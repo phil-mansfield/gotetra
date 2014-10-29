@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"encoding/binary"
 	"os"
 
@@ -8,5 +10,8 @@ import (
 )
 
 func main() {
-	gotetra.ReadGadget(os.Args[1], binary.BigEndian)
+	ps, hd :=  gotetra.ReadGadget(os.Args[1], binary.BigEndian)
+	fmt.Println(hd)
+	fmt.Println(ps[0])
+	fmt.Println(ps[1])
 }
