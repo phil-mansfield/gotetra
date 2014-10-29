@@ -101,5 +101,5 @@ func ReadGadget(fileName string, order binary.ByteOrder) (*Header, []Particle) {
 
 	for i := range ps { ps[i].Id = ids[i] }
 
-	return ps, h
+	return h, ps
 }
