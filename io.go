@@ -6,7 +6,6 @@ import (
 	"os"
 )
 
-
 type GadgetHeader struct {
 	NPart [6]uint32
 	Mass [6]float64
@@ -20,12 +19,16 @@ type GadgetHeader struct {
 	Padding [88]byte
 }
 
+// ReadInt32 returns single 32-bit interger from the given file generated on
+// a machine with the given endianness.
 func ReadInt32(f *os.File, order binary.ByteOrder) int32 {
 	var n int32
 	if err := binary.Read(f, order, &n); err != nil { panic(err) }
 	return n
 }
 
+// Standardize returns a standardized header the corresponds to the source
+// Gadget header.
 func (gh *GadgetHeader) Standardize() *Header {
 	h := &Header{}
 
@@ -33,7 +36,7 @@ func (gh *GadgetHeader) Standardize() *Header {
 	h.TotalCount = int64(gh.NPartTotal[1] + gh.NPartTotal[0] << 32)
 	h.Mass = float64(gh.Mass[1])
 	h.BoxSize = float64(gh.BoxSize)
-
+	
 	h.Cosmo.Z = gh.Redshift
 	h.Cosmo.OmegaM = gh.Omega0
 	h.Cosmo.OmegaL = gh.OmegaLambda
@@ -42,6 +45,7 @@ func (gh *GadgetHeader) Standardize() *Header {
 	return h
 }
 
+// WrapDistance returns a value of x which is inside the box described by h.
 func (h *GadgetHeader) WrapDistance(x float64) float64 {
 	if x < 0 {
 		return x + h.BoxSize
@@ -51,16 +55,19 @@ func (h *GadgetHeader) WrapDistance(x float64) float64 {
 	return x
 }
 
-func ReadGadget(fileName string, order binary.ByteOrder) ([]Particle, *Header) {
+// ReadGadget reads the gadget particle catalog located at the given location
+// generated on a machine with the given endianness and returns the particles
+// along with the standardized header file contained within.
+func ReadGadget(fileName string, order binary.ByteOrder) (*Header, []Particle) {
 	f, err := os.Open(fileName)
 	if err != nil { panic(err) }
 
 	gh := &GadgetHeader{}
 
 	_ = ReadInt32(f, order)
-	binary.Read(f, order, gh)
+	binary.Read(f, binary.LittleEndian, gh)
 	_ = ReadInt32(f, order)
-
+	
 	h := gh.Standardize()
 	floatBuf := make([]float32, 3 * h.Count)
 	ps := make([]Particle, h.Count)
@@ -94,7 +101,7 @@ func ReadGadget(fileName string, order binary.ByteOrder) ([]Particle, *Header) {
 
 	for i := range ps { ps[i].Id = ids[i] }
 
-	return ps, h
+	return h, ps
 }
 
 func ReadOnePositionGadget(fileName string, order binary.ByteOrder) (*Header, []float64) {
