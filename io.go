@@ -96,3 +96,25 @@ func ReadGadget(fileName string, order binary.ByteOrder) ([]Particle, *Header) {
 
 	return ps, h
 }
+
+func ReadOnePositionGadget(fileName string, order binary.ByteOrder) (*Header, []float64) {
+	f, err := os.Open(fileName)
+	if err != nil { panic(err) }
+
+	gh := &GadgetHeader{}
+	_ = ReadInt32(f, order)
+	binary.Read(f, order, gh)
+	_ = ReadInt32(f, order)	
+
+	h := gh.Standardize()
+
+	pos := make([]float64, 3)
+	_ = ReadInt32(f, order)
+	binary.Read(f, order, pos)
+	
+	pos[0] = gh.WrapDistance(float64(pos[0]))
+	pos[1] = gh.WrapDistance(float64(pos[1]))
+	pos[2] = gh.WrapDistance(float64(pos[2]))
+
+	return h, pos
+}
