@@ -20,7 +20,7 @@ func fRange(min, max, x float64) (outMin, outMax float64) {
 }
 
 func main() {
-	ps, hd := gotetra.ReadGadget(os.Args[1], binary.LittleEndian)
+	hd, ps := gotetra.ReadGadget(os.Args[1], binary.LittleEndian)
 
 	boxCount, err := strconv.Atoi(os.Args[2])
     if err != nil { panic(err) }
@@ -37,9 +37,9 @@ func main() {
 		zMin, zMax = fRange(zMin, zMax, z)
 	}
 
-	fmt.Printf("%11s: [%10g %10g]\n", "X Range", xMin, xMax)
-	fmt.Printf("%11s: [%10g %10g]\n", "Y Range", yMin, yMax)
-	fmt.Printf("%11s: [%10g %10g]\n", "Z Range", zMin, zMax)
-	fmt.Printf("%11s:  %10g\n", "Volume", (xMax - xMin) * (yMax - yMin) * (zMax - zMin))
-	fmt.Printf("%11s:  %10g\n", "Exp. Volume", boxVolume)
+	fmt.Printf("%11s: [%20g %20g] %20g\n", "X Range", xMin, xMax, xMax - xMin)
+	fmt.Printf("%11s: [%20g %20g] %20g\n", "Y Range", yMin, yMax, yMax - yMin)
+	fmt.Printf("%11s: [%20g %20g] %20g\n", "Z Range", zMin, zMax, zMax - zMin)
+	fmt.Printf("%11s:  %20g\n", "Volume", (xMax - xMin) * (yMax - yMin) * (zMax - zMin))
+	fmt.Printf("%11s:  %20g\n", "Exp. Volume", boxVolume)
 }
