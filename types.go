@@ -8,8 +8,12 @@ type Particle struct {
 
 type Header struct {
 	Cosmo CosmologyHeader
+	// particle info
+	Mass float64 
 	Count, TotalCount int64
-	Mass, BoxSize float64
+	// binning info
+	Idx, GridWidth int64
+	Width, TotalWidth float64
 }
 
 type CosmologyHeader struct {
