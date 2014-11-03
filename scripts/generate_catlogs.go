@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 	"os"
 	"path"
 	"strconv"
@@ -60,9 +61,24 @@ func main() {
 		fmt.Println(err.Error())
 		os.Exit(1)
 	}
+
+	width := float64(l) / float64(gridWidth)
+
+	for _, match := range matches {
+		_, ps := catalog.ReadGadget(match, binary.LittleEndian)
+		bins := rebinParticles(width, int64(gridWidth), ps)
+		for i, ps := range bins {
+			if len(ps) > 0 { 
+				name := path.Join(
+					outSnapPath, fmt.Sprintf("gridcell_%04d.dat", i),
+				)
+				catalog.Append(name, ps)
+			}
+		}
+	}
 }
 
-// pasreDir reads one of benedikt's sim directory names and returns the relevent
+// pasreDir reads one of Benedikt's sim directory names and returns the relevent
 // physical information.
 func parseDir(dir string) (int, int, string, error) {
 	parts := strings.Split(dir, "_")
@@ -103,4 +119,23 @@ func createHeaders(outPath string, exampleInput string, gridWidth int, countWidt
 	}
 
 	return nil
+}
+
+func rebinParticles(width float64, gridWidth int64, ps []tetra.Particle) ([][]tetra.Particle) {
+	totalCells := gridWidth * gridWidth * gridWidth
+	bins := make([][]tetra.Particle, totalCells)
+
+	for i := 0; i < len(bins); i++ { 
+		bins[i] = make([]tetra.Particle, 0)
+	}
+
+	for _, p := range ps {
+		xIdx := int64(math.Floor(p.Xs[0] / width))
+		yIdx := int64(math.Floor(p.Xs[1] / width))
+		zIdx := int64(math.Floor(p.Xs[2] / width))
+		idx :=  xIdx + yIdx * gridWidth + zIdx * gridWidth * gridWidth
+		bins[idx] = append(bins[idx], p)
+	}
+
+	return bins
 }
