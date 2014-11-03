@@ -89,6 +89,20 @@ func (h *gadgetHeader) WrapDistance(x float64) float64 {
 	return x
 }
 
+func ReadGadgetHeader(path string, order binary.ByteOrder) *tetra.Header {
+	f, err := os.Open(path)
+	if err != nil { panic(err) }
+	defer f.Close()
+
+	gh := &gadgetHeader{}
+
+	_ = readInt32(f, order)
+	binary.Read(f, binary.LittleEndian, gh)	
+	h := gh.Standardize()
+
+	return h
+}
+
 // ReadGadget reads the gadget particle catalog located at the given location
 // and written with the given endianness. Its header and particle sequence
 // are returned in a standardized format.
