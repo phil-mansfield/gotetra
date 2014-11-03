@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/binary"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"strconv"
@@ -16,16 +15,18 @@ import (
 func main() {
 	// Parse input information
 
-	if len(os.Args) != 4 {
-		fmt.Printf("%s requires three arguments, a regex indicating the target"+
-			" catalogs,\n the output directory, the width of the" + 
-			" generated catalog grid.\n", os.Args[0])
+	if len(os.Args) < 4 {
+		fmt.Printf("%s requires three arguments, a regex indicating the " + 
+			"target\ncatalogs, the output directory, the width of the" + 
+			"generated catalog\ngrid.", os.Args[0])
 		os.Exit(1)
 	}
 
-	pattern := os.Args[1]
-	outPath := os.Args[2]
-	gridWidth, err := strconv.Atoi(os.Args[3])
+	matches := os.Args[1:len(os.Args) - 2]
+
+	outPath := os.Args[len(os.Args) - 2]
+	gridWidth, err := strconv.Atoi(os.Args[len(os.Args) - 1])
+
 	if err != nil {
 		fmt.Println(err.Error())
 		os.Exit(1)
@@ -34,8 +35,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	snapDir := path.Base(path.Dir(pattern))
-	paramDir := path.Base(path.Dir(path.Dir(pattern)))
+	snapDir := path.Base(path.Dir(matches[0]))
+	paramDir := path.Base(path.Dir(path.Dir(path.Dir(matches[0]))))
 	
 	l, n, str, err := parseDir(paramDir)
 	if err != nil {
@@ -45,26 +46,15 @@ func main() {
 
 	// Create requisite directories.
 
-	outParamDir := fmt.Sprintf("Box_L%04d_N%04d_G%04d_%s", l, n, gridWidth,str)
+	outParamDir := fmt.Sprintf("Box_L%04d_N%04d_G%04d_%s", l, n, gridWidth, str)
 	outParamPath := path.Join(outPath, outParamDir)
-	if err = os.Mkdir(outParamPath, 0666); err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
-	}
-
-	outSnapPath := fmt.Sprintf(outParamPath, snapDir)
-	if err = os.Mkdir(path.Join(outParamPath, snapDir), 0666); err != nil {
+	outSnapPath := path.Join(outParamPath, snapDir)
+	if err = os.MkdirAll(path.Join(outParamPath, snapDir), 0777); err != nil {
 		fmt.Println(err.Error())
 		os.Exit(1)
 	}	
 
 	// Rebin catalogs.
-
-	matches, err := allMatches(pattern)
-	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
-	}
 	
 	if err = createHeaders(outSnapPath, matches[0], gridWidth, n); err != nil {
 		fmt.Println(err.Error())
@@ -72,27 +62,8 @@ func main() {
 	}
 }
 
-// allMatches returns a slice of all filenames which path the given filepath.
-// Standard unix regex syntax applies to the final element of the path.
-func allMatches(pattern string) ([]string, error) {
-	dir := path.Dir(pattern)
-	matches := make([]string, 0)
-
-	fs, err := ioutil.ReadDir(dir)
-	if err != nil { return nil, err }
-
-	for _, f := range fs {
-		name := path.Join(dir, f.Name())
-		if matched, err := path.Match(pattern, name); err != nil {
-			return nil, err
-		} else if matched {
-			matches = append(matches, name)
-		}
-	}
-
-	return matches, nil
-}
-
+// pasreDir reads one of benedikt's sim directory names and returns the relevent
+// physical information.
 func parseDir(dir string) (int, int, string, error) {
 	parts := strings.Split(dir, "_")
 
@@ -126,10 +97,8 @@ func createHeaders(outPath string, exampleInput string, gridWidth int, countWidt
 
 	maxIdx := gridWidth * gridWidth * gridWidth
 	for i := 0; i < maxIdx; i++ {
-		name := path.Join(outPath, fmt.Sprintf("gridcell_%04d.dat"))
+		name := path.Join(outPath, fmt.Sprintf("gridcell_%04d.dat", i))
 		h.Idx = int64(i)
-		fmt.Println(path.Base(name))
-		fmt.Println(h)
 		catalog.Write(name, h, ps)
 	}
 
