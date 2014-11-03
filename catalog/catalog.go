@@ -1,3 +1,22 @@
+/*package catalog contains funcitons for reading from and writing to
+files containing catalogs of particle locations and velocities.
+
+Catalogs written by external programs are standardized to a single type when
+read. Currently the only such extrenal catalog type that is supported the
+Gadget 2 particle catalog.
+
+The binary format used is as follows:
+    |-- 1 --||-- 2 --||-- 3 --||-- ... 4 ... --||-- ... 5 ... --|
+    
+    1 - (int32) Flag indicating the endianness of the file. 0 indicates a big
+        endian byte ordering and -1 indicates a little endian byte order.
+    2 - (int32) Size of a Header struct. Should be checked for consistency.
+    3 - (int32) Size of a Particle struct. Should be checked for consistency.
+    4 - (tetra.Header) Header file contiainung meta-information about the
+        particle catalog.
+    5 - ([]tetra.Particle) Contiguous block of particles. Garuanteed to be
+        of size unsafe.Sizeof(Particle{}) * header.Count.
+*/
 package catalog
 
 import (
@@ -9,14 +28,17 @@ import (
 	
 	"unsafe"
 
-	"github.com/phil-mansfield/gotetra"
+	tetra "github.com/phil-mansfield/gotetra"
 )
 
 const (
-	DefaultEndiannessFlag = -1
+	// Endianness used by default when writing catalogs. Catalogs of any
+	// endianness can be read.
+	DefaultEndiannessFlag int32 = -1
 )
 
-type GadgetHeader struct {
+// gadgetHeader is the formatting for meta-information used by Gadget 2.
+type gadgetHeader struct {
 	NPart [6]uint32
 	Mass [6]float64
 	Time, Redshift float64
@@ -29,22 +51,18 @@ type GadgetHeader struct {
 	Padding [88]byte
 }
 
-// ReadInt32 returns single 32-bit interger from the given file generated on
-// a machine with the given endianness.
-func ReadInt32(r io.Reader, order binary.ByteOrder) int32 {
+// readInt32 returns single 32-bit interger from the given file using the
+// given endianness.
+func readInt32(r io.Reader, order binary.ByteOrder) int32 {
 	var n int32
 	if err := binary.Read(r, order, &n); err != nil { panic(err) }
 	return n
 }
 
-func WriteInt32(w io.Writer, order binary.ByteOrder, n int32) {
-	if err := binary.Write(w, order, n); err != nil { panic(err) }
-}
-
-// Standardize returns a standardized header the corresponds to the source
-// Gadget header.
-func (gh *GadgetHeader) Standardize() *gotetra.Header {
-	h := &gotetra.Header{}
+// Standardize returns a tetra.Header that corresponds to the source
+// Gadget 2 header.
+func (gh *gadgetHeader) Standardize() *tetra.Header {
+	h := &tetra.Header{}
 
 	h.Count = int64(gh.NPart[1] + gh.NPart[0] << 32)
 	h.TotalCount = int64(gh.NPartTotal[1] + gh.NPartTotal[0] << 32)
@@ -60,8 +78,9 @@ func (gh *GadgetHeader) Standardize() *gotetra.Header {
 	return h
 }
 
-// WrapDistance returns a value of x which is inside the box described by h.
-func (h *GadgetHeader) WrapDistance(x float64) float64 {
+// WrapDistance takes a value and interprets it as a position defined within
+// a periodic domain of width h.BoxSize.
+func (h *gadgetHeader) WrapDistance(x float64) float64 {
 	if x < 0 {
 		return x + h.BoxSize
 	} else if x >= h.BoxSize {
@@ -71,26 +90,26 @@ func (h *GadgetHeader) WrapDistance(x float64) float64 {
 }
 
 // ReadGadget reads the gadget particle catalog located at the given location
-// generated on a machine with the given endianness and returns the particles
-// along with the standardized header file contained within.
-func ReadGadget(fileName string, order binary.ByteOrder) (*gotetra.Header, []gotetra.Particle) {
-	f, err := os.Open(fileName)
+// and written with the given endianness. Its header and particle sequence
+// are returned in a standardized format.
+func ReadGadget(path string, order binary.ByteOrder) (*tetra.Header, []tetra.Particle) {
+	f, err := os.Open(path)
 	if err != nil { panic(err) }
 	defer f.Close()
 
-	gh := &GadgetHeader{}
+	gh := &gadgetHeader{}
 
-	_ = ReadInt32(f, order)
+	_ = readInt32(f, order)
 	binary.Read(f, binary.LittleEndian, gh)
-	_ = ReadInt32(f, order)
+	_ = readInt32(f, order)
 	
 	h := gh.Standardize()
 	floatBuf := make([]float32, 3 * h.Count)
-	ps := make([]gotetra.Particle, h.Count)
+	ps := make([]tetra.Particle, h.Count)
 
-	_ = ReadInt32(f, order)
+	_ = readInt32(f, order)
 	binary.Read(f, order, floatBuf)
-	_ = ReadInt32(f, order)
+	_ = readInt32(f, order)
 
 	for i := range ps { 
 		ps[i].Xs[0] = gh.WrapDistance(float64(floatBuf[3 * i + 0]))
@@ -98,9 +117,9 @@ func ReadGadget(fileName string, order binary.ByteOrder) (*gotetra.Header, []got
 		ps[i].Xs[2] = gh.WrapDistance(float64(floatBuf[3 * i + 2]))
 	}
 
-	_ = ReadInt32(f, order)
+	_ = readInt32(f, order)
 	binary.Read(f, order, floatBuf)
-	_ = ReadInt32(f, order)
+	_ = readInt32(f, order)
 
 	rootA := float32(math.Sqrt(float64(gh.Time)))
 	for i := range ps { 
@@ -111,26 +130,27 @@ func ReadGadget(fileName string, order binary.ByteOrder) (*gotetra.Header, []got
 
 	ids := make([]int64, h.Count)
 
-	_ = ReadInt32(f, order)
+	_ = readInt32(f, order)
 	binary.Read(f, order, ids)
-	_ = ReadInt32(f, order)
+	_ = readInt32(f, order)
 
 	for i := range ps { ps[i].Id = ids[i] }
 
 	return h, ps
 }
 
-// Write writes a standardized header and particle slice to the given location
-func Write(path string, h *gotetra.Header, ps []gotetra.Particle) {
+// Write writes the given header and particle sequence to the specified file.
+func Write(path string, h *tetra.Header, ps []tetra.Particle) {
 	f, err := os.Create(path)
 	if err != nil { panic(err) }
 	defer f.Close()
 
+	h.Count = int64(len(ps))
 	order := endianness(DefaultEndiannessFlag)
 
 	err = binary.Write(f, order, DefaultEndiannessFlag)
 	if err != nil { panic(err.Error()) }
-	err = binary.Write(f, order, int32(unsafe.Sizeof(gotetra.Header{})))
+	err = binary.Write(f, order, int32(unsafe.Sizeof(tetra.Header{})))
 	if err != nil { panic(err.Error()) }
 	err = binary.Write(f, order, int32(unsafe.Sizeof(ps[0])))
 	if err != nil { panic(err.Error()) }
@@ -140,42 +160,43 @@ func Write(path string, h *gotetra.Header, ps []gotetra.Particle) {
 	if err != nil { panic(err.Error()) }
 }
 
-func readHeader(path string) (*gotetra.Header, *os.File, binary.ByteOrder) {
-	f, err := os.Open(path)
+// readHeader reads only the header from the given file.
+func readHeader(path string) (*tetra.Header, *os.File, binary.ByteOrder) {
+	f, err := os.OpenFile(path, os.O_RDWR, os.ModePerm)
 	if err != nil { panic(err) }
 
-	order := endianness(ReadInt32(f, binary.LittleEndian))
+	order := endianness(readInt32(f, binary.LittleEndian))
 
 	// Sanity checks:
-	headerSize := ReadInt32(f, order)
-	particleSize := ReadInt32(f, order)
-	if int32(unsafe.Sizeof(gotetra.Header{})) != headerSize {
+	headerSize := readInt32(f, order)
+	particleSize := readInt32(f, order)
+	if int32(unsafe.Sizeof(tetra.Header{})) != headerSize {
 		panic(fmt.Sprintf(
 			"Size of header in code, %d, does not match size in catalog, %d.",
-			unsafe.Sizeof(gotetra.Header{}), headerSize,
+			unsafe.Sizeof(tetra.Header{}), headerSize,
 		))
-	} else if int32(unsafe.Sizeof(gotetra.Particle{})) != particleSize {
+	} else if int32(unsafe.Sizeof(tetra.Particle{})) != particleSize {
 		panic(fmt.Sprintf(
 			"Size of header in code, %d, does not match size in catalog, %d.",
-			unsafe.Sizeof(gotetra.Particle{}), particleSize,
+			unsafe.Sizeof(tetra.Particle{}), particleSize,
 		))
 	}
 
-	h := &gotetra.Header{}
+	h := &tetra.Header{}
 	err = binary.Read(f, order, h)
 	if err != nil { panic(err.Error()) }
 
 	return h, f, order
 }
 
-// Append appends a particle list to the given file containing a standardized
-// header and updates the header accordingly.
-func Append(path string, ps []gotetra.Particle) {
+// Append appends a particle sequence to the end of the given file.
+func Append(path string, ps []tetra.Particle) {
 	h, f, order := readHeader(path)
 	defer f.Close()
 
-	_, err := f.Seek(int64(unsafe.Sizeof(ps[0])) * h.Count, 1)
+	idx, err := f.Seek(0, 2)
 	if err != nil { panic(err.Error()) }
+	println(idx)
 	err = binary.Write(f, order, ps)
 	if err != nil { panic(err.Error()) }
 	_, err = f.Seek(12, 0)
@@ -186,18 +207,20 @@ func Append(path string, ps []gotetra.Particle) {
 	if err != nil { panic(err.Error()) }
 }
 
-// Read reads a header and particle list from a standardized catalog header.
-func Read(path string) (*gotetra.Header, []gotetra.Particle) {
+// Read reads a header and particle sequence from the given file.
+func Read(path string) (*tetra.Header, []tetra.Particle) {
 	h, f, order := readHeader(path)
 	defer f.Close()
 
-	ps := make([]gotetra.Particle, h.Count)
+	ps := make([]tetra.Particle, h.Count)
 	err := binary.Read(f, order, ps)
 	if err != nil { panic(err.Error()) }
 
 	return h, ps
 }
 
+// endianness is a utility function converting an endianness flag to a
+// byte order.
 func endianness(flag int32) binary.ByteOrder {
 	if flag == 0 {
 		return binary.LittleEndian
@@ -205,13 +228,5 @@ func endianness(flag int32) binary.ByteOrder {
 		return binary.BigEndian
 	} else {
 		panic("Unrecognized endianness flag.")
-	}
-}
-
-func endiannessFlag(order binary.ByteOrder) int32 {
-	if order == binary.LittleEndian {
-		return 0
-	} else {
-		return -1
 	}
 }
