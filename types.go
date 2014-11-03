@@ -10,7 +10,7 @@ type Header struct {
 	Cosmo CosmologyHeader
 	// particle info
 	Mass float64 
-	Count, TotalCount int64
+	Count, TotalCount, CountWidth int64
 	// binning info
 	Idx, GridWidth int64
 	Width, TotalWidth float64
