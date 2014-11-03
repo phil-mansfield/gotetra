@@ -205,12 +205,13 @@ func readHeader(path string) (*tetra.Header, *os.File, binary.ByteOrder) {
 
 // Append appends a particle sequence to the end of the given file.
 func Append(path string, ps []tetra.Particle) {
+	if len(ps) == 0 { return }
+
 	h, f, order := readHeader(path)
 	defer f.Close()
 
-	idx, err := f.Seek(0, 2)
+	_, err := f.Seek(0, 2)
 	if err != nil { panic(err.Error()) }
-	println(idx)
 	err = binary.Write(f, order, ps)
 	if err != nil { panic(err.Error()) }
 	_, err = f.Seek(12, 0)
