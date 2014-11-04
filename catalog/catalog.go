@@ -103,6 +103,61 @@ func ReadGadgetHeader(path string, order binary.ByteOrder) *tetra.Header {
 	return h
 }
 
+func ReadGadgetParticlesAt(
+	path string,
+	order binary.ByteOrder,
+	floatBuf []float32,
+	intBuf []int64,
+	ps []tetra.Particle,
+) {
+	f, err := os.Open(path)
+	if err != nil { panic(err) }
+	defer f.Close()
+
+	gh := &gadgetHeader{}
+
+	_ = readInt32(f, order)
+	binary.Read(f, binary.LittleEndian, gh)
+	_ = readInt32(f, order)
+	
+	h := gh.Standardize()
+
+	if int64(len(floatBuf)) != 3 * h.Count {
+		panic("Incorrect length for float buffer.")
+	} else if int64(len(intBuf)) != h.Count {
+		panic("Incorrect length for int buffer.")
+	} else if int64(len(ps)) != h.Count {
+		panic("Incorrect length for particle slice.")
+	}
+
+	_ = readInt32(f, order)
+	binary.Read(f, order, floatBuf)
+	_ = readInt32(f, order)
+
+	for i := range ps { 
+		ps[i].Xs[0] = gh.WrapDistance(float64(floatBuf[3 * i + 0]))
+		ps[i].Xs[1] = gh.WrapDistance(float64(floatBuf[3 * i + 1]))
+		ps[i].Xs[2] = gh.WrapDistance(float64(floatBuf[3 * i + 2]))
+	}
+
+	_ = readInt32(f, order)
+	binary.Read(f, order, floatBuf)
+	_ = readInt32(f, order)
+
+	rootA := float32(math.Sqrt(float64(gh.Time)))
+	for i := range ps { 
+		ps[i].Vs[0] = float64(floatBuf[3 * i + 0] * rootA)
+		ps[i].Vs[1] = float64(floatBuf[3 * i + 1] * rootA)
+		ps[i].Vs[2] = float64(floatBuf[3 * i + 2] * rootA)
+	}
+
+	_ = readInt32(f, order)
+	binary.Read(f, order, intBuf)
+	_ = readInt32(f, order)
+
+	for i := range ps { ps[i].Id = intBuf[i] }
+}
+
 // ReadGadget reads the gadget particle catalog located at the given location
 // and written with the given endianness. Its header and particle sequence
 // are returned in a standardized format.
@@ -152,6 +207,7 @@ func ReadGadget(path string, order binary.ByteOrder) (*tetra.Header, []tetra.Par
 
 	return h, ps
 }
+
 
 // Write writes the given header and particle sequence to the specified file.
 func Write(path string, h *tetra.Header, ps []tetra.Particle) {
@@ -223,15 +279,16 @@ func Append(path string, ps []tetra.Particle) {
 }
 
 // Read reads a header and particle sequence from the given file.
-func Read(path string) (*tetra.Header, []tetra.Particle) {
+func ReadParticlesAt(path string, ps []tetra.Particle) {
 	h, f, order := readHeader(path)
 	defer f.Close()
 
-	ps := make([]tetra.Particle, h.Count)
+	if int64(len(ps)) != h.Count {
+		panic("Incorrect Particle buffer length.")
+	}
+
 	err := binary.Read(f, order, ps)
 	if err != nil { panic(err.Error()) }
-
-	return h, ps
 }
 
 // endianness is a utility function converting an endianness flag to a
