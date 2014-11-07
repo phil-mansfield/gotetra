@@ -6,14 +6,19 @@ type Particle struct {
 	Id int64
 }
 
+// Header describes meta-information about the current catalog.
 type Header struct {
 	Cosmo CosmologyHeader
-	// particle info
-	Mass float64 
-	Count, TotalCount, CountWidth int64
-	// binning info
-	Idx, GridWidth int64
-	Width, TotalWidth float64
+
+	Mass float64  // Mass of one particle
+	Count int64 // Number of particles in catalog
+	TotalCount int64 // Number of particles in all catalogs
+	CountWidth int64 // Number of particles "on one side": TotalCount^(1/3)
+
+	Idx int64 // Index of catalog: x-major ordering is used
+	GridWidth int64 // Number of gird cells "on one side"
+	Width int64 // Width of the catalog's bounding box
+	TotalWidth float64 // Width of the sim's bounding box
 }
 
 type CosmologyHeader struct {
