@@ -17,7 +17,7 @@ type Header struct {
 
 	Idx        int64   // Index of catalog: x-major ordering is used
 	GridWidth  int64   // Number of gird cells "on one side"
-	Width      int64   // Width of the catalog's bounding box
+	Width      float64 // Width of the catalog's bounding box
 	TotalWidth float64 // Width of the sim's bounding box
 }
 
