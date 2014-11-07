@@ -129,11 +129,20 @@ func ReadGadgetParticlesAt(
 	h := gh.Standardize()
 
 	if int64(len(floatBuf)) != 3*h.Count {
-		panic("Incorrect length for float buffer.")
+		panic(fmt.Sprintf(
+			"Incorrect length for float buffer. Found %d, expected %d",
+			len(floatBuf), 3*h.Count,
+		))
 	} else if int64(len(intBuf)) != h.Count {
-		panic("Incorrect length for int buffer.")
+		panic(fmt.Sprintf(
+			"Incorrect length for int buffer. Found %d, expected %d",
+			len(intBuf), h.Count,
+		))
 	} else if int64(len(ps)) != h.Count {
-		panic("Incorrect length for particle slice.")
+		panic(fmt.Sprintf(
+			"Incorrect length for Particle buffer. Found %d, expected %d",
+			len(ps), h.Count,
+		))
 	}
 
 	_ = readInt32(f, order)
@@ -254,8 +263,8 @@ func Write(path string, h *tetra.Header, ps []tetra.Particle) {
 }
 
 // readHeader reads only the header from the given file.
-func readHeader(path string) (*tetra.Header, *os.File, binary.ByteOrder) {
-	f, err := os.OpenFile(path, os.O_RDWR, os.ModePerm)
+func readHeader(path string, flag int) (*tetra.Header, *os.File, binary.ByteOrder) {
+	f, err := os.OpenFile(path, flag, os.ModePerm)
 	if err != nil {
 		panic(err)
 	}
@@ -286,13 +295,21 @@ func readHeader(path string) (*tetra.Header, *os.File, binary.ByteOrder) {
 	return h, f, order
 }
 
+func ReadHeader(path string) *tetra.Header {
+	h, f, _ := readHeader(path, os.O_RDONLY)
+	if err := f.Close(); err != nil {
+		panic(err)
+	}
+	return h
+}
+
 // Append appends a particle sequence to the end of the given file.
 func Append(path string, ps []tetra.Particle) {
 	if len(ps) == 0 {
 		return
 	}
 
-	h, f, order := readHeader(path)
+	h, f, order := readHeader(path, os.O_RDWR)
 	defer f.Close()
 
 	_, err := f.Seek(0, 2)
@@ -317,7 +334,7 @@ func Append(path string, ps []tetra.Particle) {
 
 // Read reads a header and particle sequence from the given file.
 func ReadParticlesAt(path string, ps []tetra.Particle) {
-	h, f, order := readHeader(path)
+	h, f, order := readHeader(path, os.O_RDONLY)
 	defer f.Close()
 
 	if int64(len(ps)) != h.Count {
