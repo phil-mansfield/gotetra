@@ -347,6 +347,13 @@ func ReadParticlesAt(path string, ps []tetra.Particle) {
 	}
 }
 
+func Read(path string) (*tetra.Header, []tetra.Particle) {
+	h := ReadHeader(path)
+	ps := make([]tetra.Particle, h.Count)
+	ReadParticlesAt(path, ps)
+	return h, ps
+}
+
 // endianness is a utility function converting an endianness flag to a
 // byte order.
 func endianness(flag int32) binary.ByteOrder {
