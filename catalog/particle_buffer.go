@@ -8,14 +8,14 @@ import (
 // appended to files on the fly without much overhead from I/O or without
 // excessive memory usage/reallocating.
 type ParticleBuffer struct {
-	buf []tetra.Particle
-	idx int
+	buf  []tetra.Particle
+	idx  int
 	path string
 }
 
 // NewParticleBuffer creates a ParticleBuffer associated with the given file.
 func NewParticleBuffer(path string, bufSize int) *ParticleBuffer {
-	pb := &ParticleBuffer{ make([]tetra.Particle, bufSize), 0, path }
+	pb := &ParticleBuffer{make([]tetra.Particle, bufSize), 0, path}
 	return pb
 }
 
@@ -24,7 +24,9 @@ func NewParticleBuffer(path string, bufSize int) *ParticleBuffer {
 func (pb *ParticleBuffer) Append(p tetra.Particle) {
 	pb.buf[pb.idx] = p
 	pb.idx++
-	if pb.idx == len(pb.buf) { pb.Flush() }
+	if pb.idx == len(pb.buf) {
+		pb.Flush()
+	}
 }
 
 // Flush writes the contents of the buffer to its target file. This will
