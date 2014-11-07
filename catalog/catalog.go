@@ -12,7 +12,7 @@ The binary format used is as follows:
         endian byte ordering and -1 indicates a little endian byte order.
     2 - (int32) Size of a Header struct. Should be checked for consistency.
     3 - (int32) Size of a Particle struct. Should be checked for consistency.
-    4 - (tetra.Header) Header file contiainung meta-information about the
+    4 - (tetra.Header) Header file containing meta-information about the
         particle catalog.
     5 - ([]tetra.Particle) Contiguous block of particles. Garuanteed to be
         of size unsafe.Sizeof(Particle{}) * header.Count.
@@ -270,9 +270,9 @@ func Append(path string, ps []tetra.Particle) {
 	if err != nil { panic(err.Error()) }
 	err = binary.Write(f, order, ps)
 	if err != nil { panic(err.Error()) }
+
 	_, err = f.Seek(12, 0)
 	if err != nil { panic(err.Error()) }
-
 	h.Count += int64(len(ps))
 	err = binary.Write(f, order, h)
 	if err != nil { panic(err.Error()) }
