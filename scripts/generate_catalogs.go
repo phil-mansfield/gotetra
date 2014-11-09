@@ -9,6 +9,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"runtime"
 
 	tetra "github.com/phil-mansfield/gotetra"
 	"github.com/phil-mansfield/gotetra/catalog"
@@ -143,8 +144,13 @@ func rebinParticles(inFiles, outFiles []string, gridWidth int64) {
 
 	bufs := createBuffers(outFiles, defaultBufSize)
 
+	ms := runtime.MemStats{}
+
 	for i, inFile := range inFiles {
 		fmt.Println(inFile)
+		runtime.ReadMemStats(&ms)
+		fmt.Printf("  Alloc = %10d MB TotalAlloc = %10d MB Sys = %10d MB\n",
+			ms.Alloc >> 20, ms.TotalAlloc >> 20, ms.Sys >> 20)
 
 		floatBuf := floatBufMax[0:hs[i].Count*3]
 		intBuf := intBufMax[0:hs[i].Count]
