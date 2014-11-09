@@ -189,9 +189,9 @@ func rebinSlice(
 	ps []tetra.Particle,
 ) {
 	for _, p := range ps {
-		xIdx := int64(math.Floor(p.Xs[0] / width))
-		yIdx := int64(math.Floor(p.Xs[1] / width))
-		zIdx := int64(math.Floor(p.Xs[2] / width))
+		xIdx := int64(math.Floor(float64(p.Xs[0]) / width))
+		yIdx := int64(math.Floor(float64(p.Xs[1]) / width))
+		zIdx := int64(math.Floor(float64(p.Xs[2]) / width))
 		idx := xIdx + yIdx*gridWidth + zIdx*gridWidth*gridWidth
 		bufs[idx].Append(p)
 	}

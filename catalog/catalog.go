@@ -119,7 +119,6 @@ func ReadGadgetParticlesAt(
 		panic(err)
 	}
 	defer f.Close()
-
 	gh := &gadgetHeader{}
 
 	_ = readInt32(f, order)
@@ -150,9 +149,9 @@ func ReadGadgetParticlesAt(
 	_ = readInt32(f, order)
 
 	for i := range ps {
-		ps[i].Xs[0] = gh.WrapDistance(float64(floatBuf[3*i+0]))
-		ps[i].Xs[1] = gh.WrapDistance(float64(floatBuf[3*i+1]))
-		ps[i].Xs[2] = gh.WrapDistance(float64(floatBuf[3*i+2]))
+		ps[i].Xs[0] = float32(gh.WrapDistance(float64(floatBuf[3*i+0])))
+		ps[i].Xs[1] = float32(gh.WrapDistance(float64(floatBuf[3*i+1])))
+		ps[i].Xs[2] = float32(gh.WrapDistance(float64(floatBuf[3*i+2])))
 	}
 
 	_ = readInt32(f, order)
@@ -161,9 +160,9 @@ func ReadGadgetParticlesAt(
 
 	rootA := float32(math.Sqrt(float64(gh.Time)))
 	for i := range ps {
-		ps[i].Vs[0] = float64(floatBuf[3*i+0] * rootA)
-		ps[i].Vs[1] = float64(floatBuf[3*i+1] * rootA)
-		ps[i].Vs[2] = float64(floatBuf[3*i+2] * rootA)
+		ps[i].Vs[0] = floatBuf[3*i+0] * rootA
+		ps[i].Vs[1] = floatBuf[3*i+1] * rootA
+		ps[i].Vs[2] = floatBuf[3*i+2] * rootA
 	}
 
 	_ = readInt32(f, order)
@@ -200,9 +199,9 @@ func ReadGadget(path string, order binary.ByteOrder) (*tetra.Header, []tetra.Par
 	_ = readInt32(f, order)
 
 	for i := range ps {
-		ps[i].Xs[0] = gh.WrapDistance(float64(floatBuf[3*i+0]))
-		ps[i].Xs[1] = gh.WrapDistance(float64(floatBuf[3*i+1]))
-		ps[i].Xs[2] = gh.WrapDistance(float64(floatBuf[3*i+2]))
+		ps[i].Xs[0] = float32(gh.WrapDistance(float64(floatBuf[3*i+0])))
+		ps[i].Xs[1] = float32(gh.WrapDistance(float64(floatBuf[3*i+1])))
+		ps[i].Xs[2] = float32(gh.WrapDistance(float64(floatBuf[3*i+2])))
 	}
 
 	_ = readInt32(f, order)
@@ -211,9 +210,9 @@ func ReadGadget(path string, order binary.ByteOrder) (*tetra.Header, []tetra.Par
 
 	rootA := float32(math.Sqrt(float64(gh.Time)))
 	for i := range ps {
-		ps[i].Vs[0] = float64(floatBuf[3*i+0] * rootA)
-		ps[i].Vs[1] = float64(floatBuf[3*i+1] * rootA)
-		ps[i].Vs[2] = float64(floatBuf[3*i+2] * rootA)
+		ps[i].Vs[0] = floatBuf[3*i+0] * rootA
+		ps[i].Vs[1] = floatBuf[3*i+1] * rootA
+		ps[i].Vs[2] = floatBuf[3*i+2] * rootA
 	}
 
 	ids := make([]int64, h.Count)

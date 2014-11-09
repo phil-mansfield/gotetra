@@ -45,9 +45,9 @@ func (h *Header) wrapDist(x1, x2 float64) float64 {
 }
 
 func (h *Header) Distance(p1, p2 *Particle) float64 {
-	dx := h.wrapDist(p1.Xs[0], p2.Xs[0])
-	dy := h.wrapDist(p1.Xs[1], p2.Xs[1])
-	dz := h.wrapDist(p1.Xs[2], p2.Xs[2])
+	dx := h.wrapDist(float64(p1.Xs[0]), float64(p2.Xs[0]))
+	dy := h.wrapDist(float64(p1.Xs[1]), float64(p2.Xs[1]))
+	dz := h.wrapDist(float64(p1.Xs[2]), float64(p2.Xs[2]))
 
 	return math.Sqrt(dx * dx + dy * dy + dz * dz)
 }

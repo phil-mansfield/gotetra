@@ -1,8 +1,13 @@
 package gotetra
 
+// Particle represents a single interpolation point on the Lagrangian
+// submanifold which all the matter in the simulation is constrained to.
+//
+// float32s is used only for memory efficiency. All calculations should be done
+// with float64s.
 type Particle struct {
-	Xs [3]float64
-	Vs [3]float64
+	Xs [3]float32
+	Vs [3]float32
 	Id int64
 }
 

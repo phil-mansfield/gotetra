@@ -122,9 +122,9 @@ func BinFraction(
 
 	nBuf := make([]int64, 3)
 	cp := &tetra.Particle{}
-	cp.Xs[0] = (xDiff / 2.0 + lowX) * h0.Width
-	cp.Xs[1] = (yDiff / 2.0 + lowY) * h0.Width
-	cp.Xs[2] = (zDiff / 2.0 + lowZ) * h0.Width
+	cp.Xs[0] = float32((xDiff / 2.0 + lowX) * h0.Width)
+	cp.Xs[1] = float32((yDiff / 2.0 + lowY) * h0.Width)
+	cp.Xs[2] = float32((zDiff / 2.0 + lowZ) * h0.Width)
 
 	for id := range man.Locs {
 		p := man.Get(id)
