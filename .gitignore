@@ -6,6 +6,9 @@
 # Folders
 _obj
 _test
+scripts/batch_scripts
+scripts/pprof
+scripts/out
 
 # Architecture specific extensions/prefixes
 *.[568vq]
