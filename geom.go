@@ -4,6 +4,10 @@ import (
 	"math"
 )
 
+const (
+	eps = 1e-6
+)
+
 func (h *Header) compressCoords(x, y, z, dx, dy, dz int64) int64 {
 	// Can be send up with & tricks or conditionals.
 	newX := (x + dx + h.CountWidth) % h.CountWidth
@@ -66,7 +70,24 @@ func (h *Header) Volume(ps []*Particle, vb *VolumeBuffer) float64 {
 	h.subX(ps[3], ps[0], &vb.buf3)
 
 	cross(&vb.buf2, &vb.buf3, &vb.bufCross)
-	return math.Abs(dot(&vb.buf1, &vb.bufCross) / 6.0)
+	return math.Abs(dot(&vb.buf1, &vb.bufCross)) / 6.0
+}
+
+func (h *Header) WithinTetra(
+	p *Particle,
+	ps []*Particle,
+	vol float64,
+	vb *VolumeBuffer,
+) bool {
+
+	buf := []*Particle{ps[0], ps[1], ps[2], p}
+	sum := 0.0
+	for i := 0; i < 4; i++ {
+		sum += h.Volume(buf, vb)
+		buf[i] = ps[(i + 3) % 4]
+	}
+
+	return (math.Abs(sum - vol) / vol) <= eps
 }
 
 func (h *Header) subX(p1, p2 *Particle, out *[3]float64) {
