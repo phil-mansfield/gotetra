@@ -1,6 +1,7 @@
 package gotetra
 
 import (
+	"fmt"
 	"math"
 )
 
@@ -8,8 +9,32 @@ const (
 	eps = 1e-6
 )
 
+var (
+	dirs = [6][4][3]int64{
+		{{1, 0, 0}, {1, 1, 0}},
+		{{1, 0, 0}, {1, 0, 1}},
+		{{0, 1, 0}, {1, 1, 0}},
+		{{0, 0, 1}, {1, 0, 1}},
+		{{0, 1, 0}, {0, 1, 1}},
+		{{0, 0, 1}, {0, 1, 1}},
+	}
+)
+
+// Note, should probably make this a [4]Particle
+type Tetra []*Particle
+
+func (t Tetra) Valid() bool {
+	for i := 0; i < 4; i++ {
+		if t[i] == nil { return false }
+	}
+	return true
+}
+
+type Bounds struct {
+	MinX, MaxX, MinY, MaxY, MinZ, MaxZ int
+}
+
 func (h *Header) compressCoords(x, y, z, dx, dy, dz int64) int64 {
-	// Can be send up with & tricks or conditionals.
 	newX := (x + dx + h.CountWidth) % h.CountWidth
 	newY := (y + dy + h.CountWidth) % h.CountWidth
 	newZ := (z + dz + h.CountWidth) % h.CountWidth
@@ -17,16 +42,24 @@ func (h *Header) compressCoords(x, y, z, dx, dy, dz int64) int64 {
 	return newX + newY * h.CountWidth + newZ * h.CountWidth * h.CountWidth
 }
 
-func (h *Header) TetraCorners(idx int64, out []int64) {
+func (h *Header) TetraCorners(idx int64, dir int, out []int64) {
+	if dir < 0 || dir >= 6 {
+		panic(fmt.Sprintf("Unknown direction %d", dir))
+	}
+
 	countArea := h.CountWidth * h.CountWidth
 
 	x := idx % h.CountWidth
 	y := (idx % countArea) / h.CountWidth
 	z := idx / countArea
 
-	out[0] = h.compressCoords(x, y, z, 0, 0, 1)
-	out[1] = h.compressCoords(x, y, z, 0, 1, 0)
-	out[2] = h.compressCoords(x, y, z, 1, 0, 0)
+	out[0] = h.compressCoords(
+		x, y, z, dirs[dir][0][0], dirs[dir][0][1], dirs[dir][0][2],
+	)
+	out[1] = h.compressCoords(
+		x, y, z, dirs[dir][1][0], dirs[dir][1][1], dirs[dir][1][2],
+	)
+	out[2] = h.compressCoords(x, y, z, 1, 1, 1)
 }
 
 func (h *Header) wrapDist(x1, x2 float64) float64 {
@@ -64,7 +97,7 @@ func NewVolumeBuffer() *VolumeBuffer {
 	return &VolumeBuffer{ }
 }
 
-func (h *Header) Volume(ps []*Particle, vb *VolumeBuffer) float64 {
+func (h *Header) Volume(ps Tetra, vb *VolumeBuffer) float64 {
 	h.subX(ps[1], ps[0], &vb.buf1)
 	h.subX(ps[2], ps[0], &vb.buf2)
 	h.subX(ps[3], ps[0], &vb.buf3)
@@ -75,7 +108,7 @@ func (h *Header) Volume(ps []*Particle, vb *VolumeBuffer) float64 {
 
 func (h *Header) WithinTetra(
 	p *Particle,
-	ps []*Particle,
+	ps Tetra,
 	vol float64,
 	vb *VolumeBuffer,
 ) bool {
@@ -108,4 +141,45 @@ func dot(v1, v2 *[3]float64) float64 {
 		sum += (*v1)[i] * (*v2)[i] 
 	}
 	return sum
+}
+
+func (h *Header) Bounds(t Tetra, cellWidth float64, ib *Bounds) *Bounds {
+	if ib == nil {
+		ib = &Bounds{}
+	}
+
+	minX := float64(t[0].Xs[0])
+	minY := float64(t[0].Xs[1])
+	minZ := float64(t[0].Xs[2])
+	maxX, maxY, maxZ := minX, minY, minX
+
+	for i := 1; i < 4; i++ {
+		minX, maxX = minMax(float64(t[i].Xs[0]), minX, maxX)
+		minY, maxY = minMax(float64(t[i].Xs[1]), minY, maxY)
+		minZ, maxZ = minMax(float64(t[i].Xs[2]), minZ, maxZ)
+	}
+	
+	ib.MinX = int(minX / cellWidth)
+	ib.MaxX = int(math.Ceil(maxX / cellWidth))
+	ib.MinY = int(minY / cellWidth)
+	ib.MaxY = int(math.Ceil(maxY / cellWidth))
+	ib.MinZ = int(minZ / cellWidth)
+	ib.MaxZ = int(math.Ceil(maxZ / cellWidth))
+
+	return ib
+}
+
+func (h *Header) minMax(coord int64) (min, max float64) {
+	min = float64(coord) * h.Width
+	return min, min + h.Width
+}
+
+func minMax(x, oldMin, oldMax float64) (min, max float64) {
+	if x > oldMax {
+		return oldMin, x
+	} else if x < oldMin {
+		return x, oldMax
+	} else {
+		return oldMin, oldMax
+	}
 }
