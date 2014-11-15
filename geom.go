@@ -183,3 +183,38 @@ func minMax(x, oldMin, oldMax float64) (min, max float64) {
 		return oldMin, oldMax
 	}
 }
+
+type Point [3]float64
+
+// source:
+// http://vcg.isti.cnr.it/activities/geometryegraphics/pointintetraedro.html
+func (h *Header) Sample(t Tetra, randBuf []float64, out []Point) {
+	if len(randBuf) * 3 != len(out) {
+		panic(fmt.Sprintf("buf len %d not long enough for %d points.",
+			len(randBuf), len(out)))
+	}
+
+	for i := range out {
+		// Three of the four barycentric coordinates
+		t1, t2, t3 := randBuf[i], randBuf[i + 1], randBuf[i + 2]
+
+		if t1 + t2 + t3 < 1.0 {
+			continue
+		} else if t2 + t3 > 1.0 {
+			t1, t2, t3 = t1, 1.0 - t3, 1.0 - t1 - t2
+		} else {
+			t1, t2, t3 = 1.0 - t2 - t3, t2,  t1 + t2 + t3 - 1.0
+		}
+
+		t4 := 1.0 - t1 - t2 - t3
+
+		h.Scale(t1, &out[i], &out[i])
+		h.Scale(t2, &out[i], &out[i])
+		h.Scale(t3, &out[i], &out[i])
+		h.Scale(t4, &out[i], &out[i])
+	}
+}
+
+func (h *tetra.Header) Scale(k float64, v, out *Point) {
+	for i := 0; i < 3; i ++ { out[i] = v[i] * 3 }
+}
