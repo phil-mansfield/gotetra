@@ -8,6 +8,9 @@ simulation's phase sheet onto position space. This project is serving as a
 prototype for an eventual C-based package, `tetra` which will be a more heavily
 optimized and documented version of the same project.
 
+Unfinished documentation can be found at 
+http://godoc.org/github.com/phil-mansfield/gotetra
+
 Project Structure
 -----------------
 
