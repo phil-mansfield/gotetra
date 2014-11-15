@@ -143,7 +143,7 @@ func dot(v1, v2 *[3]float64) float64 {
 	return sum
 }
 
-func (h *Header) Bounds(t Tetra, cellWidth float64, ib *Bounds) *Bounds {
+func (t Tetra) Bounds(cellWidth float64, ib *Bounds) *Bounds {
 	if ib == nil {
 		ib = &Bounds{}
 	}
@@ -151,7 +151,7 @@ func (h *Header) Bounds(t Tetra, cellWidth float64, ib *Bounds) *Bounds {
 	minX := float64(t[0].Xs[0])
 	minY := float64(t[0].Xs[1])
 	minZ := float64(t[0].Xs[2])
-	maxX, maxY, maxZ := minX, minY, minX
+	maxX, maxY, maxZ := minX, minY, minZ
 
 	for i := 1; i < 4; i++ {
 		minX, maxX = minMax(float64(t[i].Xs[0]), minX, maxX)
