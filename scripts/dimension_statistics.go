@@ -4,15 +4,13 @@ import (
 	"math"
 	"strconv"
 	"os"
-	"path"
-	"runtime"
 
 	tetra "github.com/phil-mansfield/gotetra"
-	"github.com/phil-mansfield/gotetra/catalog"
+	"github.com/phil-mansfield/gotetra/scripts/helper"
 )
 
 const (
-	midX, midY, midZ = 0, 6, 5
+	midX, midY, midZ = 0, 0, 1
 	layers = 1
 )
 
@@ -21,31 +19,7 @@ func main() {
 	bins, err := strconv.Atoi(os.Args[2])
 	if err != nil { panic(err) }
 
-	ms := runtime.MemStats{}
-	man := tetra.NewParticleManager()
-	h0 := catalog.ReadHeader(path.Join(dir, "gridcell_0000.dat"))
-
-	runtime.ReadMemStats(&ms)
-
-	var centerPs []tetra.Particle
-
-	for x := midX - layers; x <= midX + layers; x++ {
-		for y := midY - layers; y <= midY + layers; y++ {
-			for z := midZ - layers; z <= midZ + layers; z++ {
-				xIdx := (x + int(h0.GridWidth)) % int(h0.GridWidth)
-				yIdx := (y + int(h0.GridWidth)) % int(h0.GridWidth)
-				zIdx := (z + int(h0.GridWidth)) % int(h0.GridWidth)
-					
-				_, ps := readParticles(int(h0.GridWidth), xIdx, yIdx, zIdx, dir)
-				man.Add(ps)
-				runtime.ReadMemStats(&ms)
-
-				if x == midX && y == midY && z == midZ {
-					centerPs = ps
-				}
-			}
-		}
-	}
+	h0, man, centerPs := helper.ReadCatalogs(dir, midX, midY, midZ, layers)
 
 	lRs, lRFreq, lVs, lVFreq, f := dimensionBins(h0, centerPs, man, bins)
 
@@ -59,16 +33,6 @@ func main() {
 	}
 }
 
-func readParticles(
-	gridWidth, x, y, z int,
-	dir string,
-) (*tetra.Header, []tetra.Particle) {
-	idx := x + y * gridWidth + z * gridWidth * gridWidth
-	name := fmt.Sprintf("gridcell_%04d.dat", idx)
-	path := path.Join(dir, name)
-	return catalog.Read(path)
-}
-
 // returns binned dimensional statistics
 func dimensionBins(
 	h0 *tetra.Header,
@@ -76,44 +40,43 @@ func dimensionBins(
 	man *tetra.ParticleManager,
 	bins int,
 ) (lRs, lRFreqs, lVs, lVFreqs []float64, missFrac float64) {
-	Vs := make([]float64, len(ps))
-	Rs := make([]float64, 3 * len(ps))
+	Vs := make([]float64, 6 * len(ps))
+	Rs := make([]float64, 6 * 3 * len(ps))
 
 	
 	cornerBuf := []int64{ 0, 0, 0 }
 	partBuf := []*tetra.Particle{ nil, nil, nil, nil }
 	vb := tetra.NewVolumeBuffer()
 
-	misses := 0
-	volMisses := 0
+	rIdx, vIdx := 0, 0
 
 	for i := range ps {
-		h0.TetraCorners(ps[i].Id, cornerBuf)
-		partBuf[3] = &ps[i]
+		for dir := 0; dir < 6; dir++ {
+			h0.TetraCorners(ps[i].Id, dir, cornerBuf)
+			partBuf[3] = &ps[i]
 
-		for j, cornerIdx := range cornerBuf {
-			c := man.Get(cornerIdx)
-			partBuf[j] = c
-
-			if c == nil {
-				misses += 1
-			} else {
-				Rs[3 * i + j - misses] = h0.Distance(&ps[i], c)
+			for j, cornerIdx := range cornerBuf {
+				c := man.Get(cornerIdx)
+				partBuf[j] = c
+				
+				if c != nil {
+					Rs[rIdx] = h0.Distance(&ps[i], c)
+					rIdx++
+				}
 			}
-		}
-
-		if partBuf[0] != nil && partBuf[1] != nil && partBuf[2] != nil {
-			vol := h0.Volume(partBuf, vb)
-			Vs[i - volMisses] = vol
-		} else {
-			volMisses++
+			
+			if partBuf[0] != nil && partBuf[1] != nil && partBuf[2] != nil {
+				vol := h0.Volume(partBuf, vb)
+				Vs[vIdx] = vol
+				vIdx++
+			}
 		}
 	}
 
 
-	lRs, lRFreqs = logBin(Rs[0: len(Rs) - misses], bins)
-	lVs, lVFreqs = logBin(Vs[0: len(Vs) - volMisses], bins)
-	missFrac = float64(misses) / (3.0 * float64(len(ps)))
+	lRs, lRFreqs = logBin(Rs[0: rIdx], bins)
+	lVs, lVFreqs = logBin(Vs[0: vIdx], bins)
+	missFrac = float64(vIdx) / float64(len(Vs))
 
 	return lRs, lRFreqs, lVs, lVFreqs, missFrac
 }
