@@ -9,6 +9,9 @@ _test
 scripts/batch_scripts
 scripts/pprof
 scripts/out
+out
+plots
+plotting_scripts
 
 # Architecture specific extensions/prefixes
 *.[568vq]
@@ -25,3 +28,5 @@ _testmain.go
 *.exe
 *.test
 *.prof
+*.pprof
+*.mprof
