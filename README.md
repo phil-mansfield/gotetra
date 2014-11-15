@@ -23,7 +23,7 @@ particle catalogs.
 
 - Package `grid` provides functions for operating on 3D grids.
 
-- Package `scripts` contains numerous large scritps for actually computing
+- Package `scripts` contains numerous large scripts for actually computing
 quantities.
 
 - Package `scripts/helper` contains helper functions for script writing which
