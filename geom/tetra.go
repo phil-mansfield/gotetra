@@ -131,7 +131,7 @@ func (t *Tetra) Contains(v *Vec) bool {
 	volSum += math.Abs(vi)
 
 	if volSum > vol {
-		return false
+		 return false
 	}
 	vi = t.signedVolume(&t.Corners[0], &t.Corners[1], v, &t.Corners[3])
 	if math.Signbit(vi) != sign {
@@ -151,7 +151,8 @@ func (t *Tetra) Contains(v *Vec) bool {
 	return (1-eps)*math.Abs(volSum) <= vol
 }
 
-// TODO: Think about whether or not this actually does what you want with
+// TODO: Think about whether or not this actually does what you want with the
+// sign bit.
 func (t *Tetra) signedVolume(c1, c2, c3, c4 *Vec) float64 {
 	c2.SubAt(c1, t.width, &t.vb.buf1)
 	c3.SubAt(c1, t.width, &t.vb.buf2)
@@ -215,7 +216,7 @@ func minMax(x, oldMin, oldMax float32) (min, max float32) {
 // from within a tetrahedron. The length of randBuf must be three times the
 // length of vecBuf.
 func (t *Tetra) Sample(gen *rand.Generator, randBuf []float64, vecBuf []Vec) {
-	if len(randBuf)*3 != len(vecBuf) {
+	if len(randBuf) != len(vecBuf) *3 {
 		panic(fmt.Sprintf("buf len %d not long enough for %d points.",
 			len(randBuf), len(vecBuf)))
 	}
