@@ -190,9 +190,12 @@ func (t *Tetra) CellBoundsAt(g *Grid, out *CellBounds) *CellBounds {
 		}
 	}
 
+	mult := float64(g.Width) / t.width
 	for d := 0; d < 3; d++ {
-		out.Min[d] = int(math.Floor(float64(bary[d] + minDs[d])))
-		out.Max[d] = int(math.Ceil(float64(bary[d] + maxDs[d])))
+		fIdx := float64(bary[d] + minDs[d]) * mult
+		out.Min[d] =  int(math.Floor(fIdx)) - g.Origin[d]
+		fIdx = float64(bary[d] + maxDs[d]) * mult
+		out.Max[d] = int(math.Ceil(fIdx)) - g.Origin[d]
 	}
 
 	return out
