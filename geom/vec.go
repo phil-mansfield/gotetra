@@ -1,13 +1,15 @@
+/*package geom contains routines for computing geometrical quantities in a
+box with periodic boundary conditions. */
 package geom
 
 import (
 	"math"
 )
 
-/* Vec represents a 3D vector. All vector methods which return vectors will
-also contain *Self() and *At() variants which compute the operation in-place
-and at the specified location, respectively. All output vectors are valid
-unless they overlap with an input vector but are not equal to that vector. */
+// Vec represents a 3D vector. All vector methods which return vectors will
+// also contain *Self() and *At() variants which compute the operation in-place
+// and at the specified location, respectively. All output vectors are valid
+// unless they overlap with an input vector but are not equal to that vector.
 type Vec [3]float32
 
 // Scale multiplies all components of a vector by a constant.
