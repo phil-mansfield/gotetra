@@ -19,9 +19,8 @@ Project Structure
 - Package `catalog` handles reading to and writing from different formats of
 particle catalogs.
 
-- Package `geom` provides functions for computing properties of 3D objects.
-
-- Package `grid` provides functions for operating on 3D grids.
+- Package `geom` provides functions for computing properties of 3D objects
+within domains with periodic boundary conditions.
 
 - Package `scripts` contains numerous large scripts for actually computing
 quantities.
