@@ -67,34 +67,17 @@ func (v1 *Vec) AddAt(v2, out *Vec) *Vec {
 	return out
 }
 
-// Sub subtracts two vectors.
-func (v1 *Vec) Sub(v2 *Vec) *Vec {
-	return v1.SubAt(v2, &Vec{})
-}
-
-func (v1 *Vec) SubSelf(v2 *Vec) *Vec {
-	return v1.SubAt(v2, v1)
-}
-
-func (v1 *Vec) SubAt(v2, out *Vec) *Vec {
-	for i := 0; i < 3; i++ {
-		out[i] = v1[i] - v2[i]
-	}
-
-	return out
-}
-
-// ModSub caluculates the minimum dispacement vecotr between two vectors,
+// Sub caluculates the dispacement vector between two vectors,
 // assuming a box of the given width with periodic boundary conditions.
-func (v1 *Vec) ModSub(v2 *Vec, width float64) *Vec {
-	return v1.ModSubAt(v2, width, &Vec{})
+func (v1 *Vec) Sub(v2 *Vec, width float64) *Vec {
+	return v1.SubAt(v2, width, &Vec{})
 }
 
-func (v1 *Vec) ModSubSelf(v2 *Vec, width float64) *Vec {
-	return v1.ModSubAt(v2, width, v1)
+func (v1 *Vec) SubSelf(v2 *Vec, width float64) *Vec {
+	return v1.SubAt(v2, width, v1)
 }
 
-func (v1 *Vec) ModSubAt(v2 *Vec, width float64, out *Vec) *Vec {
+func (v1 *Vec) SubAt(v2 *Vec, width float64, out *Vec) *Vec {
 	w2 := width / 2.0
 	for i := 0; i < 3; i++ {
 		out[i] = float32(math.Mod(float64(v1[i] - v2[i]), w2))
