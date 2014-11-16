@@ -1,7 +1,7 @@
 package geom
 
 // Grid provides an interface for reasoning over a 1D slice as if it were a
-// 3D grid with periodic boundary conditions.
+// 3D grid.
 type Grid struct {
 	Origin              [3]int
 	Width, Area, Volume int
@@ -28,24 +28,23 @@ func (g *Grid) Init(origin *[3]int, width int) {
 }
 
 // Bounds returns a Grid's bounding box.
-func (g *Grid) Bounds() *CellBounds {
+func (g *Grid) CellBounds() *CellBounds {
 	b := &CellBounds{}
-	g.BoundsAt(b)
+	g.CellBoundsAt(b)
 	return b
 }
 
 // BoundsAt puts a Grid' bounding box at the specified location.
-func (g *Grid) BoundsAt(out *CellBounds) {
+func (g *Grid) CellBoundsAt(out *CellBounds) {
 	out.Min = g.Origin
 	for d := 0; d < 3; d++ {
 		out.Max[d] = out.Min[d]
 	}
 }
 
-// Idx returns the grid index corresponding to a set of coordinates. Periodic
-// boundary conditions are assumed.
+// Idx returns the grid index corresponding to a set of coordinates.
 func (g *Grid) Idx(x, y, z int) int {
-	return pMod(x, g.Width) + pMod(y, g.Width)*g.Width + pMod(z, g.Width)*g.Area
+	return x + y*g.Width + z*g.Area
 }
 
 // Coords returns the x, y, z coordinates of a point from its grid index.
