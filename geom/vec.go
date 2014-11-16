@@ -21,7 +21,7 @@ func (v *Vec) ScaleSelf(k float64) *Vec {
 	return v.ScaleAt(k, v)
 }
 
-func (v *Vec) ScaleAt(k float64, out *Vec) *Vec {	
+func (v *Vec) ScaleAt(k float64, out *Vec) *Vec {
 	for i := 0; i < 3; i++ {
 		out[i] = float32(float64(v[i]) * k)
 	}
@@ -42,7 +42,7 @@ func (v *Vec) ModSelf(width float64) *Vec {
 func (v *Vec) ModAt(width float64, out *Vec) *Vec {
 	for i := 0; i < 3; i++ {
 		out[i] = float32(math.Mod(float64(v[i]), width))
-		if out[i] < 0 { 
+		if out[i] < 0 {
 			out[i] += float32(width)
 		}
 	}
@@ -80,7 +80,7 @@ func (v1 *Vec) SubSelf(v2 *Vec, width float64) *Vec {
 func (v1 *Vec) SubAt(v2 *Vec, width float64, out *Vec) *Vec {
 	w2 := width / 2.0
 	for i := 0; i < 3; i++ {
-		out[i] = float32(math.Mod(float64(v1[i] - v2[i]), w2))
+		out[i] = float32(math.Mod(float64(v1[i]-v2[i]), w2))
 	}
 
 	return out
@@ -110,9 +110,9 @@ func (v1 *Vec) CrossSelf(v2 *Vec) *Vec {
 }
 
 func (v2 *Vec) CrossAt(v1, out *Vec) *Vec {
-	out0 := v1[1] * v2[2] - v1[2] * v2[1]
-	out1 := v1[2] * v2[0] - v1[0] * v2[2]
-	out2 := v1[0] * v2[1] - v1[1] * v2[0]
+	out0 := v1[1]*v2[2] - v1[2]*v2[1]
+	out1 := v1[2]*v2[0] - v1[0]*v2[2]
+	out2 := v1[0]*v2[1] - v1[1]*v2[0]
 	out[0], out[1], out[2] = out0, out1, out2
 	return out
 }

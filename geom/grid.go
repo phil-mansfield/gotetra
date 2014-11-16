@@ -1,9 +1,9 @@
 package geom
 
-// Grid provides an interface for reasoning over a 1D slice as if it were a 
+// Grid provides an interface for reasoning over a 1D slice as if it were a
 // 3D grid with periodic boundary conditions.
 type Grid struct {
-	Origin [3]int
+	Origin              [3]int
 	Width, Area, Volume int
 }
 
@@ -14,7 +14,7 @@ type CellBounds struct {
 
 // NewGrid returns a new Grid instance.
 func NewGrid(origin *[3]int, width int) *Grid {
-	g := &Grid{} 
+	g := &Grid{}
 	g.Init(origin, width)
 	return g
 }
@@ -45,7 +45,7 @@ func (g *Grid) BoundsAt(out *CellBounds) {
 // Idx returns the grid index corresponding to a set of coordinates. Periodic
 // boundary conditions are assumed.
 func (g *Grid) Idx(x, y, z int) int {
-	return pMod(x, g.Width) + pMod(y, g.Width) * g.Width + pMod(z, g.Width) * g.Area
+	return pMod(x, g.Width) + pMod(y, g.Width)*g.Width + pMod(z, g.Width)*g.Area
 }
 
 // Coords returns the x, y, z coordinates of a point from its grid index.
@@ -59,6 +59,8 @@ func (g *Grid) Coords(idx int) (x, y, z int) {
 // pMod computes the positive module x % y.
 func pMod(x, y int) int {
 	m := x % y
-	if m < 0 { m += y }
+	if m < 0 {
+		m += y
+	}
 	return m
 }

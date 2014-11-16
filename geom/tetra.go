@@ -16,11 +16,12 @@ import (
 // Tetra instances only for calculations.
 type Tetra struct {
 	Corners [4]Vec
-	volume float64
-	bary Vec
-	width float64
-	vb volumeBuffer
-	sb sampleBuffer
+	volume  float64
+	bary    Vec
+	width   float64
+	vb      volumeBuffer
+	sb      sampleBuffer
+
 	volumeValid, baryValid bool
 }
 
@@ -67,7 +68,7 @@ func NewTetra(c1, c2, c3, c4 *Vec, width float64) (t *Tetra, ok bool) {
 func (t *Tetra) Init(c1, c2, c3, c4 *Vec, width float64) (ok bool) {
 	t.volumeValid = false
 	t.baryValid = false
-	
+
 	if c1 == nil || c2 == nil || c3 == nil || c4 == nil {
 		return false
 	}
@@ -120,25 +121,37 @@ func (t *Tetra) Contains(v *Vec) bool {
 	volSum := math.Abs(vi)
 	sign := math.Signbit(volSum)
 
-	if volSum > vol { return false }
+	if volSum > vol {
+		return false
+	}
 	vi = t.signedVolume(&t.Corners[0], v, &t.Corners[2], &t.Corners[3])
-	if math.Signbit(vi) != sign { return false }
+	if math.Signbit(vi) != sign {
+		return false
+	}
 	volSum += math.Abs(vi)
 
-	if volSum > vol { return false }
+	if volSum > vol {
+		return false
+	}
 	vi = t.signedVolume(&t.Corners[0], &t.Corners[1], v, &t.Corners[3])
-	if math.Signbit(vi) != sign { return false }
+	if math.Signbit(vi) != sign {
+		return false
+	}
 	volSum += math.Abs(vi)
 
-	if volSum > vol { return false }
+	if volSum > vol {
+		return false
+	}
 	vi = t.signedVolume(&t.Corners[0], &t.Corners[1], &t.Corners[2], v)
-	if math.Signbit(vi) != sign { return false }
+	if math.Signbit(vi) != sign {
+		return false
+	}
 	volSum += math.Abs(vi)
 
-	return (1 - eps) * math.Abs(volSum) <= vol
+	return (1-eps)*math.Abs(volSum) <= vol
 }
 
-// TODO: Think about whether or not this actually does what you want with 
+// TODO: Think about whether or not this actually does what you want with
 func (t *Tetra) signedVolume(c1, c2, c3, c4 *Vec) float64 {
 	c2.SubAt(c1, t.width, &t.vb.buf1)
 	c3.SubAt(c1, t.width, &t.vb.buf2)
@@ -178,8 +191,8 @@ func (t *Tetra) CellBoundsAt(g *Grid, out *CellBounds) *CellBounds {
 	}
 
 	for d := 0; d < 3; d++ {
-		out.Mins[d] = int64(math.Floor(float64(bary[d] + minDs[d])))
-		out.Maxs[d] = int64(math.Ceil(float64(bary[d] + maxDs[d])))
+		out.Min[d] = int(math.Floor(float64(bary[d] + minDs[d])))
+		out.Max[d] = int(math.Ceil(float64(bary[d] + maxDs[d])))
 	}
 
 	return out
@@ -199,14 +212,14 @@ func minMax(x, oldMin, oldMax float32) (min, max float32) {
 // from within a tetrahedron. The length of randBuf must be three times the
 // length of vecBuf.
 func (t *Tetra) Sample(gen *rand.Generator, randBuf []float64, vecBuf []Vec) {
-	if len(randBuf) * 3 != len(vecBuf) {
+	if len(randBuf)*3 != len(vecBuf) {
 		panic(fmt.Sprintf("buf len %d not long enough for %d points.",
 			len(randBuf), len(vecBuf)))
 	}
 
 	gen.UniformAt(0.0, 1.0, randBuf)
 	bary := t.Barycenter()
-	
+
 	// Some gross code to prevent allocations. cs are the displacement vectors
 	// to the corners and the ds are the barycentric components of the random
 	// points.
@@ -217,14 +230,14 @@ func (t *Tetra) Sample(gen *rand.Generator, randBuf []float64, vecBuf []Vec) {
 
 	for i := range vecBuf {
 		// Generate three of the four barycentric coordinates
-		t1, t2, t3 := randBuf[i * 3], randBuf[i * 3 + 1], randBuf[i * 3 + 2]
+		t1, t2, t3 := randBuf[i*3], randBuf[i*3+1], randBuf[i*3+2]
 
-		if t1 + t2 + t3 < 1.0 {
+		if t1+t2+t3 < 1.0 {
 			continue
-		} else if t2 + t3 > 1.0 {
-			t1, t2, t3 = t1, 1.0 - t3, 1.0 - t1 - t2
+		} else if t2+t3 > 1.0 {
+			t1, t2, t3 = t1, 1.0-t3, 1.0-t1-t2
 		} else {
-			t1, t2, t3 = 1.0 - t2 - t3, t2,  t1 + t2 + t3 - 1.0
+			t1, t2, t3 = 1.0-t2-t3, t2, t1+t2+t3-1.0
 		}
 
 		// Solve for the last one.
@@ -234,7 +247,7 @@ func (t *Tetra) Sample(gen *rand.Generator, randBuf []float64, vecBuf []Vec) {
 		t.sb.c[1].ScaleAt(t2, &t.sb.d[1])
 		t.sb.c[2].ScaleAt(t3, &t.sb.d[2])
 		t.sb.c[3].ScaleAt(t4, &t.sb.d[3])
-		
+
 		t.sb.c[0].AddAt(&t.sb.c[1], &vecBuf[i])
 		vecBuf[i].AddSelf(&t.sb.c[2]).AddSelf(&t.sb.c[3])
 	}
@@ -252,7 +265,7 @@ func (t *Tetra) Barycenter() *Vec {
 
 	for d := 0; d < 3; d++ {
 		xiSum, zetaSum := 0.0, 0.0
-		
+
 		for i := 0; i < 4; i++ {
 			theta := float64(t.Corners[i][d]) * wTwoPi
 			zeta, xi := math.Sincos(theta)
@@ -260,8 +273,8 @@ func (t *Tetra) Barycenter() *Vec {
 			xiSum += xi
 			zetaSum += zeta
 		}
-		
-		zetaBar, xiBar := zetaSum / 4.0, xiSum / 4.0
+
+		zetaBar, xiBar := zetaSum/4.0, xiSum/4.0
 		t.bary[d] = float32((math.Atan2(-zetaBar, -xiBar) + math.Pi) / wTwoPi)
 	}
 
