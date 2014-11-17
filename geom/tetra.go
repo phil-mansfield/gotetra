@@ -74,9 +74,11 @@ func (t *Tetra) Init(c1, c2, c3, c4 *Vec, width float64) (ok bool) {
 	}
 
 	t.Corners[0] = *c1
-	t.Corners[0] = *c2
-	t.Corners[0] = *c3
-	t.Corners[0] = *c4
+	t.Corners[1] = *c2
+	t.Corners[2] = *c3
+	t.Corners[3] = *c4
+
+	t.width = width
 
 	// Remaining fields are buffers and need not be initialized.
 
@@ -117,38 +119,41 @@ func (t *Tetra) Contains(v *Vec) bool {
 	vol := t.Volume()
 
 	// (my appologies for the gross code here)
-	vi := t.signedVolume(v, &t.Corners[1], &t.Corners[2], &t.Corners[3])
+	vi := t.signedVolume(v, &t.Corners[0], &t.Corners[1], &t.Corners[2])
 	volSum := math.Abs(vi)
-	sign := math.Signbit(volSum)
-
-	if volSum > vol {
+	sign := math.Signbit(vi)
+	if volSum > vol * (1 + eps) {
 		return false
 	}
-	vi = t.signedVolume(&t.Corners[0], v, &t.Corners[2], &t.Corners[3])
+
+	vi = t.signedVolume(v, &t.Corners[1], &t.Corners[3], &t.Corners[2])
 	if math.Signbit(vi) != sign {
 		return false
 	}
 	volSum += math.Abs(vi)
-
-	if volSum > vol {
-		 return false
+	if volSum > vol * (1 + eps) {
+		return false
 	}
-	vi = t.signedVolume(&t.Corners[0], &t.Corners[1], v, &t.Corners[3])
+
+	vi = t.signedVolume(v, &t.Corners[0], &t.Corners[3], &t.Corners[1])
 	if math.Signbit(vi) != sign {
 		return false
 	}
 	volSum += math.Abs(vi)
-
-	if volSum > vol {
+	if volSum > vol * (1 + eps) {
 		return false
 	}
-	vi = t.signedVolume(&t.Corners[0], &t.Corners[1], &t.Corners[2], v)
+
+	vi = t.signedVolume(v, &t.Corners[0], &t.Corners[2], &t.Corners[3])
 	if math.Signbit(vi) != sign {
 		return false
 	}
 	volSum += math.Abs(vi)
+	return epsEq(volSum, vol, eps)
+}
 
-	return (1-eps)*math.Abs(volSum) <= vol
+func epsEq(x, y, eps float64) bool {
+	return (x == 0 && y == 0) || math.Abs((x - y) / x) <= eps
 }
 
 // TODO: Think about whether or not this actually does what you want with the
@@ -159,6 +164,7 @@ func (t *Tetra) signedVolume(c1, c2, c3, c4 *Vec) float64 {
 	c4.SubAt(c1, t.width, &t.vb.buf3)
 
 	t.vb.buf2.CrossSelf(&t.vb.buf3)
+
 	return t.vb.buf1.Dot(&t.vb.buf2) / 6.0
 }
 
