@@ -78,17 +78,25 @@ func (v1 *Vec) SubSelf(v2 *Vec, width float64) *Vec {
 }
 
 func (v1 *Vec) SubAt(v2 *Vec, width float64, out *Vec) *Vec {
-	w2 := width / 2.0
-	for i := 0; i < 3; i++ {
-		out[i] = float32(math.Mod(float64(v1[i]-v2[i]), w2))
-	}
+    w2 := width / 2.0
+    for i := 0; i < 3; i++ {
+        diff := math.Mod(float64(v1[i]-v2[i]), width)
 
-	return out
+        if diff > w2 {
+            diff -= width
+        } else if diff < -w2 {
+            diff += width
+        }
+
+		out[i] = float32(diff)
+    }
+
+    return out
 }
 
 // Norm computes the norm of a vector.
 func (v *Vec) Norm() float64 {
-	return v.Dot(v)
+	return math.Sqrt(v.Dot(v))
 }
 
 // Dot computes the dot product of two vectors.
@@ -97,7 +105,7 @@ func (v1 *Vec) Dot(v2 *Vec) float64 {
 	for i := 0; i < 3; i++ {
 		sum += float64(v1[i] * v2[i])
 	}
-	return math.Sqrt(sum)
+	return sum
 }
 
 // Cross computes the cross product of two vectors.
