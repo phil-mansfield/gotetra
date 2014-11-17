@@ -38,7 +38,7 @@ type sampleBuffer struct {
 }
 
 const (
-	eps = 1e-6
+	eps = 5e-5
 
 	TetraDirCount = 6
 )
@@ -117,7 +117,7 @@ func (t *Tetra) Volume() float64 {
 // otherwise.
 func (t *Tetra) Contains(v *Vec) bool {
 	vol := t.Volume()
-
+	
 	// (my appologies for the gross code here)
 	vi := t.signedVolume(v, &t.Corners[0], &t.Corners[1], &t.Corners[2])
 	volSum := math.Abs(vi)
@@ -148,11 +148,14 @@ func (t *Tetra) Contains(v *Vec) bool {
 	if math.Signbit(vi) != sign {
 		return false
 	}
-	return true
+
+	// This last check is neccessary due to periodic boundaries.
+	return epsEq(math.Abs(vi) + volSum, vol, eps)
 }
 
 func epsEq(x, y, eps float64) bool {
-	return (x == 0 && y == 0) || math.Abs((x - y) / x) <= eps
+	return (x == 0 && y == 0) || 
+		(x != 0 && y != 0 && math.Abs((x - y) / x) <= eps)
 }
 
 // TODO: Think about whether or not this actually does what you want with the
@@ -163,7 +166,6 @@ func (t *Tetra) signedVolume(c1, c2, c3, c4 *Vec) float64 {
 	c4.SubAt(c1, t.width, &t.vb.buf3)
 
 	t.vb.buf2.CrossSelf(&t.vb.buf3)
-
 	return t.vb.buf1.Dot(&t.vb.buf2) / 6.0
 }
 
