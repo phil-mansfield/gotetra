@@ -263,7 +263,8 @@ func (tet *Tetra) Sample(gen *rand.Generator, randBuf []float64, vecBuf []Vec) {
 
 
 		tet.sb.d[0].AddAt(bary, &vecBuf[i])
-		vecBuf[i].AddSelf(&tet.sb.d[1]).AddSelf(&tet.sb.d[2]).AddSelf(&tet.sb.d[3])
+		vecBuf[i].AddSelf(&tet.sb.d[1]).AddSelf(&tet.sb.d[2])
+		vecBuf[i].AddSelf(&tet.sb.d[3]).ModSelf(tet.width)
 	}
 }
 
