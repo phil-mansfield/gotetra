@@ -222,45 +222,48 @@ func minMax(x, oldMin, oldMax float32) (min, max float32) {
 // Sample fills a buffer of vecotrs with points generated uniformly at random
 // from within a tetrahedron. The length of randBuf must be three times the
 // length of vecBuf.
-func (t *Tetra) Sample(gen *rand.Generator, randBuf []float64, vecBuf []Vec) {
+func (tet *Tetra) Sample(gen *rand.Generator, randBuf []float64, vecBuf []Vec) {
 	if len(randBuf) != len(vecBuf) *3 {
 		panic(fmt.Sprintf("buf len %d not long enough for %d points.",
 			len(randBuf), len(vecBuf)))
 	}
 
 	gen.UniformAt(0.0, 1.0, randBuf)
-	bary := t.Barycenter()
+	bary := tet.Barycenter()
 
 	// Some gross code to prevent allocations. cs are the displacement vectors
 	// to the corners and the ds are the barycentric components of the random
 	// points.
 	for i := 0; i < 4; i++ {
-		t.Corners[i].SubAt(bary, t.width, &t.sb.c[i])
-		t.sb.d[i].ScaleSelf(0.0)
+		tet.Corners[i].SubAt(bary, tet.width, &tet.sb.c[i])
+		tet.sb.d[i].ScaleSelf(0.0)
 	}
 
 	for i := range vecBuf {
-		// Generate three of the four barycentric coordinates
-		t1, t2, t3 := randBuf[i*3], randBuf[i*3+1], randBuf[i*3+2]
+		// Generate three of the four barycentric coordinates, see
+		// C. Rocchini, P. Cignoni, 2001.
+		s, t, u := randBuf[i*3], randBuf[i*3+1], randBuf[i*3+2]
 
-		if t1+t2+t3 < 1.0 {
-			continue
-		} else if t2+t3 > 1.0 {
-			t1, t2, t3 = t1, 1.0-t3, 1.0-t1-t2
-		} else {
-			t1, t2, t3 = 1.0-t2-t3, t2, t1+t2+t3-1.0
+		if s+t > 1 {
+			s, t = 1-s, 1-t
 		}
 
-		// Solve for the last one.
-		t4 := 1.0 - t1 - t2 - t3
+		if t+u > 1 {
+			t, u = 1-u, 1-s-t
+		} else if s+t+u > 1 {
+			s, u = 1-t-u, s+t+u-1
+		}
 
-		t.sb.c[0].ScaleAt(t1, &t.sb.d[0])
-		t.sb.c[1].ScaleAt(t2, &t.sb.d[1])
-		t.sb.c[2].ScaleAt(t3, &t.sb.d[2])
-		t.sb.c[3].ScaleAt(t4, &t.sb.d[3])
+		v := 1-s-t-u
 
-		t.sb.c[0].AddAt(&t.sb.c[1], &vecBuf[i])
-		vecBuf[i].AddSelf(&t.sb.c[2]).AddSelf(&t.sb.c[3])
+		tet.sb.c[0].ScaleAt(s, &tet.sb.d[0])
+		tet.sb.c[1].ScaleAt(t, &tet.sb.d[1])
+		tet.sb.c[2].ScaleAt(u, &tet.sb.d[2])
+		tet.sb.c[3].ScaleAt(v, &tet.sb.d[3])
+
+
+		tet.sb.d[0].AddAt(bary, &vecBuf[i])
+		vecBuf[i].AddSelf(&tet.sb.d[1]).AddSelf(&tet.sb.d[2]).AddSelf(&tet.sb.d[3])
 	}
 }
 
