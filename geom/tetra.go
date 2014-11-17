@@ -73,10 +73,10 @@ func (t *Tetra) Init(c1, c2, c3, c4 *Vec, width float64) (ok bool) {
 		return false
 	}
 
-	t.Corners[0] = *c1
-	t.Corners[1] = *c2
-	t.Corners[2] = *c3
-	t.Corners[3] = *c4
+	c1.ModAt(width, &t.Corners[0])
+	c2.ModAt(width, &t.Corners[1])
+	c3.ModAt(width, &t.Corners[2])
+	c4.ModAt(width, &t.Corners[3])
 
 	t.width = width
 
@@ -148,8 +148,7 @@ func (t *Tetra) Contains(v *Vec) bool {
 	if math.Signbit(vi) != sign {
 		return false
 	}
-	volSum += math.Abs(vi)
-	return epsEq(volSum, vol, eps)
+	return true
 }
 
 func epsEq(x, y, eps float64) bool {
@@ -269,25 +268,16 @@ func (t *Tetra) Barycenter() *Vec {
 		return &t.bary
 	}
 
-	// This is a bit more involved than normal because of the periodic boundary
-	// conditions. The idea is to interpret the points as angles on a circle.
-	wTwoPi := 2.0 * math.Pi / t.width
-
-	for d := 0; d < 3; d++ {
-		xiSum, zetaSum := 0.0, 0.0
-
-		for i := 0; i < 4; i++ {
-			theta := float64(t.Corners[i][d]) * wTwoPi
-			zeta, xi := math.Sincos(theta)
-
-			xiSum += xi
-			zetaSum += zeta
-		}
-
-		zetaBar, xiBar := zetaSum/4.0, xiSum/4.0
-		t.bary[d] = float32((math.Atan2(-zetaBar, -xiBar) + math.Pi) / wTwoPi)
-	}
-
+	buf1, buf2 := &t.vb.buf1, &t.vb.buf2
+	center(&t.Corners[0], &t.Corners[1], buf1, t.width)
+	center(&t.Corners[2], &t.Corners[3], buf2, t.width)
+	center(buf1, buf2, &t.bary, t.width)
+	t.bary.ModSelf(t.width)
 	t.baryValid = true
+
 	return &t.bary
+}
+
+func center(r1, r2, out *Vec, width float64) {
+	r1.SubAt(r2, width, out).AddSelf(r2).AddSelf(r2).ScaleSelf(0.5)
 }
