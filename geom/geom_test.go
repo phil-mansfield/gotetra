@@ -201,7 +201,7 @@ func TestVolume(t *testing.T) {
 		tet, valid := NewTetra(test.c1, test.c2, test.c3, test.c4, test.width)
 
 		if valid != test.valid {
-			t.Errorf("%d) Tetra {%v %v %v %v} gives validity %b, not %b\n",
+			t.Errorf("%d) Tetra {%v %v %v %v} gives validity %v, not %v\n",
 				i, test.c1, test.c2, test.c3, test.c4, valid, test.valid)
 		} else if valid && !epsEq(test.vol, tet.Volume(), testEps) {
 			t.Errorf("%d) Tetra {%v %v %v %v} gives volume %g, not %g\n",
