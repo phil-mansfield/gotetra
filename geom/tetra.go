@@ -117,12 +117,12 @@ func (t *Tetra) Volume() float64 {
 // otherwise.
 func (t *Tetra) Contains(v *Vec) bool {
 	vol := t.Volume()
-	
+
 	// (my appologies for the gross code here)
 	vi := t.signedVolume(v, &t.Corners[0], &t.Corners[1], &t.Corners[2])
 	volSum := math.Abs(vi)
 	sign := math.Signbit(vi)
-	if volSum > vol * (1 + eps) {
+	if volSum > vol*(1+eps) {
 		return false
 	}
 
@@ -131,7 +131,7 @@ func (t *Tetra) Contains(v *Vec) bool {
 		return false
 	}
 	volSum += math.Abs(vi)
-	if volSum > vol * (1 + eps) {
+	if volSum > vol*(1+eps) {
 		return false
 	}
 
@@ -140,7 +140,7 @@ func (t *Tetra) Contains(v *Vec) bool {
 		return false
 	}
 	volSum += math.Abs(vi)
-	if volSum > vol * (1 + eps) {
+	if volSum > vol*(1+eps) {
 		return false
 	}
 
@@ -150,12 +150,12 @@ func (t *Tetra) Contains(v *Vec) bool {
 	}
 
 	// This last check is neccessary due to periodic boundaries.
-	return epsEq(math.Abs(vi) + volSum, vol, eps)
+	return epsEq(math.Abs(vi)+volSum, vol, eps)
 }
 
 func epsEq(x, y, eps float64) bool {
-	return (x == 0 && y == 0) || 
-		(x != 0 && y != 0 && math.Abs((x - y) / x) <= eps)
+	return (x == 0 && y == 0) ||
+		(x != 0 && y != 0 && math.Abs((x-y)/x) <= eps)
 }
 
 // TODO: Think about whether or not this actually does what you want with the
@@ -200,9 +200,9 @@ func (t *Tetra) CellBoundsAt(g *Grid, out *CellBounds) *CellBounds {
 
 	mult := float64(g.Width) / t.width
 	for d := 0; d < 3; d++ {
-		fIdx := float64(bary[d] + minDs[d]) * mult
-		out.Min[d] =  int(math.Floor(fIdx)) - g.Origin[d]
-		fIdx = float64(bary[d] + maxDs[d]) * mult
+		fIdx := float64(bary[d]+minDs[d]) * mult
+		out.Min[d] = int(math.Floor(fIdx)) - g.Origin[d]
+		fIdx = float64(bary[d]+maxDs[d]) * mult
 		out.Max[d] = int(math.Ceil(fIdx)) - g.Origin[d]
 	}
 
@@ -223,7 +223,7 @@ func minMax(x, oldMin, oldMax float32) (min, max float32) {
 // from within a tetrahedron. The length of randBuf must be three times the
 // length of vecBuf.
 func (tet *Tetra) Sample(gen *rand.Generator, randBuf []float64, vecBuf []Vec) {
-	if len(randBuf) != len(vecBuf) *3 {
+	if len(randBuf) != len(vecBuf)*3 {
 		panic(fmt.Sprintf("buf len %d not long enough for %d points.",
 			len(randBuf), len(vecBuf)))
 	}
@@ -254,13 +254,12 @@ func (tet *Tetra) Sample(gen *rand.Generator, randBuf []float64, vecBuf []Vec) {
 			s, u = 1-t-u, s+t+u-1
 		}
 
-		v := 1-s-t-u
+		v := 1 - s - t - u
 
 		tet.sb.c[0].ScaleAt(s, &tet.sb.d[0])
 		tet.sb.c[1].ScaleAt(t, &tet.sb.d[1])
 		tet.sb.c[2].ScaleAt(u, &tet.sb.d[2])
 		tet.sb.c[3].ScaleAt(v, &tet.sb.d[3])
-
 
 		tet.sb.d[0].AddAt(bary, &vecBuf[i])
 		vecBuf[i].AddSelf(&tet.sb.d[1]).AddSelf(&tet.sb.d[2])

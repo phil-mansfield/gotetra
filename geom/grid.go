@@ -44,14 +44,14 @@ func (g *Grid) CellBoundsAt(out *CellBounds) {
 
 // Idx returns the grid index corresponding to a set of coordinates.
 func (g *Grid) Idx(x, y, z int) int {
-	return ((x - g.Origin[0]) + (y - g.Origin[1])*g.Width +
-		(z - g.Origin[2])*g.Area)
+	return ((x - g.Origin[0]) + (y-g.Origin[1])*g.Width +
+		(z-g.Origin[2])*g.Area)
 }
 
 // IdxCheck returns an index and true if the given coordinate are valid and
 // false otherwise.
 func (g *Grid) IdxCheck(x, y, z int) (idx int, ok bool) {
-	if !g.BoundsCheck(x, y, z) { 
+	if !g.BoundsCheck(x, y, z) {
 		return -1, false
 	}
 
@@ -61,11 +61,17 @@ func (g *Grid) IdxCheck(x, y, z int) (idx int, ok bool) {
 // TODO: make this correct.
 func (g *Grid) Wrap(x, y, z int) (wx, wy, wz int) {
 	wx = x % g.Width
-	if wx < 0 { wx += g.Width}
+	if wx < 0 {
+		wx += g.Width
+	}
 	wy = y % g.Width
-	if wy < 0 { wy += g.Width}
+	if wy < 0 {
+		wy += g.Width
+	}
 	wz = z % g.Width
-	if wz < 0 { wz += g.Width}
+	if wz < 0 {
+		wz += g.Width
+	}
 	return wx, wy, wz
 }
 
@@ -73,8 +79,8 @@ func (g *Grid) Wrap(x, y, z int) (wx, wy, wz int) {
 // false otherwise.
 func (g *Grid) BoundsCheck(x, y, z int) bool {
 	return (g.Origin[0] < x && g.Origin[1] < y && g.Origin[2] < z) ||
-		(x < g.Width + g.Origin[0] && y < g.Width + g.Origin[1] &&
-		z < g.Width + g.Origin[2])
+		(x < g.Width+g.Origin[0] && y < g.Width+g.Origin[1] &&
+			z < g.Width+g.Origin[2])
 }
 
 // Coords returns the x, y, z coordinates of a point from its grid index.

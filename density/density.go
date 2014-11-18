@@ -25,15 +25,17 @@ type Interpolator interface {
 type Flag int
 
 type cic struct {
-	g, bg geom.Grid
-	cellWidth, cellVolume float64
-	rhos []float64
+	g, bg      geom.Grid
+	cellWidth  float64
+	cellVolume float64
+	rhos       []float64
 }
 
 type ngp struct {
-	g geom.Grid
-	cellWidth, cellVolume float64
-	rhos []float64
+	g          geom.Grid
+	cellWidth  float64
+	cellVolume float64
+	rhos       []float64
 }
 
 const (
@@ -47,7 +49,7 @@ const (
 // interpolation Grids within the bounding grid [on one side].
 func Bounds(cells, gridWidth, gx, gy, gz int) (g, bg *geom.Grid) {
 	g = geom.NewGrid(&[3]int{gx * cells, gy * cells, gz * cells}, cells)
-	bg = geom.NewGrid(&[3]int{0, 0, 0}, cells * gridWidth)
+	bg = geom.NewGrid(&[3]int{0, 0, 0}, cells*gridWidth)
 	return g, bg
 }
 
@@ -104,28 +106,28 @@ func (intr *cic) Interpolate(mass float64, pts []geom.Vec) {
 		j0, j1 := intr.nbrs(int(yc))
 		k0, k1 := intr.nbrs(int(zc))
 
-		intr.incr(i0, j0, k0, tx*ty*tz * frac)
-		intr.incr(i1, j0, k0, dx*ty*tz * frac)
-		intr.incr(i0, j1, k0, tx*dy*tz * frac)
-		intr.incr(i1, j1, k0, dx*dy*tz * frac)
-		intr.incr(i0, j0, k1, tx*ty*dz * frac)
-		intr.incr(i1, j0, k1, dx*ty*dz * frac)
-		intr.incr(i0, j1, k1, tx*dy*dz * frac)
-		intr.incr(i1, j1, k1, dx*dy*dz * frac)
+		intr.incr(i0, j0, k0, tx*ty*tz*frac)
+		intr.incr(i1, j0, k0, dx*ty*tz*frac)
+		intr.incr(i0, j1, k0, tx*dy*tz*frac)
+		intr.incr(i1, j1, k0, dx*dy*tz*frac)
+		intr.incr(i0, j0, k1, tx*ty*dz*frac)
+		intr.incr(i1, j0, k1, dx*ty*dz*frac)
+		intr.incr(i0, j1, k1, tx*dy*dz*frac)
+		intr.incr(i1, j1, k1, dx*dy*dz*frac)
 	}
 }
 
 func (intr *cic) nbrs(i int) (i0, i1 int) {
-	if i + 1 == intr.bg.Width {
+	if i+1 == intr.bg.Width {
 		return i, 0
 	}
-	return i, i +1
+	return i, i + 1
 }
 
 func (intr *cic) incr(i, j, k int, frac float64) {
 	if idx, ok := intr.g.IdxCheck(i, j, k); ok {
 		intr.rhos[idx] += frac
-	}	
+	}
 }
 
 func cellPoints(x, y, z, cw float64) (xc, yc, zc float64) {

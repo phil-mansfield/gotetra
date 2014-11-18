@@ -78,20 +78,20 @@ func (v1 *Vec) SubSelf(v2 *Vec, width float64) *Vec {
 }
 
 func (v1 *Vec) SubAt(v2 *Vec, width float64, out *Vec) *Vec {
-    w2 := width / 2.0
-    for i := 0; i < 3; i++ {
-        diff := math.Mod(float64(v1[i]-v2[i]), width)
+	w2 := width / 2.0
+	for i := 0; i < 3; i++ {
+		diff := math.Mod(float64(v1[i]-v2[i]), width)
 
-        if diff > w2 {
-            diff -= width
-        } else if diff < -w2 {
-            diff += width
-        }
+		if diff > w2 {
+			diff -= width
+		} else if diff < -w2 {
+			diff += width
+		}
 
 		out[i] = float32(diff)
-    }
+	}
 
-    return out
+	return out
 }
 
 // Norm computes the norm of a vector.

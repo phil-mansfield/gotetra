@@ -28,7 +28,7 @@ func (v *Vec) random(gen *rand.Generator, width float64) {
 }
 
 func BenchmarkVolume(b *testing.B) {
-	ts := make([]Tetra, b.N / 20 + 1)
+	ts := make([]Tetra, b.N/20+1)
 	gen := rand.NewTimeSeed(genType)
 	for i := range ts {
 		ts[i].random(gen, 1.0, 1.0)
@@ -36,14 +36,14 @@ func BenchmarkVolume(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		t := &ts[i % len(ts)]
+		t := &ts[i%len(ts)]
 		t.volumeValid = false
 		t.Volume()
 	}
 }
 
 func BenchmarkBarycenter(b *testing.B) {
-	ts := make([]Tetra, b.N / 20 + 1)
+	ts := make([]Tetra, b.N/20+1)
 	gen := rand.NewTimeSeed(genType)
 	for i := range ts {
 		ts[i].random(gen, 1.0, 1.0)
@@ -51,14 +51,14 @@ func BenchmarkBarycenter(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		t := &ts[i % len(ts)]
+		t := &ts[i%len(ts)]
 		t.baryValid = false
 		t.Barycenter()
 	}
 }
 
 func BenchmarkCellBounds(b *testing.B) {
-	ts := make([]Tetra, b.N / 20 + 1)
+	ts := make([]Tetra, b.N/20+1)
 	gen := rand.NewTimeSeed(genType)
 	for i := range ts {
 		ts[i].random(gen, 1.0, 1.0)
@@ -68,14 +68,14 @@ func BenchmarkCellBounds(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		t := &ts[i % len(ts)]
+		t := &ts[i%len(ts)]
 		t.baryValid = false
 		t.CellBounds(g)
 	}
 }
 
 func BenchmarkCellBoundsAt(b *testing.B) {
-	ts := make([]Tetra, b.N / 20 + 1)
+	ts := make([]Tetra, b.N/20+1)
 	gen := rand.NewTimeSeed(genType)
 	for i := range ts {
 		ts[i].random(gen, 1.0, 1.0)
@@ -86,120 +86,120 @@ func BenchmarkCellBoundsAt(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		t := &ts[i % len(ts)]
+		t := &ts[i%len(ts)]
 		t.baryValid = false
 		t.CellBoundsAt(g, cb)
 	}
 }
 
 func BenchmarkContains(b *testing.B) {
-	ts := make([]Tetra, b.N / 20 + 1)
+	ts := make([]Tetra, b.N/20+1)
 	gen := rand.NewTimeSeed(genType)
 	for i := range ts {
 		ts[i].random(gen, 1.0, 1.0)
 	}
 
-	vs := make([]Vec, len(ts) + 1)
+	vs := make([]Vec, len(ts)+1)
 	for i := range vs {
 		vs[i].random(gen, 1.0)
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		t := &ts[i % len(ts)]
-		t.Contains(&vs[i % len(vs)])
+		t := &ts[i%len(ts)]
+		t.Contains(&vs[i%len(vs)])
 	}
 }
 
 func BenchmarkSample1(b *testing.B) {
-	ts := make([]Tetra, b.N / 20 + 1)
+	ts := make([]Tetra, b.N/20+1)
 	gen := rand.NewTimeSeed(genType)
 	for i := range ts {
 		ts[i].random(gen, 1.0, 1.0)
 	}
-	
-	randBuf := make([]float64, 1 * 3)
+
+	randBuf := make([]float64, 1*3)
 	vecBuf := make([]Vec, 1)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		t := &ts[i % len(ts)]
+		t := &ts[i%len(ts)]
 		t.baryValid = false
 		t.Sample(gen, randBuf, vecBuf)
 	}
 }
 
 func BenchmarkSample10(b *testing.B) {
-	ts := make([]Tetra, b.N / 20 + 1)
+	ts := make([]Tetra, b.N/20+1)
 	gen := rand.NewTimeSeed(genType)
 	for i := range ts {
 		ts[i].random(gen, 1.0, 1.0)
 	}
-	
-	randBuf := make([]float64, 10 * 3)
+
+	randBuf := make([]float64, 10*3)
 	vecBuf := make([]Vec, 10)
 
 	b.ResetTimer()
-	for i := 0; i < b.N / 10 + 1; i++ {
-		t := &ts[i % len(ts)]
+	for i := 0; i < b.N/10+1; i++ {
+		t := &ts[i%len(ts)]
 		t.baryValid = false
 		t.Sample(gen, randBuf, vecBuf)
 	}
 }
 
 func BenchmarkSample100(b *testing.B) {
-	ts := make([]Tetra, b.N / 20 + 1)
+	ts := make([]Tetra, b.N/20+1)
 	gen := rand.NewTimeSeed(genType)
 	for i := range ts {
 		ts[i].random(gen, 1.0, 1.0)
 	}
-	
-	randBuf := make([]float64, 100 * 3)
+
+	randBuf := make([]float64, 100*3)
 	vecBuf := make([]Vec, 100)
 
 	b.ResetTimer()
-	for i := 0; i < b.N / 100 + 1; i++ {
-		t := &ts[i % len(ts)]
+	for i := 0; i < b.N/100+1; i++ {
+		t := &ts[i%len(ts)]
 		t.baryValid = false
 		t.Sample(gen, randBuf, vecBuf)
 	}
 }
 
 func BenchmarkSample1000(b *testing.B) {
-	ts := make([]Tetra, b.N / 20 + 1)
+	ts := make([]Tetra, b.N/20+1)
 	gen := rand.NewTimeSeed(genType)
 	for i := range ts {
 		ts[i].random(gen, 1.0, 1.0)
 	}
-	
-	randBuf := make([]float64, 1000 * 3)
+
+	randBuf := make([]float64, 1000*3)
 	vecBuf := make([]Vec, 1000)
 
 	b.ResetTimer()
-	for i := 0; i < b.N / 1000 + 1; i++ {
-		t := &ts[i % len(ts)]
+	for i := 0; i < b.N/1000+1; i++ {
+		t := &ts[i%len(ts)]
 		t.baryValid = false
 		t.Sample(gen, randBuf, vecBuf)
 	}
 }
 
 func TestVolume(t *testing.T) {
-	table := []struct{
+	table := []struct {
 		c1, c2, c3, c4 *Vec
-		width, vol float64
-		valid bool
-	} {
+		width, vol     float64
+		valid          bool
+	}{
 		{&Vec{0, 0, 0}, &Vec{1, 0, 0}, &Vec{0, 1, 0}, &Vec{0, 0, 1},
-			100, 1.0/6.0, true},
+			100, 1.0 / 6.0, true},
 		{&Vec{0, 0, 0}, &Vec{1, 0, 0}, nil, &Vec{0, 0, 1},
-			100, 1.0/6.0, false},
+			100, 1.0 / 6.0, false},
 		{&Vec{0, 0, 0}, &Vec{1, 0, 0}, &Vec{0.5, 0, 0}, &Vec{0, 0, 1},
 			100, 0, true},
 	}
 
 	for i, test := range table {
 		tet, valid := NewTetra(test.c1, test.c2, test.c3, test.c4, test.width)
-		
+
 		if valid != test.valid {
 			t.Errorf("%d) Tetra {%v %v %v %v} gives validity %b, not %b\n",
 				i, test.c1, test.c2, test.c3, test.c4, valid, test.valid)
@@ -213,9 +213,9 @@ func TestVolume(t *testing.T) {
 func TestContains(t *testing.T) {
 	table := []struct {
 		c1, c2, c3, c4, pt *Vec
-		width float64
-		res bool
-	} {
+		width              float64
+		res                bool
+	}{
 		{&Vec{1, 1, 1}, &Vec{2, 1, 1}, &Vec{1, 2, 1}, &Vec{1, 1, 2},
 			&Vec{1.1, 1.1, 1.1}, 3, true},
 		{&Vec{1, 1, 1}, &Vec{2, 1, 1}, &Vec{1, 2, 1}, &Vec{1, 1, 2},
@@ -225,19 +225,19 @@ func TestContains(t *testing.T) {
 		{&Vec{1, 1, 1}, &Vec{2, 1, 1}, &Vec{1, 2, 1}, &Vec{1, 1, 2},
 			&Vec{1.1, 1.1, 0.9}, 3, false},
 		{&Vec{1, 1, 1}, &Vec{2, 1, 1}, &Vec{1, 2, 1}, &Vec{1, 1, 2},
-			&Vec{1.5, 1.5, 1.5}, 3, false},	
+			&Vec{1.5, 1.5, 1.5}, 3, false},
 
 		{&Vec{-.25, -.25, -.25}, &Vec{.75, -.25, -.25},
 			&Vec{-.25, .75, -.25}, &Vec{-.25, -.25, .75},
-			&Vec{-.2, -.2, -.2}, 3, true},	
+			&Vec{-.2, -.2, -.2}, 3, true},
 		{&Vec{-.25, -.25, -.25}, &Vec{.75, -.25, -.25},
 			&Vec{-.25, .75, -.25}, &Vec{-.25, -.25, .75},
-			&Vec{2.8, 2.8, 2.8}, 3, true},	
+			&Vec{2.8, 2.8, 2.8}, 3, true},
 	}
 
 	for i, test := range table {
 		tet, _ := NewTetra(test.c1, test.c2, test.c3, test.c4, test.width)
-		
+
 		if tet.Contains(test.pt) != test.res {
 			t.Errorf("%d) [%v %v %v %v, %g].Contains(%v) = %v, not %v \n",
 				i, test.c1, test.c2, test.c3, test.c4, test.width,
@@ -251,17 +251,17 @@ func TestContainsMC(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping TestContainsMC")
 	}
-	
+
 	xs := make([]float64, 10000)
 	ys := make([]float64, 10000)
 	zs := make([]float64, 10000)
-	
+
 	gen := rand.NewTimeSeed(genType)
 	tet, _ := NewTetra(
-		&Vec{2.8, 2.8, 2.8}, &Vec{0.8, 2.8, 2.8}, 
+		&Vec{2.8, 2.8, 2.8}, &Vec{0.8, 2.8, 2.8},
 		&Vec{2.8, 0.8, 2.8}, &Vec{2.8, 2.8, 0.8}, 3,
 	)
-	
+
 	v := &Vec{}
 
 	inside, total := 0, 0
@@ -284,8 +284,8 @@ func TestContainsMC(t *testing.T) {
 
 	if !epsEq(exp, float64(inside), 0.05) {
 		normFrac := float64(inside) / float64(total) * (27 * 6)
-		t.Errorf("%d million point MC integration of tetrahedron volume " +
-			"gives %f/27 instead of 1/27.", total / 1000000, normFrac)
+		t.Errorf("%d million point MC integration of tetrahedron volume "+
+			"gives %f/27 instead of 1/27.", total/1000000, normFrac)
 	}
 }
 
@@ -301,9 +301,9 @@ func (v1 *Vec) epsEq(v2 *Vec, eps float64) bool {
 func TestBarycenter(t *testing.T) {
 	table := []struct {
 		c1, c2, c3, c4 *Vec
-		width float64
-		res *Vec
-	} {
+		width          float64
+		res            *Vec
+	}{
 		{&Vec{0, 0, 0}, &Vec{4, 0, 0}, &Vec{0, 0, 4}, &Vec{0, 4, 0},
 			100, &Vec{1, 1, 1}},
 		{&Vec{1, 2, 3}, &Vec{5, 2, 3}, &Vec{1, 2, 7}, &Vec{1, 6, 3},
@@ -343,7 +343,7 @@ func TestBarycenterMC(t *testing.T) {
 
 	tet := &Tetra{}
 	gen := rand.New(genType, 0)
-	
+
 	for i := 0; i < testNum; i++ {
 		tet.randomAtPt(gen, tRng, vRng, width)
 

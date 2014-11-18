@@ -5,7 +5,7 @@ type cmpIdx struct {
 }
 
 type ParticleManager struct {
-	ps [][]Particle
+	ps   [][]Particle
 	Locs map[int64]cmpIdx
 	Size int64
 }
@@ -36,7 +36,6 @@ func (man *ParticleManager) Get(id int64) *Particle {
 	if !ok {
 		return nil
 	}
-		
+
 	return &man.ps[idx.slice][idx.p]
 }
-
