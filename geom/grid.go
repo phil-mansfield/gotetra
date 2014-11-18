@@ -4,7 +4,10 @@ package geom
 // 3D grid.
 type Grid struct {
 	Origin              [3]int
-	Width, Area, Volume int
+	Width int
+	Area int
+	Volume int
+	uBounds [3]int
 }
 
 // CellBounds represents a bounding box aligned to grid cells.
@@ -25,6 +28,10 @@ func (g *Grid) Init(origin *[3]int, width int) {
 	g.Width = width
 	g.Area = width * width
 	g.Volume = width * width * width
+
+	for i := 0; i < 3; i++ {
+		g.uBounds[i] = g.Origin[i] + g.Width
+	}
 }
 
 // Bounds returns a Grid's bounding box.
@@ -78,9 +85,9 @@ func (g *Grid) Wrap(x, y, z int) (wx, wy, wz int) {
 // BoundsCheck returns true if the given coordinates are within the Grid and
 // false otherwise.
 func (g *Grid) BoundsCheck(x, y, z int) bool {
-	return (g.Origin[0] < x && g.Origin[1] < y && g.Origin[2] < z) ||
-		(x < g.Width+g.Origin[0] && y < g.Width+g.Origin[1] &&
-			z < g.Width+g.Origin[2])
+	return (g.Origin[0] <= x && g.Origin[1] <= y && g.Origin[2] <= z) &&
+		(x < g.uBounds[0] && y < g.uBounds[1] &&
+		z < g.uBounds[2])
 }
 
 // Coords returns the x, y, z coordinates of a point from its grid index.
