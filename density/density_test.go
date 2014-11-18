@@ -39,14 +39,14 @@ func TestBounds(t *testing.T) {
 		g, bg            *geom.Grid
 	}{
 		{100, 1, 0, 0, 0,
-			&geom.Grid{[3]int{0, 0, 0}, 100, 100 * 100, 100 * 100 * 100},
-			&geom.Grid{[3]int{0, 0, 0}, 100, 100 * 100, 100 * 100 * 100}},
+			geom.NewGrid(&[3]int{0, 0, 0}, 100),
+			geom.NewGrid(&[3]int{0, 0, 0}, 100)},
 		{10, 10, 0, 0, 0,
-			&geom.Grid{[3]int{0, 0, 0}, 10, 10 * 10, 10 * 10 * 10},
-			&geom.Grid{[3]int{0, 0, 0}, 100, 100 * 100, 100 * 100 * 100}},
+			geom.NewGrid(&[3]int{0, 0, 0}, 10),
+			geom.NewGrid(&[3]int{0, 0, 0}, 100)},
 		{20, 10, 1, 2, 3,
-			&geom.Grid{[3]int{20, 40, 60}, 20, 20 * 20, 20 * 20 * 20},
-			&geom.Grid{[3]int{0, 0, 0}, 200, 200 * 200, 200 * 200 * 200}},
+			geom.NewGrid(&[3]int{20, 40, 60}, 20),
+			geom.NewGrid(&[3]int{0, 0, 0}, 200)},
 	}
 
 	for i, test := range table {
@@ -61,6 +61,60 @@ func TestBounds(t *testing.T) {
 	}
 }
 
+func TestNGPInterpolate(t *testing.T) {
+	table := []struct {
+		gx10, gy10, gz10 int
+		mass, width      float64
+		pts              []geom.Vec
+		rhos             []float64
+	}{
+		// Tests for both NGP and CIC
+		{0, 0, 0, 1.0, 2.0, []geom.Vec{},
+			[]float64{0, 0, 0, 0, 0, 0, 0, 0}},
+		{0, 0, 0, 1.0, 2.0, []geom.Vec{{0.5, 0.5, 0.5}},
+			[]float64{1, 0, 0, 0, 0, 0, 0, 0}},
+		{0, 0, 0, 1.0, 4.0, []geom.Vec{{0.5, 0.5, 0.5}},
+			[]float64{0.125, 0, 0, 0, 0, 0, 0, 0}},
+		{0, 0, 0, 1.0, 2.0, []geom.Vec{{1.5, 0.5, 0.5}},
+			[]float64{0, 1, 0, 0, 0, 0, 0, 0}},
+
+		{0, 0, 0, 1.0, 2.0, []geom.Vec{{1.5, 0.5, 0.5}},
+			[]float64{0, 1, 0, 0, 0, 0, 0, 0}},
+		{0, 0, 0, 1.0, 2.0, []geom.Vec{{0.5, 1.5, 0.5}},
+			[]float64{0, 0, 1, 0, 0, 0, 0, 0}},
+		{0, 0, 0, 1.0, 2.0, []geom.Vec{{0.5, 0.5, 1.5}},
+			[]float64{0, 0, 0, 0, 1, 0, 0, 0}},
+
+		{0, 0, 0, 1.0, 2.0, []geom.Vec{{9.5, 0.5, 0.5}},
+			[]float64{0, 0, 0, 0, 0, 0, 0, 0}},
+		{0, 0, 0, 1.0, 2.0, []geom.Vec{{0.5, 9.5, 0.5}},
+			[]float64{0, 0, 0, 0, 0, 0, 0, 0}},
+		{0, 0, 0, 1.0, 2.0, []geom.Vec{{0.5, 0.5, 9.5}},
+			[]float64{0, 0, 0, 0, 0, 0, 0, 0}},
+
+		{2, 4, 6, 1.0, 2.0, []geom.Vec{{2.5, 4.5, 6.5}},
+			[]float64{1, 0, 0, 0, 0, 0, 0, 0}},
+		{0, 0, 0, 1.0, 2.0, []geom.Vec{{0.5, 0.5, 0.5}, {1.5, 1.5, 1.5}},
+			[]float64{1, 0, 0, 0, 0, 0, 0, 1}},
+		// Tests for only NGP
+		{0, 0, 0, 1.0, 2.0, []geom.Vec{{0.75, 0.75, 0.75}},
+			[]float64{1, 0, 0, 0, 0, 0, 0, 0}},
+	}
+
+	for i, test := range table {
+		g, bg := Bounds(2, 5, test.gx10/2, test.gy10/2, test.gz10/2)
+
+		rhos := make([]float64, len(test.rhos))
+		intr := NewInterpolator(NearestGridPoint, g, bg, test.width, rhos)
+		intr.Interpolate(test.mass, test.pts)
+
+		if !sliceEq(rhos, test.rhos) {
+			t.Errorf("%d) Expected density grid %v, got %v.\n",
+				i, test.rhos, rhos)
+		}
+	}
+}
+
 func gridEq(g1, g2 *geom.Grid) bool {
 	for i := 0; i < 3; i++ {
 		if g1.Origin[i] != g2.Origin[i] {
@@ -69,4 +123,18 @@ func gridEq(g1, g2 *geom.Grid) bool {
 	}
 
 	return g1.Width == g2.Width
+}
+
+func sliceEq(xs1, xs2 []float64) bool {
+	if len(xs1) != len(xs2) {
+		return false
+	}
+
+	for i := range xs1 {
+		if xs1[i] != xs2[i] {
+			return false
+		}
+	}
+
+	return true
 }
