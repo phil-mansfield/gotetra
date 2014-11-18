@@ -11,7 +11,6 @@ scripts/pprof
 scripts/out
 out
 plots
-plotting_scripts
 
 # Architecture specific extensions/prefixes
 *.[568vq]
