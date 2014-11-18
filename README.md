@@ -26,7 +26,9 @@ within domains with periodic boundary conditions.
 quantities.
 
 - Package `scripts/helper` contains helper functions for script writing which
-are too sepcific to the IO model to inlcude in a direct subpackage.
+are too specific to the IO model to inlcude in a direct subpackage.
+
+- Package `density` interpolates particle sequences onto density grids.
 
 Version
 -------
