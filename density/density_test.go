@@ -73,8 +73,10 @@ func TestNGPInterpolate(t *testing.T) {
 			[]float64{0, 0, 0, 0, 0, 0, 0, 0}},
 		{0, 0, 0, 1.0, 2.0, []geom.Vec{{0.5, 0.5, 0.5}},
 			[]float64{1, 0, 0, 0, 0, 0, 0, 0}},
-		{0, 0, 0, 1.0, 4.0, []geom.Vec{{0.5, 0.5, 0.5}},
+		{0, 0, 0, 1.0, 4.0, []geom.Vec{{1.0, 1.0, 1.0}},
 			[]float64{0.125, 0, 0, 0, 0, 0, 0, 0}},
+		{0, 0, 0, 2.0, 2.0, []geom.Vec{{0.5, 0.5, 0.5}},
+			[]float64{2, 0, 0, 0, 0, 0, 0, 0}},
 		{0, 0, 0, 1.0, 2.0, []geom.Vec{{1.5, 0.5, 0.5}},
 			[]float64{0, 1, 0, 0, 0, 0, 0, 0}},
 
@@ -94,6 +96,8 @@ func TestNGPInterpolate(t *testing.T) {
 
 		{2, 4, 6, 1.0, 2.0, []geom.Vec{{2.5, 4.5, 6.5}},
 			[]float64{1, 0, 0, 0, 0, 0, 0, 0}},
+		{0, 0, 0, 1.0, 4.0, []geom.Vec{{3.0, 3.0, 3.0}},
+			[]float64{0, 0, 0, 0, 0, 0, 0, .125}},
 		{0, 0, 0, 1.0, 2.0, []geom.Vec{{0.5, 0.5, 0.5}, {1.5, 1.5, 1.5}},
 			[]float64{1, 0, 0, 0, 0, 0, 0, 1}},
 		// Tests for only NGP
@@ -106,6 +110,79 @@ func TestNGPInterpolate(t *testing.T) {
 
 		rhos := make([]float64, len(test.rhos))
 		intr := NewInterpolator(NearestGridPoint, g, bg, test.width, rhos)
+		intr.Interpolate(test.mass, test.pts)
+
+		if !sliceEq(rhos, test.rhos) {
+			t.Errorf("%d) Expected density grid %v, got %v.\n",
+				i, test.rhos, rhos)
+		}
+	}
+}
+
+func TestCICInterpolate(t *testing.T) {
+	table := []struct {
+		gx10, gy10, gz10 int
+		mass, width      float64
+		pts              []geom.Vec
+		rhos             []float64
+	}{
+		// Tests for both NGP and CIC
+		{0, 0, 0, 1.0, 2.0, []geom.Vec{},
+			[]float64{0, 0, 0, 0, 0, 0, 0, 0}},
+		{0, 0, 0, 1.0, 2.0, []geom.Vec{{0.5, 0.5, 0.5}},
+			[]float64{1, 0, 0, 0, 0, 0, 0, 0}},
+		{0, 0, 0, 1.0, 4.0, []geom.Vec{{1.0, 1.0, 1.0}},
+			[]float64{0.125, 0, 0, 0, 0, 0, 0, 0}},
+
+		{0, 0, 0, 1.0, 2.0, []geom.Vec{{1.5, 0.5, 0.5}},
+			[]float64{0, 1, 0, 0, 0, 0, 0, 0}},
+
+		{0, 0, 0, 1.0, 2.0, []geom.Vec{{1.5, 0.5, 0.5}},
+			[]float64{0, 1, 0, 0, 0, 0, 0, 0}},
+		{0, 0, 0, 1.0, 2.0, []geom.Vec{{0.5, 1.5, 0.5}},
+			[]float64{0, 0, 1, 0, 0, 0, 0, 0}},
+		{0, 0, 0, 1.0, 2.0, []geom.Vec{{0.5, 0.5, 1.5}},
+			[]float64{0, 0, 0, 0, 1, 0, 0, 0}},
+
+		{0, 0, 0, 1.0, 2.0, []geom.Vec{{9.5, 0.5, 0.5}},
+			[]float64{0, 0, 0, 0, 0, 0, 0, 0}},
+		{0, 0, 0, 1.0, 2.0, []geom.Vec{{0.5, 9.5, 0.5}},
+			[]float64{0, 0, 0, 0, 0, 0, 0, 0}},
+		{0, 0, 0, 1.0, 2.0, []geom.Vec{{0.5, 0.5, 9.5}},
+			[]float64{0, 0, 0, 0, 0, 0, 0, 0}},
+
+		{2, 4, 6, 1.0, 2.0, []geom.Vec{{2.5, 4.5, 6.5}},
+			[]float64{1, 0, 0, 0, 0, 0, 0, 0}},
+		{0, 0, 0, 1.0, 4.0, []geom.Vec{{3.0, 3.0, 3.0}},
+			[]float64{0, 0, 0, 0, 0, 0, 0, 0.125}},
+		{0, 0, 0, 1.0, 2.0, []geom.Vec{{0.5, 0.5, 0.5}, {1.5, 1.5, 1.5}},
+			[]float64{1, 0, 0, 0, 0, 0, 0, 1}},
+
+		// Tests for CIC only
+		{0, 0, 0, 1.0, 2.0, []geom.Vec{{1, 0.5, 0.5}},
+			[]float64{0.5, 0.5, 0, 0, 0, 0, 0, 0}},
+		{0, 0, 0, 1.0, 2.0, []geom.Vec{{0.5, 1, 0.5}},
+			[]float64{0.5, 0, 0.5, 0, 0, 0, 0, 0}},
+		{0, 0, 0, 1.0, 2.0, []geom.Vec{{0.5, 0.5, 1}},
+			[]float64{0.5, 0, 0, 0, 0.5, 0, 0, 0}},
+		{0, 0, 0, 1.0, 2.0, []geom.Vec{{1,1,1}, {1,1,1}, {1,1,1}, {1,1,1}},
+			[]float64{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5}},
+		{0, 0, 0, 1.0, 2.0, []geom.Vec{{10, 0.5, 0.5}},
+			[]float64{0.5, 0, 0, 0, 0, 0, 0, 0}},
+		{0, 0, 0, 1.0, 2.0, []geom.Vec{{0.5, 10, 0.5}},
+			[]float64{0.5, 0, 0, 0, 0, 0, 0, 0}},
+		{0, 0, 0, 1.0, 2.0, []geom.Vec{{0.5, 0.5, 10}},
+			[]float64{0.5, 0, 0, 0, 0, 0, 0, 0}},
+		{8, 8, 8, 1.0, 2.0, []geom.Vec{{0, 9.5, 9.5}},
+			[]float64{0, 0, 0, 0, 0, 0, 0, 0.5}},
+
+	}
+
+	for i, test := range table {
+		g, bg := Bounds(2, 5, test.gx10/2, test.gy10/2, test.gz10/2)
+
+		rhos := make([]float64, len(test.rhos))
+		intr := NewInterpolator(CloudInCell, g, bg, test.width, rhos)
 		intr.Interpolate(test.mass, test.pts)
 
 		if !sliceEq(rhos, test.rhos) {
