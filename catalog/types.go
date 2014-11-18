@@ -1,13 +1,4 @@
-/*Package gotetra implements a suite of algorithms for computing cosmic field
-densities from particle catalogs.
-
-It is worth discussing a quick note on the types used throughout this pacakge.
-For storage efficiency purposes, all data structures store data as float32s.
-However, whenever possible calculations are done with float64s to improve
-accuracy. Additionally, any calculation which is expected to interact with the
-fixed-width integers used in catalogs will use int64s, while all other
-calculations will use ints.*/
-package gotetra
+package catalog
 
 import (
 	"github.com/phil-mansfield/gotetra/geom"
