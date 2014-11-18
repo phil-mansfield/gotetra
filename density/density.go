@@ -116,13 +116,16 @@ func (intr *cic) Interpolate(mass float64, pts []geom.Vec) {
 }
 
 func (intr *cic) nbrs(i int) (i0, i1 int) {
-	return i % intr.bg.Width, (i + 1) % intr.bg.Width
+	if i + 1 == intr.bg.Width {
+		return i, 0
+	}
+	return i, i +1
 }
 
 func (intr *cic) incr(i, j, k int, frac float64) {
 	if idx, ok := intr.g.IdxCheck(i, j, k); ok {
 		intr.rhos[idx] += frac
-	}
+	}	
 }
 
 func cellPoints(x, y, z, cw float64) (xc, yc, zc float64) {
