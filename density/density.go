@@ -100,11 +100,13 @@ func (intr *ngp) Interpolate(mass float64, pts []geom.Vec) {
 // cloud in cell scheme.
 func (intr *cic) Interpolate(mass float64, pts []geom.Vec) {
 	frac := mass / intr.cellVolume
+	cw, cw2 := intr.cellWidth, intr.cellWidth / 2
 	for _, pt := range pts {
-		xp, yp, zp := float64(pt[0]), float64(pt[1]), float64(pt[2])
+		
+		xp, yp, zp := float64(pt[0])-cw2, float64(pt[1])-cw2, float64(pt[2])-cw2
 		xc, yc, zc := cellPoints(xp, yp, zp, intr.cellWidth)
-		dx, dy, dz := xp-xc, yp-yc, zp-zc
-		tx, ty, tz := intr.cellWidth-dx, intr.cellWidth-dy, intr.cellWidth-dz
+		dx, dy, dz := (xp / cw)-xc, (yp / cw)-yc, (zp / cw)-zc
+		tx, ty, tz := 1-dx, 1-dy, 1-dz
 
 		i0, i1 := intr.nbrs(int(xc))
 		j0, j1 := intr.nbrs(int(yc))
@@ -122,6 +124,9 @@ func (intr *cic) Interpolate(mass float64, pts []geom.Vec) {
 }
 
 func (intr *cic) nbrs(i int) (i0, i1 int) {
+	if i == -1 {
+		return intr.bg.Width - 1, 0
+	}
 	if i+1 == intr.bg.Width {
 		return i, 0
 	}
