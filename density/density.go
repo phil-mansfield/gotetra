@@ -70,7 +70,7 @@ func NewInterpolator(
 	}
 
 	cellWidth := width / float64(g.Width)
-	cellVolume := 1.0 / (cellWidth * cellWidth * cellWidth)
+	cellVolume := cellWidth * cellWidth * cellWidth
 
 	switch flag {
 	case CloudInCell:
@@ -81,6 +81,8 @@ func NewInterpolator(
 	panic(fmt.Sprintf("Unknown flag %d", flag))
 }
 
+// Interpolate interpolates a sequence of particles onto a density grid via a
+// nearest grid point scheme.
 func (intr *ngp) Interpolate(mass float64, pts []geom.Vec) {
 	frac := mass / intr.cellVolume
 	for _, pt := range pts {
@@ -94,6 +96,8 @@ func (intr *ngp) Interpolate(mass float64, pts []geom.Vec) {
 	}
 }
 
+// Interpolate interpolates a sequence of particles onto a density grid via a
+// cloud in cell scheme.
 func (intr *cic) Interpolate(mass float64, pts []geom.Vec) {
 	frac := mass / intr.cellVolume
 	for _, pt := range pts {
