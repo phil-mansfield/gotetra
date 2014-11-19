@@ -147,7 +147,7 @@ func compareDensityMain(x, y, z, cells int, sourceDir string) {
 
 	bufIdx := 0
 	for i := range centerPs {
-		xsBuf[i] = centerPs[bufIdx].Xs
+		xsBuf[bufIdx] = centerPs[i].Xs
 
 		if bufIdx == len(xsBuf) - 1 || i == len(centerPs) - 1 {
 			ngpIntr.Interpolate(h0.Mass, xsBuf)
