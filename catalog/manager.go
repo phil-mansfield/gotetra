@@ -1,4 +1,4 @@
-package gotetra
+package catalog
 
 type cmpIdx struct {
 	slice, p int32

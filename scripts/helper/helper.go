@@ -4,17 +4,17 @@ import (
 	"fmt"
 	"path"
 
-    tetra "github.com/phil-mansfield/gotetra"
     "github.com/phil-mansfield/gotetra/catalog"
 )
 
 func ReadCatalogs(
 	dir string, midX, midY, midZ, layers int,
-) (*tetra.Header, *tetra.ParticleManager, []tetra.Particle) {
-	man := tetra.NewParticleManager()
+) (*catalog.Header, *catalog.ParticleManager, []catalog.Particle) {
+	man := catalog.NewParticleManager()
 	h0 := catalog.ReadHeader(path.Join(dir, "gridcell_0000.dat"))
 
-	var centerPs []tetra.Particle
+	var centerPs []catalog.Particle
+
 	for x := midX - layers; x <= midX + layers; x++ {
 		for y := midY - layers; y <= midY + layers; y++ {
 			for z := midZ - layers; z <= midZ + layers; z++ {
@@ -42,7 +42,7 @@ func ReadCatalogs(
 func readParticles(
 	gridWidth, x, y, z int,
 	dir string,
-) (*tetra.Header, []tetra.Particle) {
+) (*catalog.Header, []catalog.Particle) {
 	idx := x + y * gridWidth + z * gridWidth * gridWidth
 	name := fmt.Sprintf("gridcell_%04d.dat", idx)
 	path := path.Join(dir, name)

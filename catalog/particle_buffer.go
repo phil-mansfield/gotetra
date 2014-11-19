@@ -1,27 +1,23 @@
 package catalog
 
-import (
-	tetra "github.com/phil-mansfield/gotetra"
-)
-
 // ParticleBuffer is a wrapper around catalog files which allows floats to be
 // appended to files on the fly without much overhead from I/O or without
 // excessive memory usage/reallocating.
 type ParticleBuffer struct {
-	buf  []tetra.Particle
+	buf  []Particle
 	idx  int
 	path string
 }
 
 // NewParticleBuffer creates a ParticleBuffer associated with the given file.
 func NewParticleBuffer(path string, bufSize int) *ParticleBuffer {
-	pb := &ParticleBuffer{make([]tetra.Particle, bufSize), 0, path}
+	pb := &ParticleBuffer{make([]Particle, bufSize), 0, path}
 	return pb
 }
 
 // Append adds a value to the float buffer, which will eventually be
 // written to the target file.
-func (pb *ParticleBuffer) Append(p tetra.Particle) {
+func (pb *ParticleBuffer) Append(p Particle) {
 	pb.buf[pb.idx] = p
 	pb.idx++
 	if pb.idx == len(pb.buf) {

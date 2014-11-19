@@ -27,8 +27,6 @@ import (
 	"os"
 
 	"unsafe"
-
-	tetra "github.com/phil-mansfield/gotetra"
 )
 
 const (
@@ -61,10 +59,10 @@ func readInt32(r io.Reader, order binary.ByteOrder) int32 {
 	return n
 }
 
-// Standardize returns a tetra.Header that corresponds to the source
+// Standardize returns a Header that corresponds to the source
 // Gadget 2 header.
-func (gh *gadgetHeader) Standardize() *tetra.Header {
-	h := &tetra.Header{}
+func (gh *gadgetHeader) Standardize() *Header {
+	h := &Header{}
 
 	h.Count = int64(gh.NPart[1] + gh.NPart[0]<<32)
 	h.TotalCount = int64(gh.NPartTotal[1] + gh.NPartTotal[0]<<32)
@@ -91,7 +89,7 @@ func (h *gadgetHeader) WrapDistance(x float64) float64 {
 	return x
 }
 
-func ReadGadgetHeader(path string, order binary.ByteOrder) *tetra.Header {
+func ReadGadgetHeader(path string, order binary.ByteOrder) *Header {
 	f, err := os.Open(path)
 	if err != nil {
 		panic(err)
@@ -112,7 +110,7 @@ func ReadGadgetParticlesAt(
 	order binary.ByteOrder,
 	floatBuf []float32,
 	intBuf []int64,
-	ps []tetra.Particle,
+	ps []Particle,
 ) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -177,7 +175,7 @@ func ReadGadgetParticlesAt(
 // ReadGadget reads the gadget particle catalog located at the given location
 // and written with the given endianness. Its header and particle sequence
 // are returned in a standardized format.
-func ReadGadget(path string, order binary.ByteOrder) (*tetra.Header, []tetra.Particle) {
+func ReadGadget(path string, order binary.ByteOrder) (*Header, []Particle) {
 	f, err := os.Open(path)
 	if err != nil {
 		panic(err)
@@ -192,7 +190,7 @@ func ReadGadget(path string, order binary.ByteOrder) (*tetra.Header, []tetra.Par
 
 	h := gh.Standardize()
 	floatBuf := make([]float32, 3*h.Count)
-	ps := make([]tetra.Particle, h.Count)
+	ps := make([]Particle, h.Count)
 
 	_ = readInt32(f, order)
 	binary.Read(f, order, floatBuf)
@@ -229,7 +227,7 @@ func ReadGadget(path string, order binary.ByteOrder) (*tetra.Header, []tetra.Par
 }
 
 // Write writes the given header and particle sequence to the specified file.
-func Write(path string, h *tetra.Header, ps []tetra.Particle) {
+func Write(path string, h *Header, ps []Particle) {
 	f, err := os.Create(path)
 	if err != nil {
 		panic(err)
@@ -243,7 +241,7 @@ func Write(path string, h *tetra.Header, ps []tetra.Particle) {
 	if err != nil {
 		panic(err.Error())
 	}
-	err = binary.Write(f, order, int32(unsafe.Sizeof(tetra.Header{})))
+	err = binary.Write(f, order, int32(unsafe.Sizeof(Header{})))
 	if err != nil {
 		panic(err.Error())
 	}
@@ -262,7 +260,7 @@ func Write(path string, h *tetra.Header, ps []tetra.Particle) {
 }
 
 // readHeader reads only the header from the given file.
-func readHeader(path string, flag int) (*tetra.Header, *os.File, binary.ByteOrder) {
+func readHeader(path string, flag int) (*Header, *os.File, binary.ByteOrder) {
 	f, err := os.OpenFile(path, flag, os.ModePerm)
 	if err != nil {
 		panic(err)
@@ -273,19 +271,19 @@ func readHeader(path string, flag int) (*tetra.Header, *os.File, binary.ByteOrde
 	// Sanity checks:
 	headerSize := readInt32(f, order)
 	particleSize := readInt32(f, order)
-	if int32(unsafe.Sizeof(tetra.Header{})) != headerSize {
+	if int32(unsafe.Sizeof(Header{})) != headerSize {
 		panic(fmt.Sprintf(
 			"Size of header in code, %d, does not match size in catalog, %d.",
-			unsafe.Sizeof(tetra.Header{}), headerSize,
+			unsafe.Sizeof(Header{}), headerSize,
 		))
-	} else if int32(unsafe.Sizeof(tetra.Particle{})) != particleSize {
+	} else if int32(unsafe.Sizeof(Particle{})) != particleSize {
 		panic(fmt.Sprintf(
 			"Size of header in code, %d, does not match size in catalog, %d.",
-			unsafe.Sizeof(tetra.Particle{}), particleSize,
+			unsafe.Sizeof(Particle{}), particleSize,
 		))
 	}
 
-	h := &tetra.Header{}
+	h := &Header{}
 	err = binary.Read(f, order, h)
 	if err != nil {
 		panic(err.Error())
@@ -294,7 +292,7 @@ func readHeader(path string, flag int) (*tetra.Header, *os.File, binary.ByteOrde
 	return h, f, order
 }
 
-func ReadHeader(path string) *tetra.Header {
+func ReadHeader(path string) *Header {
 	h, f, _ := readHeader(path, os.O_RDONLY)
 	if err := f.Close(); err != nil {
 		panic(err)
@@ -303,7 +301,7 @@ func ReadHeader(path string) *tetra.Header {
 }
 
 // Append appends a particle sequence to the end of the given file.
-func Append(path string, ps []tetra.Particle) {
+func Append(path string, ps []Particle) {
 	if len(ps) == 0 {
 		return
 	}
@@ -332,7 +330,7 @@ func Append(path string, ps []tetra.Particle) {
 }
 
 // Read reads a header and particle sequence from the given file.
-func ReadParticlesAt(path string, ps []tetra.Particle) {
+func ReadParticlesAt(path string, ps []Particle) {
 	h, f, order := readHeader(path, os.O_RDONLY)
 	defer f.Close()
 
@@ -346,9 +344,9 @@ func ReadParticlesAt(path string, ps []tetra.Particle) {
 	}
 }
 
-func Read(path string) (*tetra.Header, []tetra.Particle) {
+func Read(path string) (*Header, []Particle) {
 	h := ReadHeader(path)
-	ps := make([]tetra.Particle, h.Count)
+	ps := make([]Particle, h.Count)
 	ReadParticlesAt(path, ps)
 	return h, ps
 }
