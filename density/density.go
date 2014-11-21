@@ -8,6 +8,7 @@ import (
 	"math"
 
 	"github.com/phil-mansfield/gotetra/geom"
+	"github.com/phil-mansfield/gotetra/catalog"
 )
 
 // Interpolator creates a grid-based density distribution from seqeunces of
@@ -17,7 +18,7 @@ type Interpolator interface {
 	// density grid used by the Interpolator. Particles should all be within
 	// the bounds of the bounding grid and points not within the interpolation
 	// grid will be ignored.
-	Interpolate(mass float64, pts []geom.Vec)
+	Interpolate(mass float64, ids []int64, xs []geom.Vec)
 }
 
 // Flag indicates the interpolation scheme that should be used to assign
@@ -60,7 +61,9 @@ func Bounds(cells, gridWidth, gx, gy, gz int) (g, bg *geom.Grid) {
 // variable width refers to the interpolation grid, not the bounding grid.
 func NewInterpolator(
 	flag Flag, g, bg *geom.Grid,
-	width float64, rhos []float64,
+	width float64,
+	man *catalog.ParticleManager,
+	rhos []float64,
 ) Interpolator {
 	if g.Volume != len(rhos) {
 		panic(fmt.Sprintf(
@@ -83,9 +86,9 @@ func NewInterpolator(
 
 // Interpolate interpolates a sequence of particles onto a density grid via a
 // nearest grid point scheme.
-func (intr *ngp) Interpolate(mass float64, pts []geom.Vec) {
+func (intr *ngp) Interpolate(mass float64, ids []int64, xs []geom.Vec) {
 	frac := mass / intr.cellVolume
-	for _, pt := range pts {
+	for _, pt := range xs {
 		xp, yp, zp := float64(pt[0]), float64(pt[1]), float64(pt[2])
 		xc, yc, zc := cellPoints(xp, yp, zp, intr.cellWidth)
 		i, j, k := int(xc), int(yc), int(zc)
@@ -98,10 +101,10 @@ func (intr *ngp) Interpolate(mass float64, pts []geom.Vec) {
 
 // Interpolate interpolates a sequence of particles onto a density grid via a
 // cloud in cell scheme.
-func (intr *cic) Interpolate(mass float64, pts []geom.Vec) {
+func (intr *cic) Interpolate(mass float64, ids []int64, xs []geom.Vec) {
 	frac := mass / intr.cellVolume
 	cw, cw2 := intr.cellWidth, intr.cellWidth / 2
-	for _, pt := range pts {
+	for _, pt := range xs {
 		
 		xp, yp, zp := float64(pt[0])-cw2, float64(pt[1])-cw2, float64(pt[2])-cw2
 		xc, yc, zc := cellPoints(xp, yp, zp, intr.cellWidth)
