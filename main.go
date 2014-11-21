@@ -133,12 +133,17 @@ func compareDensityMain(x, y, z, cells int, sourceDir string) {
 
 	ngpRhos := make([]float64, cells * cells * cells)
 	ngpIntr := density.NewInterpolator(
-		density.NearestGridPoint, g, bg, h0.Width, man, ngpRhos,
+		density.NearestGridPoint, g, bg, h0.Width, h0.CountWidth, man, ngpRhos,
 	)
 
 	cicRhos := make([]float64, cells * cells * cells)
 	cicIntr := density.NewInterpolator(
-		density.CloudInCell, g, bg, h0.Width, man, cicRhos,
+		density.CloudInCell, g, bg, h0.Width, h0.CountWidth, man, cicRhos,
+	)
+
+	mcRhos := make([]float64, cells * cells * cells)
+	mcIntr := density.NewMonteCarloInterpolator(
+		g, bg, h0.Width, h0.CountWidth, man, 100, mcRhos,
 	)
 
 	xsBuf := make([]geom.Vec, vecBufLen)
@@ -151,14 +156,18 @@ func compareDensityMain(x, y, z, cells int, sourceDir string) {
 		xsBuf[i] = centerPs[bufIdx].Xs
 		idsBuf[i] = centerPs[bufIdx].Id
 
-		if bufIdx == len(xsBuf) - 1 || i == len(centerPs) - 1 {
+		if bufIdx == len(xsBuf) - 1 {
 			ngpIntr.Interpolate(h0.Mass, idsBuf, xsBuf)
 			cicIntr.Interpolate(h0.Mass, idsBuf, xsBuf)
+			mcIntr.Interpolate(h0.Mass, idsBuf, xsBuf)
 			bufIdx = 0
 		} else {
 			bufIdx++
 		}
 	}
+	ngpIntr.Interpolate(h0.Mass, idsBuf[0: bufIdx], xsBuf[0: bufIdx])
+	cicIntr.Interpolate(h0.Mass, idsBuf[0: bufIdx], xsBuf[0: bufIdx])
+	mcIntr.Interpolate(h0.Mass, idsBuf[0: bufIdx], xsBuf[0: bufIdx])
 
 	log.Println("Finished interpolation.")
 
