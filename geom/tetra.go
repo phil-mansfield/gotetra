@@ -25,9 +25,7 @@ type Tetra struct {
 	volumeValid, baryValid bool
 }
 
-type TetraIdxs struct {
-	Corners [4]int64
-}
+type TetraIdxs [4]int64
 
 type volumeBuffer struct {
 	buf1, buf2, buf3 Vec
@@ -89,14 +87,42 @@ func (t *Tetra) Init(c1, c2, c3, c4 *Vec, width float64) (ok bool) {
 // with an anchor point at the given index. The parameter dir selects a
 // particular tetrahedron configuration and must line in the range
 // [0, TetraDirCount).
-func NewTetraIdxs(idx, gridWidth int64, dir int) *TetraIdxs {
+func NewTetraIdxs(idx, countWidth int64, dir int) *TetraIdxs {
 	idxs := &TetraIdxs{}
-	return idxs.Init(idx, gridWidth, dir)
+	return idxs.Init(idx, countWidth, dir)
+}
+
+// This wastes an integer multiplication. Oh no!
+func compressCoords(x, y, z, dx, dy, dz, countWidth int64) int64 {
+	newX := (x + dx + countWidth) % countWidth
+	newY := (y + dy + countWidth) % countWidth
+	newZ := (z + dz + countWidth) % countWidth
+
+	return newX + newY * countWidth + newZ * countWidth * countWidth
 }
 
 // Init initializes a TetraIdxs collection using the same rules as NewTetraIdxs.
-func (idxs *TetraIdxs) Init(idx, gridWidth int64, dir int) *TetraIdxs {
-	return nil
+func (idxs *TetraIdxs) Init(idx, countWidth int64, dir int) *TetraIdxs {
+	if dir < 0 || dir >= 6 {
+		panic(fmt.Sprintf("Unknown direction %d", dir))
+	}
+
+	countArea := countWidth * countWidth
+
+	x := idx % countWidth
+	y := (idx % countArea) / countWidth
+	z := idx / countArea
+
+	idxs[0] = compressCoords(
+		x, y, z, dirs[dir][0][0], dirs[dir][0][1], dirs[dir][0][2], countWidth,
+	)
+	idxs[1] = compressCoords(
+		x, y, z, dirs[dir][1][0], dirs[dir][1][1], dirs[dir][1][2], countWidth,
+	)
+	idxs[2] = compressCoords(x, y, z, 1, 1, 1, countWidth)
+	idxs[3] = idx
+
+	return idxs
 }
 
 // Volume computes the volume of a tetrahedron.
