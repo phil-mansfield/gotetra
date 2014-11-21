@@ -5,8 +5,10 @@ package density
 
 import (
 	"fmt"
+	"log"
 	"math"
 
+	"github.com/phil-mansfield/num/rand"
 	"github.com/phil-mansfield/gotetra/geom"
 	"github.com/phil-mansfield/gotetra/catalog"
 )
@@ -39,9 +41,31 @@ type ngp struct {
 	rhos       []float64
 }
 
+type mcarlo struct {
+	subIntr Interpolator
+	man *catalog.ParticleManager
+	totalWidth float64
+	countWidth int64
+	steps int
+
+	gen *rand.Generator
+
+	// Buffers
+	idxBuf geom.TetraIdxs
+	tet geom.Tetra
+	randBuf []float64
+	vecBuf []geom.Vec
+}
+
 const (
 	CloudInCell Flag = iota
 	NearestGridPoint
+	MonteCarlo
+)
+
+const (
+	DefaultMonteCarloSteps = 100
+	DefaultMonteCarloGenerator = rand.Tausworthe
 )
 
 // Bounds returns a large bounding grid and a smaller interpolation Grid
@@ -59,9 +83,12 @@ func Bounds(cells, gridWidth, gx, gy, gz int) (g, bg *geom.Grid) {
 // defined by the Grid g which is embedded in the bounding Grid bg. These two
 // grids will almost always be possible to create through a call to Bounds. The
 // variable width refers to the interpolation grid, not the bounding grid.
+//
+// TODO: this initializer is really gross and in some cases requires values that
+// don't even get used. Rewrite this later.
 func NewInterpolator(
 	flag Flag, g, bg *geom.Grid,
-	width float64,
+	width float64, countWidth int64,
 	man *catalog.ParticleManager,
 	rhos []float64,
 ) Interpolator {
@@ -80,8 +107,33 @@ func NewInterpolator(
 		return &cic{*g, *bg, cellWidth, cellVolume, rhos}
 	case NearestGridPoint:
 		return &ngp{*g, cellWidth, cellVolume, rhos}
+	case MonteCarlo:
+		return NewMonteCarloInterpolator(
+			g, bg, width, countWidth, man, DefaultMonteCarloSteps, rhos,
+		)
 	}
 	panic(fmt.Sprintf("Unknown flag %d", flag))
+}
+
+// NewMonteCarloInterpolator creates a new Interpolator using the specified
+// number of interpolation points.
+func NewMonteCarloInterpolator(
+	g, bg *geom.Grid,
+	width float64, countWidth int64,
+	man *catalog.ParticleManager,
+	steps int,
+	rhos []float64,
+) Interpolator {
+
+	subIntr := NewInterpolator(CloudInCell, g, bg, width, countWidth, man, rhos)
+	totalWidth := width * float64(bg.Width) / float64(g.Width)
+
+	return &mcarlo{
+		subIntr, man, totalWidth, countWidth, steps,
+		rand.NewTimeSeed(DefaultMonteCarloGenerator),
+		geom.TetraIdxs{}, geom.Tetra{}, 
+		make([]float64, steps * 3), make([]geom.Vec, steps),
+	}
 }
 
 // Interpolate interpolates a sequence of particles onto a density grid via a
@@ -144,4 +196,44 @@ func (intr *cic) incr(i, j, k int, frac float64) {
 
 func cellPoints(x, y, z, cw float64) (xc, yc, zc float64) {
 	return math.Floor(x / cw), math.Floor(y / cw), math.Floor(z / cw)
+}
+
+func (intr *mcarlo) Interpolate(mass float64, ids []int64, xs []geom.Vec) {
+	ptMass := mass / float64(intr.steps) / 6.0
+
+	for _, id := range ids {
+		for dir := 0; dir < 6; dir++ {
+			intr.idxBuf.Init(id, intr.countWidth, dir)
+			
+			p0 := intr.man.Get(intr.idxBuf[0])
+			p1 := intr.man.Get(intr.idxBuf[1])
+			p2 := intr.man.Get(intr.idxBuf[2])
+			p3 := intr.man.Get(intr.idxBuf[3])
+
+			if p0 == nil || p1 == nil || p2 == nil || p3 == nil {
+				log.Printf("Tetrahedron [%v %v %v %v] not in manager.\n",
+					p0, p1, p2, p3)
+
+				if p0 == nil {
+					log.Printf("Point at index %d not in manager\n",
+						intr.idxBuf[0])
+				} else if p1 == nil {
+					log.Printf("Point at index %d not in manager\n",
+						intr.idxBuf[1])
+				} else if p2 == nil {
+					log.Printf("Point at index %d not in manager\n",
+						intr.idxBuf[2])
+				} else if p3 == nil {
+					log.Printf("Point at index %d not in manager\n",
+						intr.idxBuf[3])
+				}
+
+				continue
+			}
+
+			intr.tet.Init(&p0.Xs, &p1.Xs, &p2.Xs, &p3.Xs, intr.totalWidth)
+			intr.tet.Sample(intr.gen, intr.randBuf, intr.vecBuf)
+			intr.subIntr.Interpolate(ptMass, nil, intr.vecBuf)
+		}
+	}
 }
