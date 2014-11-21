@@ -126,37 +126,48 @@ func createCatalogsMain(x, y, z, cells int, sources []string, target string) {
 
 func compareDensityMain(x, y, z, cells int, sourceDir string) {
 	log.Printf("Starting to read catalogs at (%d, %d, %d)\n", x, y, z)
-	h0, _, centerPs := helper.ReadCatalogs(sourceDir, x, y, z, 1)
+	h0, man, centerPs := helper.ReadCatalogs(sourceDir, x, y, z, 1)
 	log.Println("Finished reading catalogs.")
 
 	g, bg := density.Bounds(cells, int(h0.GridWidth), x, y, z)
 
 	ngpRhos := make([]float64, cells * cells * cells)
 	ngpIntr := density.NewInterpolator(
-		density.NearestGridPoint, g, bg, h0.Width, ngpRhos,
+		density.NearestGridPoint, g, bg, h0.Width, h0.CountWidth, man, ngpRhos,
 	)
 
 	cicRhos := make([]float64, cells * cells * cells)
 	cicIntr := density.NewInterpolator(
-		density.CloudInCell, g, bg, h0.Width, cicRhos,
+		density.CloudInCell, g, bg, h0.Width, h0.CountWidth, man, cicRhos,
+	)
+
+	mcRhos := make([]float64, cells * cells * cells)
+	mcIntr := density.NewMonteCarloInterpolator(
+		g, bg, h0.Width, h0.CountWidth, man, 100, mcRhos,
 	)
 
 	xsBuf := make([]geom.Vec, vecBufLen)
+	idsBuf := make([]int64, vecBufLen)
 		
 	log.Println("Set up interpolators and buffers.")
 
 	bufIdx := 0
 	for i := range centerPs {
-		xsBuf[bufIdx] = centerPs[i].Xs
+		xsBuf[i] = centerPs[bufIdx].Xs
+		idsBuf[i] = centerPs[bufIdx].Id
 
-		if bufIdx == len(xsBuf) - 1 || i == len(centerPs) - 1 {
-			ngpIntr.Interpolate(h0.Mass, xsBuf)
-			cicIntr.Interpolate(h0.Mass, xsBuf)
+		if bufIdx == len(xsBuf) - 1 {
+			ngpIntr.Interpolate(h0.Mass, idsBuf, xsBuf)
+			cicIntr.Interpolate(h0.Mass, idsBuf, xsBuf)
+			mcIntr.Interpolate(h0.Mass, idsBuf, xsBuf)
 			bufIdx = 0
 		} else {
 			bufIdx++
 		}
 	}
+	ngpIntr.Interpolate(h0.Mass, idsBuf[0: bufIdx], xsBuf[0: bufIdx])
+	cicIntr.Interpolate(h0.Mass, idsBuf[0: bufIdx], xsBuf[0: bufIdx])
+	mcIntr.Interpolate(h0.Mass, idsBuf[0: bufIdx], xsBuf[0: bufIdx])
 
 	log.Println("Finished interpolation.")
 
