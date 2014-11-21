@@ -12,12 +12,12 @@ rhos = np.reshape(rhos, (N, N, N)) / np.mean(rhos)
 rhos = np.reshape(rhos, (N, N, N))
 
 vals = (np.array(range(9)) + 1) * N/10
-cmap_name = "cubehelix"
+cmap_name = "cubehelix" #"gist_heat" #"cubehelix"
 
 for val in vals:
     plt.figure()
     plt.title(r"N = %d" % val)
-    plt.imshow(np.log10(rhos[:, :, val]), cmap=cmap_name)
+    plt.imshow(np.log10(rhos[:, val, :]), cmap=cmap_name)
     plt.colorbar()
 
 plt.show()
