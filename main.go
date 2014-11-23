@@ -141,25 +141,42 @@ func compareDensityMain(x, y, z, cells int, sourceDir string) {
 		density.CloudInCell, g, bg, h0.Width, h0.CountWidth, man, cicRhos,
 	)
 
-	mcRhos := make([]float64, cells * cells * cells)
-	mcIntr := density.NewMonteCarloInterpolator(
-		g, bg, h0.Width, h0.CountWidth, man, 100, mcRhos,
+	mcRhos10 := make([]float64, cells * cells * cells)
+	mcIntr10 := density.NewMonteCarloInterpolator(
+		g, bg, h0.Width, h0.CountWidth, man, 10, mcRhos10,
 	)
+
+	mcRhos100 := make([]float64, cells * cells * cells)
+	mcIntr100 := density.NewMonteCarloInterpolator(
+		g, bg, h0.Width, h0.CountWidth, man, 100, mcRhos100,
+	)
+
+	//mcRhos1000 := make([]float64, cells * cells * cells)
+	//mcIntr1000 := density.NewMonteCarloInterpolator(
+	//	g, bg, h0.Width, h0.CountWidth, man, 1000, mcRhos1000,
+	//)
 
 	xsBuf := make([]geom.Vec, vecBufLen)
 	idsBuf := make([]int64, vecBufLen)
 		
 	log.Println("Set up interpolators and buffers.")
+	checkLen := len(centerPs) / 20
 
 	bufIdx := 0
 	for i := range centerPs {
-		xsBuf[i] = centerPs[bufIdx].Xs
-		idsBuf[i] = centerPs[bufIdx].Id
+		if i % checkLen == 0 {
+			log.Printf("%d Particles interpolated.\n", i)
+		}
+
+		xsBuf[bufIdx] = centerPs[i].Xs
+		idsBuf[bufIdx] = centerPs[i].Id
 
 		if bufIdx == len(xsBuf) - 1 {
 			ngpIntr.Interpolate(h0.Mass, idsBuf, xsBuf)
 			cicIntr.Interpolate(h0.Mass, idsBuf, xsBuf)
-			mcIntr.Interpolate(h0.Mass, idsBuf, xsBuf)
+			mcIntr10.Interpolate(h0.Mass, idsBuf, xsBuf)
+			mcIntr100.Interpolate(h0.Mass, idsBuf, xsBuf)
+			// mcIntr1000.Interpolate(h0.Mass, idsBuf, xsBuf)
 			bufIdx = 0
 		} else {
 			bufIdx++
@@ -167,13 +184,18 @@ func compareDensityMain(x, y, z, cells int, sourceDir string) {
 	}
 	ngpIntr.Interpolate(h0.Mass, idsBuf[0: bufIdx], xsBuf[0: bufIdx])
 	cicIntr.Interpolate(h0.Mass, idsBuf[0: bufIdx], xsBuf[0: bufIdx])
-	mcIntr.Interpolate(h0.Mass, idsBuf[0: bufIdx], xsBuf[0: bufIdx])
+	mcIntr10.Interpolate(h0.Mass, idsBuf[0: bufIdx], xsBuf[0: bufIdx])
+	mcIntr100.Interpolate(h0.Mass, idsBuf[0: bufIdx], xsBuf[0: bufIdx])
+	// mcIntr1000.Interpolate(h0.Mass, idsBuf[0: bufIdx], xsBuf[0: bufIdx])
 
 	log.Println("Finished interpolation.")
 
 	fmt.Printf("# %12s %12s\n", "NGP", "CIC")
 	for i := range ngpRhos {
-		fmt.Printf("  %12.6g %12.6g\n", ngpRhos[i], cicRhos[i])
+		fmt.Printf(
+			"  %10.5g %10.5g %10.5g %10.5g\n",
+			ngpRhos[i], cicRhos[i], mcRhos10[i], mcRhos100[i],
+		)
 	}
 
 	log.Println("Finished printing density grid.")
