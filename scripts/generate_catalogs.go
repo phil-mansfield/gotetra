@@ -11,7 +11,6 @@ import (
 	"strings"
 	"runtime"
 
-	tetra "github.com/phil-mansfield/gotetra"
 	"github.com/phil-mansfield/gotetra/catalog"
 )
 
@@ -107,7 +106,7 @@ func createCatalogs(outPath, exampleInput string, gridWidth, countWidth int) []s
 	h.CountWidth = int64(countWidth)
 	h.GridWidth = int64(gridWidth)
 
-	ps := []tetra.Particle{}
+	ps := []catalog.Particle{}
 
 	maxIdx := gridWidth * gridWidth * gridWidth
 	catalogNames := []string{}
@@ -122,9 +121,9 @@ func createCatalogs(outPath, exampleInput string, gridWidth, countWidth int) []s
 }
 
 // rebinParticles transfers particles from a slice of Gadget catalogs to a
-// slice of tetra catalogs.
+// slice of gotetra catalogs.
 func rebinParticles(inFiles, outFiles []string, gridWidth int64) {
-	hs := make([]tetra.Header, len(inFiles))
+	hs := make([]catalog.Header, len(inFiles))
 	for i := range hs {
 		hs[i] = *catalog.ReadGadgetHeader(inFiles[i], gadgetEndianness)
 	}
@@ -140,7 +139,7 @@ func rebinParticles(inFiles, outFiles []string, gridWidth int64) {
 
 	floatBufMax := make([]float32, maxLen * 3)
 	intBufMax := make([]int64, maxLen)
-	psBufMax := make([]tetra.Particle, maxLen)
+	psBufMax := make([]catalog.Particle, maxLen)
 
 	bufs := createBuffers(outFiles, defaultBufSize)
 
@@ -186,7 +185,7 @@ func rebinSlice(
 	width float64,
 	gridWidth int64,
 	bufs []*catalog.ParticleBuffer,
-	ps []tetra.Particle,
+	ps []catalog.Particle,
 ) {
 	for _, p := range ps {
 		xIdx := int64(math.Floor(float64(p.Xs[0]) / width))

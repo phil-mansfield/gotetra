@@ -23,7 +23,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"math"
 	"os"
 
 	"unsafe"
@@ -153,15 +152,8 @@ func ReadGadgetParticlesAt(
 	}
 
 	_ = readInt32(f, order)
-	binary.Read(f, order, floatBuf)
+	f.Seek(int64(unsafe.Sizeof(floatBuf[0])) * int64(len(floatBuf)), 1)
 	_ = readInt32(f, order)
-
-	rootA := float32(math.Sqrt(float64(gh.Time)))
-	for i := range ps {
-		ps[i].Vs[0] = floatBuf[3*i+0] * rootA
-		ps[i].Vs[1] = floatBuf[3*i+1] * rootA
-		ps[i].Vs[2] = floatBuf[3*i+2] * rootA
-	}
 
 	_ = readInt32(f, order)
 	binary.Read(f, order, intBuf)
@@ -176,53 +168,11 @@ func ReadGadgetParticlesAt(
 // and written with the given endianness. Its header and particle sequence
 // are returned in a standardized format.
 func ReadGadget(path string, order binary.ByteOrder) (*Header, []Particle) {
-	f, err := os.Open(path)
-	if err != nil {
-		panic(err)
-	}
-	defer f.Close()
-
-	gh := &gadgetHeader{}
-
-	_ = readInt32(f, order)
-	binary.Read(f, binary.LittleEndian, gh)
-	_ = readInt32(f, order)
-
-	h := gh.Standardize()
-	floatBuf := make([]float32, 3*h.Count)
+	h := ReadGadgetHeader(path, order)
+	floatBuf := make([]float32, 3 * h.Count)
+	intBuf := make([]int64, h.Count)
 	ps := make([]Particle, h.Count)
-
-	_ = readInt32(f, order)
-	binary.Read(f, order, floatBuf)
-	_ = readInt32(f, order)
-
-	for i := range ps {
-		ps[i].Xs[0] = float32(gh.WrapDistance(float64(floatBuf[3*i+0])))
-		ps[i].Xs[1] = float32(gh.WrapDistance(float64(floatBuf[3*i+1])))
-		ps[i].Xs[2] = float32(gh.WrapDistance(float64(floatBuf[3*i+2])))
-	}
-
-	_ = readInt32(f, order)
-	binary.Read(f, order, floatBuf)
-	_ = readInt32(f, order)
-
-	rootA := float32(math.Sqrt(float64(gh.Time)))
-	for i := range ps {
-		ps[i].Vs[0] = floatBuf[3*i+0] * rootA
-		ps[i].Vs[1] = floatBuf[3*i+1] * rootA
-		ps[i].Vs[2] = floatBuf[3*i+2] * rootA
-	}
-
-	ids := make([]int64, h.Count)
-
-	_ = readInt32(f, order)
-	binary.Read(f, order, ids)
-	_ = readInt32(f, order)
-
-	for i := range ps {
-		ps[i].Id = ids[i]
-	}
-
+	ReadGadgetParticlesAt(path, order, floatBuf, intBuf, ps)
 	return h, ps
 }
 

@@ -11,7 +11,6 @@ import (
 // with float64s.
 type Particle struct {
 	Xs geom.Vec
-	Vs geom.Vec
 	Id int64
 }
 
