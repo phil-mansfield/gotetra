@@ -125,7 +125,7 @@ func NewMonteCarloInterpolator(
 	rhos []float64,
 ) Interpolator {
 
-	subIntr := NewInterpolator(CloudInCell, g, bg, width, countWidth, man, rhos)
+	subIntr := NewInterpolator(NearestGridPoint, g, bg, width, countWidth, man, rhos)
 	totalWidth := width * float64(bg.Width) / float64(g.Width)
 
 	return &mcarlo{
