@@ -1,18 +1,29 @@
 package main
-
 import (
 	"flag"
+	"math"
 	"fmt"
+	"encoding/binary"
+	"strings"
+	"strconv"
+	"path"
 	"log"
 	"os"
+	"io/ioutil"
 
-	"github.com/phil-mansfield/gotetra/scripts/helper"
 	"github.com/phil-mansfield/gotetra/density"
 	"github.com/phil-mansfield/gotetra/geom"
+	"github.com/phil-mansfield/gotetra/catalog"
+	"github.com/phil-mansfield/gotetra/scripts/helper"
 )
 
 const (
 	vecBufLen = 1<<10
+	catalogBufLen = 1<<12
+)
+
+var (
+	gadgetEndianness = binary.LittleEndian
 )
 
 func main() {
@@ -23,7 +34,7 @@ func main() {
 	)
 
 	outPath := flag.String("Log", "", "Location to write log statements to. " + 
-		"Default is stderr.")
+		"Default is /dev/null.")
 
 	flag.IntVar(&x, "X", -1, "z location of operation.")
 	flag.IntVar(&y, "Y", -1, "y location of operation.")
@@ -38,7 +49,7 @@ func main() {
 	flag.Parse()
 
 	if *outPath == "" {
-		log.SetOutput(os.Stderr)
+		log.SetOutput(ioutil.Discard)
 	} else {
 		if lf, err := os.Create(*outPath); err != nil {
 			log.Fatalln(err.Error())
@@ -65,7 +76,7 @@ func main() {
 		sources := args[1: len(args) - 1]
 		targetDir := args[len(args) - 1]
 
-		createCatalogsMain(x, y, z, cells, sources, targetDir)
+		createCatalogsMain(cells, sources, targetDir)
 		
 	case compareDensity:
 		checkCells(cells, modeName)
@@ -120,8 +131,155 @@ func checkMode(createCatalog, compareDensity bool) string {
 	return modeStr
 }
 
-func createCatalogsMain(x, y, z, cells int, sources []string, target string) {
-	log.Fatalf("CreateCatalogs not yet [re]implemented.")
+func createCatalogsMain(cells int, matches []string, outPath string) {
+	snapDir := path.Base(path.Dir(matches[0]))
+	paramDir := path.Base(path.Dir(path.Dir(path.Dir(matches[0]))))
+
+	l, n, str, err := parseDir(paramDir)
+	if err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
+	}
+
+	outParamDir := fmt.Sprintf("Box_L%04d_N%04d_G%04d_%s", l, n, cells, str)
+	outParamPath := path.Join(outPath, outParamDir)
+	outSnapPath := path.Join(outParamPath, snapDir)
+
+	if err = os.MkdirAll(path.Join(outParamPath, snapDir), 0777); err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
+	}
+
+	catalogNames := createCatalogs(outSnapPath, matches[0], cells, n)
+
+	rebinParticles(matches, catalogNames, int64(cells))
+}
+
+// pasreDir reads one of Benedikt's sim directory names and returns the relevent
+// physical information.
+func parseDir(dir string) (int, int, string, error) {
+	parts := strings.Split(dir, "_")
+
+	if len(parts) != 4 {
+		return dirErr(dir)
+	} else if len(parts[1]) != 5 {
+		return dirErr(dir)
+	} else if len(parts[2]) != 5 {
+		return dirErr(dir)
+	}
+
+	l, err := strconv.Atoi(parts[1][1:5])
+	if err != nil {
+		return 0, 0, "", err
+	}
+	n, err := strconv.Atoi(parts[2][1:5])
+	if err != nil {
+		return 0, 0, "", err
+	}
+
+	return l, n, parts[3], nil
+}
+
+func dirErr(dir string) (int, int, string, error) {
+	return 0, 0, "", fmt.Errorf("Invalid source directory '%s'.", dir)
+}
+
+// createCatalogs creates new instances of the needed gridcell files in the
+// given directory.
+func createCatalogs(outPath, exampleInput string, gridWidth, countWidth int) []string {
+	h := catalog.ReadGadgetHeader(exampleInput, gadgetEndianness)
+	h.Width = h.TotalWidth / float64(gridWidth)
+	h.CountWidth = int64(countWidth)
+	h.GridWidth = int64(gridWidth)
+
+	ps := []catalog.Particle{}
+
+	maxIdx := gridWidth * gridWidth * gridWidth
+	catalogNames := []string{}
+	for i := 0; i < maxIdx; i++ {
+		name := path.Join(outPath, fmt.Sprintf("gridcell_%04d.dat", i))
+		catalogNames = append(catalogNames, name)
+		h.Idx = int64(i)
+		catalog.Write(name, h, ps)
+	}
+
+	return catalogNames
+}
+
+// rebinParticles transfers particles from a slice of Gadget catalogs to a
+// slice of gotetra catalogs.
+func rebinParticles(inFiles, outFiles []string, gridWidth int64) {
+	hs := make([]catalog.Header, len(inFiles))
+	log.Println("Creating catalog files")
+	for i := range hs {
+		hs[i] = *catalog.ReadGadgetHeader(inFiles[i], gadgetEndianness)
+	}
+	log.Println("Finished creating catalog files")
+
+	width := hs[0].TotalWidth / float64(gridWidth)
+
+	maxLen := int64(0)
+	for _, h := range hs {
+		if h.Count > maxLen {
+			maxLen = h.Count
+		}
+	}
+
+	floatBufMax := make([]float32, maxLen * 3)
+	intBufMax := make([]int64, maxLen)
+	psBufMax := make([]catalog.Particle, maxLen)
+
+	bufs := createBuffers(outFiles, catalogBufLen)
+
+
+	for i, inFile := range inFiles {
+		if i % 25 == 0 {
+			log.Printf("Converting %d/%d catalogs.\n", i, len(inFiles))
+		}
+
+		floatBuf := floatBufMax[0:hs[i].Count*3]
+		intBuf := intBufMax[0:hs[i].Count]
+		psBuf := psBufMax[0:hs[i].Count]
+
+		catalog.ReadGadgetParticlesAt(
+			inFile, gadgetEndianness, floatBuf, intBuf, psBuf,
+		)
+
+		rebinSlice(width, gridWidth, bufs, psBuf)
+	}
+
+	for _, buf := range bufs {
+		buf.Flush()
+	}
+}
+
+// createBuffers creates buffers for all the catalog files that will be
+// witten to.
+func createBuffers(paths []string, bufSize int) []*catalog.ParticleBuffer {
+	bufs := make([]*catalog.ParticleBuffer, len(paths))
+
+	for i, path := range paths {
+		bufs[i] = catalog.NewParticleBuffer(path, bufSize)
+	}
+
+	return bufs
+}
+
+// rebinSlice rebins the given particles into the grid of files represented
+// by bufs.
+func rebinSlice(
+	width float64,
+	gridWidth int64,
+	bufs []*catalog.ParticleBuffer,
+	ps []catalog.Particle,
+) {
+	for _, p := range ps {
+		xIdx := int64(math.Floor(float64(p.Xs[0]) / width))
+		yIdx := int64(math.Floor(float64(p.Xs[1]) / width))
+		zIdx := int64(math.Floor(float64(p.Xs[2]) / width))
+		idx := xIdx + yIdx*gridWidth + zIdx*gridWidth*gridWidth
+		bufs[idx].Append(p)
+	}
 }
 
 func compareDensityMain(x, y, z, cells int, sourceDir string) {
@@ -151,11 +309,6 @@ func compareDensityMain(x, y, z, cells int, sourceDir string) {
 		g, bg, h0.Width, h0.CountWidth, man, 100, mcRhos100,
 	)
 
-	//mcRhos1000 := make([]float64, cells * cells * cells)
-	//mcIntr1000 := density.NewMonteCarloInterpolator(
-	//	g, bg, h0.Width, h0.CountWidth, man, 1000, mcRhos1000,
-	//)
-
 	xsBuf := make([]geom.Vec, vecBufLen)
 	idsBuf := make([]int64, vecBufLen)
 		
@@ -176,7 +329,6 @@ func compareDensityMain(x, y, z, cells int, sourceDir string) {
 			cicIntr.Interpolate(h0.Mass, idsBuf, xsBuf)
 			mcIntr10.Interpolate(h0.Mass, idsBuf, xsBuf)
 			mcIntr100.Interpolate(h0.Mass, idsBuf, xsBuf)
-			// mcIntr1000.Interpolate(h0.Mass, idsBuf, xsBuf)
 			bufIdx = 0
 		} else {
 			bufIdx++
@@ -186,7 +338,6 @@ func compareDensityMain(x, y, z, cells int, sourceDir string) {
 	cicIntr.Interpolate(h0.Mass, idsBuf[0: bufIdx], xsBuf[0: bufIdx])
 	mcIntr10.Interpolate(h0.Mass, idsBuf[0: bufIdx], xsBuf[0: bufIdx])
 	mcIntr100.Interpolate(h0.Mass, idsBuf[0: bufIdx], xsBuf[0: bufIdx])
-	// mcIntr1000.Interpolate(h0.Mass, idsBuf[0: bufIdx], xsBuf[0: bufIdx])
 
 	log.Println("Finished interpolation.")
 
