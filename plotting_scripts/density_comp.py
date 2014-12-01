@@ -18,11 +18,11 @@ cmap_name = "cubehelix"
 
 for val in vals:
     for (rho, name)in zip(rhos, names):
-        rho = np.clip(np.reshape(rho, (N, N, N)), 10**-2.5, 10**3)
+        rho = np.clip(np.reshape(rho, (N, N, N)), 10**-1.5, 10**3)
 
         plt.figure()
         plt.title("%s" % name)
-        plt.imshow(np.mean(np.log10(rho[:, :, val-1:val+2]), axis=2), cmap=cmap_name)
+        plt.imshow(np.log10(rho[:, :, val]), cmap=cmap_name)
         plt.colorbar()
 
 plt.show()
