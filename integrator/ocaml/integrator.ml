@@ -39,10 +39,10 @@ let rec max_depth (ex: expression) : int =
 let print_ex (ex : expression) : unit =
   let rec print_ex' (ex' : expression) : unit =
     match ex' with
-      Num x -> printf "%g" x;
+      Num x -> printf "%.1g" x;
     | Var (name, exp) ->
       if exp != 1 then
-        printf "%s**%d" name exp
+        printf "math.Pow(%s, %d)" name exp
       else 
         printf "%s" name
     | Sum exs -> 
@@ -447,15 +447,17 @@ and integ (lo : expression) (hi : expression)
 ;;
 
 let main () =
-  let l3 = Sum [| Num (1.0);
+  (* let l3 = Sum [| Num (1.0);
                   Prod [|Num (-1.0); Var("L1", 1) |];
-                  Prod [|Num (-1.0); Var("L2", 1) |] |]in
-  let x = Sum [| Prod [| Var("x1", 1); Var("L1", 1) |];
-                 Prod [| Var("x2", 1); Var("L2", 1) |];
-                 Prod [| Var("x3", 1); l3|]|] in
-  let y = Sum [| Prod [| Var("x1", 1); Var("L1", 1) |];
-                 Prod [| Var("x2", 1); Var("L2", 1) |];
-                 Prod [| Var("x3", 1); l3|]|] in
+                  Prod [|Num (-1.0); Var("L2", 1) |] |]in *)
+  let x = Var("x", 1)
+    (*Sum [| Prod [| Var("x1", 1); Var("L1", 1) |];
+      Prod [| Var("x2", 1); Var("L2", 1) |];
+      Prod [| Var("x3", 1); l3|]|]*) in
+  let y = Var("y", 1)
+    (*Sum [| Prod [| Var("x1", 1); Var("L1", 1) |];
+      Prod [| Var("x2", 1); Var("L2", 1) |];
+      Prod [| Var("x3", 1); l3|]|] *) in
 
   let xl_diff = Sum [| x; Prod [| Num (-1.0); Var("xl", 1) |] |] in
   let xh_diff = Sum [| x; Prod [| Num (-1.0); Var("xh", 1) |] |] in
@@ -475,24 +477,25 @@ let main () =
   let area = subst "x3" (Num 0.0) area in
   let area = subst "y3" (Num 1.0) area in
 
-  let area = subst "xl" (Num 0.0) area in
-  let area = subst "yl" (Num 0.0) area in
-  let area = subst "xh" (Num 10.0) area in
-  let area = subst "yh" (Num 10.0) area in
+  let area = subst "xl" (Sum [| Var("xl", 1); Prod[| Var("mx", 1); x |] |]) area in
+  let area = subst "yl" (Sum [| Var("yl", 1); Prod[| Var("mx", 1); x |] |]) area in
+  let area = subst "xh" (Sum [| Var("xh", 1); Prod[| Var("my", 1); y |] |]) area in
+  let area = subst "yh" (Sum [| Var("yh", 1); Prod[| Var("my", 1); y |] |]) area in
 
   let ex = expand area in
-  print_ex ex;
+  (* print_ex ex;
+  printf "# ^ex"; *)
   let lo1 = Num 0.0 in
-  let hi1 = Sum [| Num 1.0; Prod [| Num (-1.0); Var("L2", 1) |] |] in
+  let hi1 = Sum [| Num 1.0; Prod [| Num (-1.0); Var("y", 1) |] |] (*Sum [| Num 1.0; Prod [| Num (-1.0); Var("L2", 1) |] |]*) in
   let lo2 = Num 0.0 in
   let hi2 = Num 1.0 in
 
-  let int_ex = integ lo1 hi1 "L1" ex in
-  print_ex int_ex;
-  let int_ex' = integ lo2 hi2 "L2" (expand int_ex) in
+  let int_ex = expand (integ lo1 hi1 "x" ex) in
+  (* print_ex int_ex;
+  printf "# ^int ex"; *)
+  let int_ex' = integ lo2 hi2 "y" int_ex in
   print_ex int_ex';
-  let final_ex = expand int_ex' in
-  print_ex final_ex;
+  (* printf "# ^int int ex"; *)
 ;;
 
 main ();;
