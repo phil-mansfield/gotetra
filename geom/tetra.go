@@ -98,7 +98,7 @@ func compressCoords(x, y, z, dx, dy, dz, countWidth int64) int64 {
 	newY := (y + dy + countWidth) % countWidth
 	newZ := (z + dz + countWidth) % countWidth
 
-	return newX + newY * countWidth + newZ * countWidth * countWidth
+	return newX + newY*countWidth + newZ*countWidth*countWidth
 }
 
 // Init initializes a TetraIdxs collection using the same rules as NewTetraIdxs.
@@ -279,7 +279,7 @@ func (t *Tetra) CellBounds(cellWidth float64) *CellBounds {
 	return cb
 }
 
-func(t *Tetra) CellBoundsAt(cellWidth float64, cb *CellBounds) {
+func (t *Tetra) CellBoundsAt(cellWidth float64, cb *CellBounds) {
 	bary := t.Barycenter()
 
 	for i := 0; i < 4; i++ {

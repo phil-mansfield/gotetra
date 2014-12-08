@@ -355,10 +355,10 @@ func TestBarycenterMC(t *testing.T) {
 
 func TestCellBounds(t *testing.T) {
 	table := []struct {
-		c1, c2, c3, c4 *Vec
+		c1, c2, c3, c4   *Vec
 		width, cellWidth float64
-		cb *CellBounds
-	} {
+		cb               *CellBounds
+	}{
 		{&Vec{50, 50, 50}, &Vec{51, 50, 50}, &Vec{50, 51, 50}, &Vec{50, 50, 51},
 			100.0, 1.0, &CellBounds{[3]int{50, 50, 50}, [3]int{51, 51, 51}}},
 		{&Vec{80, 80, 80}, &Vec{110, 80, 80}, &Vec{80, 110, 80}, &Vec{80, 80, 110},

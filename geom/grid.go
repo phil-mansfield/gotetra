@@ -3,10 +3,10 @@ package geom
 // Grid provides an interface for reasoning over a 1D slice as if it were a
 // 3D grid.
 type Grid struct {
-	Origin              [3]int
-	Width int
-	Area int
-	Volume int
+	Origin  [3]int
+	Width   int
+	Area    int
+	Volume  int
 	uBounds [3]int
 }
 
@@ -87,7 +87,7 @@ func (g *Grid) Wrap(x, y, z int) (wx, wy, wz int) {
 func (g *Grid) BoundsCheck(x, y, z int) bool {
 	return (g.Origin[0] <= x && g.Origin[1] <= y && g.Origin[2] <= z) &&
 		(x < g.uBounds[0] && y < g.uBounds[1] &&
-		z < g.uBounds[2])
+			z < g.uBounds[2])
 }
 
 // Coords returns the x, y, z coordinates of a point from its grid index.
