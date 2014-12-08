@@ -106,3 +106,36 @@ func pMod(x, y int) int {
 	}
 	return m
 }
+
+func (g *Grid) Intersect(cb *CellBounds, bounds *Grid) bool {
+	allContained := true
+
+	for i := 0; i < 3; i++ {
+		allContained = allContained && wrapOverlap(cb.Min[i], cb.Max[i],
+			g.Origin[i], g.uBounds[i], bounds.Width)
+	}
+
+	return allContained
+}
+
+func wrapOverlap(wMin, wMax, min, max, width int) bool {
+	if overlap(wMin, wMax, min, max) {
+		return true
+	}
+
+	if wMax >= width {
+		wMin -= width
+		wMax -= width
+		return overlap(wMin, wMax, min, max)
+	} else if wMin < 0 {
+		wMin += width
+		wMax += width
+		return overlap(wMin, wMax, min, max)
+	}
+
+	return false
+}
+
+func overlap(min1, max1, min2, max2 int) bool {
+	return !(min1 > max2 || min2 > max1)
+}

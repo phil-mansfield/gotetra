@@ -379,3 +379,40 @@ func TestCellBounds(t *testing.T) {
 		}
 	}
 }
+
+func TestIntersect(t *testing.T) {
+	g := NewGrid(&[3]int{5, 5, 5}, 10)
+	bg := NewGrid(&[3]int{0, 0, 0}, 20)
+
+	table := []struct {
+		cb *CellBounds
+		res bool
+	} {
+		{&CellBounds{[3]int{5, 5, 5}, [3]int{15, 15, 15}}, true},
+		{&CellBounds{[3]int{15, 15, 15}, [3]int{15, 15, 15}}, true},
+		{&CellBounds{[3]int{5, 5, 5}, [3]int{5, 5, 5}}, true},
+
+		{&CellBounds{[3]int{17, 17, 17}, [3]int{18, 18, 18}}, false},
+		{&CellBounds{[3]int{2, 2, 2}, [3]int{3, 3, 3}}, false},
+		{&CellBounds{[3]int{5, 5, 5}, [3]int{15, 15, 15}}, true},
+		{&CellBounds{[3]int{6, 6, 6}, [3]int{14, 14, 14}}, true},
+		{&CellBounds{[3]int{4, 4, 4}, [3]int{16, 16, 16}}, true},
+
+		{&CellBounds{[3]int{6, 16, 6}, [3]int{14, 17, 14}}, false},
+		{&CellBounds{[3]int{4, 16, 4}, [3]int{16, 17, 16}}, false},
+		{&CellBounds{[3]int{6, 3, 6}, [3]int{14, 4, 14}}, false},
+		{&CellBounds{[3]int{4, 3, 4}, [3]int{16, 4, 16}}, false},
+
+		{&CellBounds{[3]int{-10, -10, -10}, [3]int{1, 1, 1}}, true},
+		{&CellBounds{[3]int{19, 19, 19}, [3]int{30, 30, 30}}, true},
+
+		{&CellBounds{[3]int{-3, -3, -3}, [3]int{1, 1, 1}}, false},
+		{&CellBounds{[3]int{19, 19, 19}, [3]int{23, 23, 23}}, false},
+	}
+
+	for i, test := range table {
+		if g.Intersect(test.cb, bg) != test.res {
+			t.Errorf("%d) Got incorrect Intersect result for %v.\n", i, test.cb)
+		}
+	}
+}
