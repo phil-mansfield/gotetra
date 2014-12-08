@@ -195,46 +195,6 @@ func (t *Tetra) signedVolume(c1, c2, c3, c4 *Vec) float64 {
 	return t.vb.buf1.Dot(&t.vb.buf2) / 6.0
 }
 
-// CellBounds returns the bounding box of a tetrahedron, aligned to the given
-// grid. The indices returned represent a tetrahedron whose barycenter is
-// within the fundamental domain of the grid. As such, the returned indices
-// may not be within the domain [0, g.Width).
-func (t *Tetra) CellBounds(g *Grid) *CellBounds {
-	return t.CellBoundsAt(g, &CellBounds{})
-}
-
-// CellBoundsAt returns the same quantity as CellBounds, but the result is
-// placed at the given location.
-func (t *Tetra) CellBoundsAt(g *Grid, out *CellBounds) *CellBounds {
-	bary := t.Barycenter()
-
-	for i := 0; i < 4; i++ {
-		t.Corners[i].SubAt(bary, t.width, &t.sb.c[i])
-	}
-
-	var minDs, maxDs [3]float32
-
-	for i := 0; i < 4; i++ {
-		for d := 0; d < 3; d++ {
-			if d == 0 {
-				minDs[d], maxDs[d] = t.sb.c[i][d], t.sb.c[i][d]
-			} else {
-				minDs[d], maxDs[d] = minMax(t.sb.c[i][d], minDs[d], maxDs[d])
-			}
-		}
-	}
-
-	mult := float64(g.Width) / t.width
-	for d := 0; d < 3; d++ {
-		fIdx := float64(bary[d]+minDs[d]) * mult
-		out.Min[d] = int(math.Floor(fIdx)) - g.Origin[d]
-		fIdx = float64(bary[d]+maxDs[d]) * mult
-		out.Max[d] = int(math.Ceil(fIdx)) - g.Origin[d]
-	}
-
-	return out
-}
-
 func minMax(x, oldMin, oldMax float32) (min, max float32) {
 	if x > oldMax {
 		return oldMin, x
@@ -311,4 +271,38 @@ func (t *Tetra) Barycenter() *Vec {
 
 func center(r1, r2, out *Vec, width float64) {
 	r1.SubAt(r2, width, out).AddSelf(r2).AddSelf(r2).ScaleSelf(0.5)
+}
+
+func (t *Tetra) CellBounds(cellWidth float64) *CellBounds {
+	cb := &CellBounds{}
+	t.CellBoundsAt(cellWidth, cb)
+	return cb
+}
+
+func(t *Tetra) CellBoundsAt(cellWidth float64, cb *CellBounds) {
+	bary := t.Barycenter()
+
+	for i := 0; i < 4; i++ {
+		t.Corners[i].SubAt(bary, t.width, &t.sb.c[i]).AddSelf(bary)
+	}
+
+	for i, vec := range t.sb.c {
+		if i == 0 {
+			for j := 0; j < 3; j++ {
+				// d[0] = Min, d[1] = Max
+				t.sb.d[0][j], t.sb.d[1][j] = vec[j], vec[j]
+			}
+			continue
+		}
+
+		for j := 0; j < 3; j++ {
+			t.sb.d[0][j], t.sb.d[1][j] = minMax(vec[j],
+				t.sb.d[0][j], t.sb.d[1][j])
+		}
+	}
+
+	for j := 0; j < 3; j++ {
+		cb.Min[j] = int(math.Floor(float64(t.sb.d[0][j]) / cellWidth))
+		cb.Max[j] = int(math.Ceil(float64(t.sb.d[1][j]) / cellWidth))
+	}
 }

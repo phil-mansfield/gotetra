@@ -64,13 +64,11 @@ func BenchmarkCellBounds(b *testing.B) {
 		ts[i].random(gen, 1.0, 1.0)
 	}
 
-	g := NewGrid(&[3]int{500, 500, 500}, 100)
-
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		t := &ts[i%len(ts)]
 		t.baryValid = false
-		t.CellBounds(g)
+		t.CellBounds(1.0)
 	}
 }
 
@@ -81,14 +79,13 @@ func BenchmarkCellBoundsAt(b *testing.B) {
 		ts[i].random(gen, 1.0, 1.0)
 	}
 
-	g := NewGrid(&[3]int{500, 500, 500}, 100)
 	cb := &CellBounds{}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		t := &ts[i%len(ts)]
 		t.baryValid = false
-		t.CellBoundsAt(g, cb)
+		t.CellBoundsAt(1.0, cb)
 	}
 }
 
@@ -317,7 +314,6 @@ func TestBarycenter(t *testing.T) {
 	}
 
 	for i, test := range table {
-		_ = i
 		tet, _ := NewTetra(test.c1, test.c2, test.c3, test.c4, test.width)
 		if !test.res.epsEq(tet.Barycenter(), testEps) {
 			t.Errorf("%d) %v.Barycenter() = %v, not %v\n", i,
@@ -353,6 +349,33 @@ func TestBarycenterMC(t *testing.T) {
 		if !tet.Contains(bary) && tet.Volume() > 2e-4 {
 			t.Errorf("%d) Barycenter %v not within Tetra %v.\n", i,
 				*bary, tet.Corners)
+		}
+	}
+}
+
+func TestCellBounds(t *testing.T) {
+	table := []struct {
+		c1, c2, c3, c4 *Vec
+		width, cellWidth float64
+		cb *CellBounds
+	} {
+		{&Vec{50, 50, 50}, &Vec{51, 50, 50}, &Vec{50, 51, 50}, &Vec{50, 50, 51},
+			100.0, 1.0, &CellBounds{[3]int{50, 50, 50}, [3]int{51, 51, 51}}},
+		{&Vec{80, 80, 80}, &Vec{110, 80, 80}, &Vec{80, 110, 80}, &Vec{80, 80, 110},
+			100.0, 1.0, &CellBounds{[3]int{80, 80, 80}, [3]int{110, 110, 110}}},
+		{&Vec{80, 80, 80}, &Vec{10, 80, 80}, &Vec{80, 10, 80}, &Vec{80, 80, 10},
+			100.0, 1.0, &CellBounds{[3]int{80, 80, 80}, [3]int{110, 110, 110}}},
+		{&Vec{80, 80, 80}, &Vec{10, 80, 80}, &Vec{80, 20, 80}, &Vec{80, 80, 25},
+			100.0, 1.0, &CellBounds{[3]int{80, 80, 80}, [3]int{110, 120, 125}}},
+	}
+
+	for i, test := range table {
+		tet, _ := NewTetra(test.c1, test.c2, test.c3, test.c4, test.width)
+		cb := tet.CellBounds(test.cellWidth)
+
+		if *cb != *test.cb {
+			t.Errorf("%d) CellBounds %v was expected, but found %v.\n",
+				i, test.cb, cb)
 		}
 	}
 }
