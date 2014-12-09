@@ -298,17 +298,17 @@ func compareDensityMain(x, y, z, cells int, sourceDir string) {
 	mc100Gs := make([]density.Grid, 1)
 	mc1000Gs := make([]density.Grid, 1)
 
-	ngpGs[0].Init(h0.TotalWidth, cells,
+	ngpGs[0].Init(h0.TotalWidth, int(h0.GridWidth),
 		make([]float64, cells * cells * cells), c)
-	cicGs[0].Init(h0.TotalWidth, cells,
+	cicGs[0].Init(h0.TotalWidth, int(h0.GridWidth),
 		make([]float64, cells * cells * cells), c)
-	cCenterGs[0].Init(h0.TotalWidth, cells,
+	cCenterGs[0].Init(h0.TotalWidth, int(h0.GridWidth),
 		make([]float64, cells * cells * cells), c)
-	mc10Gs[0].Init(h0.TotalWidth, cells,
+	mc10Gs[0].Init(h0.TotalWidth, int(h0.GridWidth),
 		make([]float64, cells * cells * cells), c)
-	mc100Gs[0].Init(h0.TotalWidth, cells,
+	mc100Gs[0].Init(h0.TotalWidth, int(h0.GridWidth),
 		make([]float64, cells * cells * cells), c)
-	mc1000Gs[0].Init(h0.TotalWidth, cells,
+	mc1000Gs[0].Init(h0.TotalWidth, int(h0.GridWidth),
 		make([]float64, cells * cells * cells), c)
 	
 	ngpIntr := density.NearestGridPoint()
