@@ -337,12 +337,12 @@ func compareDensityMain(x, y, z, cells int, sourceDir string) {
 		idsBuf[bufIdx] = centerPs[i].Id
 
 		if bufIdx == len(xsBuf) - 1 {
-			//ngpIntr.Interpolate(ngpGs, h0.Mass, idsBuf, xsBuf)
-			//cicIntr.Interpolate(cicGs, h0.Mass, idsBuf, xsBuf)
+			ngpIntr.Interpolate(ngpGs, h0.Mass, idsBuf, xsBuf)
+			cicIntr.Interpolate(cicGs, h0.Mass, idsBuf, xsBuf)
 			cCenterIntr.Interpolate(cCenterGs, h0.Mass, idsBuf, xsBuf)
-			//mc10Intr.Interpolate(mc10Gs, h0.Mass, idsBuf, xsBuf)
-			//mc100Intr.Interpolate(mc100Gs, h0.Mass, idsBuf, xsBuf)
-			//mc1000Intr.Interpolate(mc1000Gs, h0.Mass, idsBuf, xsBuf)
+			mc10Intr.Interpolate(mc10Gs, h0.Mass, idsBuf, xsBuf)
+			mc100Intr.Interpolate(mc100Gs, h0.Mass, idsBuf, xsBuf)
+			mc1000Intr.Interpolate(mc1000Gs, h0.Mass, idsBuf, xsBuf)
 			bufIdx = 0
 		} else {
 			bufIdx++
