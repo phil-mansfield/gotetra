@@ -236,6 +236,10 @@ func (intr *cellCenter) intrTetra(mass float64, g *Grid, cb *geom.CellBounds) {
 	minZ := maxInt(cb.Min[2], g.BG.Origin[2])
 	maxZ := minInt(cb.Max[2], g.BG.Origin[2] + g.BG.Width)
 
+	log.Println(minX, maxX)
+	log.Println(minY, maxY)
+	log.Println(minZ, maxZ)
+
 	frac := mass * g.CellVolume / intr.tet.Volume()
 
 	for x := minX; x <= maxX; x++ {
