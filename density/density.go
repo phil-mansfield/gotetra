@@ -310,6 +310,11 @@ func (intr *mcarlo) Interpolate(gs []Grid, mass float64, ids []int64, xs []geom.
 				}
 			}
 			
+			if intersectNum == 0 {
+				log.Panic("Got zero intersections!!")
+				log.Panicf("%v and %v\n", cb, gs[0].G.CellBounds())
+			}
+
 			intr.subIntr.Interpolate(intersectGs[0: intersectNum],
 				ptMass, nil, intr.vecBuf)
 		}
