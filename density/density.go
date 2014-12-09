@@ -191,7 +191,7 @@ func (intr *cellCenter) Interpolate(gs []Grid, mass float64, ids []int64, xs []g
 	misses, hits := 0, 0
 
 	for _, id := range ids {
-		for dir := 0; dir < 5; dir++ {
+		for dir := 0; dir < 6; dir++ {
 			intr.idxBuf.Init(id, intr.countWidth, dir)
 
 			p0 := intr.man.Get(intr.idxBuf[0])
@@ -217,7 +217,6 @@ func (intr *cellCenter) Interpolate(gs []Grid, mass float64, ids []int64, xs []g
 			}
 		}
 	}
-	log.Println(misses, hits)
 }
 
 func (intr *cellCenter) intrTetra(mass float64, g *Grid, cb *geom.CellBounds) (int, int) {
@@ -229,12 +228,6 @@ func (intr *cellCenter) intrTetra(mass float64, g *Grid, cb *geom.CellBounds) (i
 	maxZ := minInt(cb.Max[2], g.G.Origin[2] + g.G.Width - 1)
 
 	frac := mass * g.CellVolume / intr.tet.Volume()
-
-	log.Println(g.G)
-
-	log.Println(minX, maxX)
-	log.Println(minY, maxY)
-	log.Println(minZ, maxZ)
 
 	misses, hits := 0, 0
 
