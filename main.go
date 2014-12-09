@@ -361,7 +361,7 @@ func compareDensityMain(x, y, z, cells int, sourceDir string) {
 	fmt.Printf("# %12s %12s %12s %12s %12s %12s\n",
 		"NGP", "CIC", "Center", "MC - 10", "MC - 100", "MC - 1000")
 	for i := 0; i < cells * cells * cells; i++ {
-		fmt.Printf("  %12g %12g %12g %12g %12g %12g\n",
+		fmt.Printf("  %12.5g %12.5g %12.5g %12.5g %12.5g %12.5g\n",
 			ngpGs[0].Rhos[i], cicGs[0].Rhos[i], cCenterGs[0].Rhos[i],
 			mc10Gs[0].Rhos[i], mc100Gs[0].Rhos[i], mc1000Gs[0].Rhos[i])
 	}
