@@ -59,18 +59,22 @@ type cellCenter struct {
 }
 
 func NewGrid(boxWidth float64, gridWidth int, rhos []float64, c *Cell) *Grid {
+	g := &Grid{}
+	g.Init(boxWidth, gridWidth, rhos, c)
+	return g
+}
+
+func (g *Grid) Init(boxWidth float64, gridWidth int, rhos []float64, c *Cell) {
 	if len(rhos) != c.Width * c.Width * c.Width {
 		panic("Length of rhos doesn't match cell width.")
 	}
 
-	g := &Grid{}
 	g.G.Init(&[3]int{c.X*c.Width, c.Y*c.Width, c.Z*c.Width}, c.Width)
 	g.BG.Init(&[3]int{0, 0, 0}, c.Width * gridWidth)
 	g.BoxWidth = boxWidth
 	g.CellWidth = boxWidth / float64(c.Width * gridWidth)
 	g.CellVolume = g.CellWidth * g.CellWidth * g.CellWidth
 	g.Rhos = rhos
-	return g
 }
 
 func CloudInCell() Interpolator {
