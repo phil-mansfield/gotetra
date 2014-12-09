@@ -242,7 +242,7 @@ func (intr *cellCenter) intrTetra(mass float64, g *Grid, cb *geom.CellBounds) {
 		for y := minY; y <= maxY; y++ {
 			for z := minZ; z <= maxZ; z++ {
 				xIdx, yIdx, zIdx := g.BG.Wrap(x, y, z)
-				idx := g.BG.Idx(xIdx, yIdx, zIdx)
+				idx := g.G.Idx(xIdx, yIdx, zIdx)
 				g.Rhos[idx] += frac
 			}
 		}
@@ -311,7 +311,7 @@ func (intr *mcarlo) Interpolate(gs []Grid, mass float64, ids []int64, xs []geom.
 			}
 			
 			if intersectNum == 0 {
-				log.Panic("Got zero intersections!!")
+				log.Println("Got zero intersections!!")
 				log.Panicf("%v and %v\n", cb, gs[0].G.CellBounds())
 			}
 
