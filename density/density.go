@@ -188,6 +188,7 @@ func cellPoints(x, y, z, cw float64) (xc, yc, zc float64) {
 func (intr *cellCenter) Interpolate(gs []Grid, mass float64, ids []int64, xs []geom.Vec) {
 	cb := &geom.CellBounds{}
 
+	//log.Println(len(ids))
 	for _, id := range ids {
 		for dir := 0; dir < 5; dir++ {
 			intr.idxBuf.Init(id, intr.countWidth, dir)
@@ -223,7 +224,10 @@ func (intr *cellCenter) Interpolate(gs []Grid, mass float64, ids []int64, xs []g
 
 			for i := range gs {
 				if gs[i].G.Intersect(cb, &gs[i].BG) {
+					//log.Printf("Grid: %v Cell Bounds: %v\n", gs[i].G, cb)
+					//log.Printf("Tet: %v\n", intr.tet.Corners)
 					intr.intrTetra(mass / 6.0, &gs[i], cb)
+					//log.Panicln("Bye bye :3")
 				}
 			}
 		}
@@ -239,17 +243,21 @@ func (intr *cellCenter) intrTetra(mass float64, g *Grid, cb *geom.CellBounds) {
 	maxZ := minInt(cb.Max[2], g.G.Origin[2] + g.G.Width - 1)
 
 	frac := mass * g.CellVolume / intr.tet.Volume()
-	dx := 0.5 * g.CellWidth
+
+	//log.Println(minX, maxX, "  ", minY, maxY, "  ", minZ, maxZ)
 
 	for x := minX; x <= maxX; x++ {
 		for y := minY; y <= maxY; y++ {
 			for z := minZ; z <= maxZ; z++ {
 				xIdx, yIdx, zIdx := g.BG.Wrap(x, y, z)
-				intr.vBuf[0] = float32(float64(xIdx) * g.CellWidth + dx)
-				intr.vBuf[1] = float32(float64(yIdx) * g.CellWidth + dx)
-				intr.vBuf[2] = float32(float64(zIdx) * g.CellWidth + dx)
+				intr.vBuf[0] = float32((float64(xIdx) + 0.5) * g.CellWidth)
+				intr.vBuf[1] = float32((float64(yIdx) + 0.5) * g.CellWidth)
+				intr.vBuf[2] = float32((float64(zIdx) + 0.5) * g.CellWidth)
+
+				//log.Printf("%d %d %d %v\n", xIdx, yIdx, zIdx, intr.vBuf)
 
 				if intr.tet.Contains(&intr.vBuf) {
+					//log.Println("!!!!")
 					idx := g.G.Idx(xIdx, yIdx, zIdx)
 					g.Rhos[idx] += frac
 				}
