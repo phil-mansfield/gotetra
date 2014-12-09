@@ -57,6 +57,7 @@ type cellCenter struct {
 	countWidth int64
 	idxBuf geom.TetraIdxs
 	tet geom.Tetra
+	vBuf geom.Vec
 }
 
 func NewGrid(boxWidth float64, gridWidth int, rhos []float64, c *Cell) *Grid {
@@ -87,7 +88,8 @@ func NearestGridPoint() Interpolator {
 }
 
 func CellCenter(man *catalog.ParticleManager, countWidth int64) Interpolator {
-	return &cellCenter{man, countWidth, geom.TetraIdxs{}, geom.Tetra{}}
+	return &cellCenter{man, countWidth, geom.TetraIdxs{},
+		geom.Tetra{}, geom.Vec{}}
 }
 
 func MonteCarlo(man *catalog.ParticleManager, countWidth int64,
@@ -229,25 +231,28 @@ func (intr *cellCenter) Interpolate(gs []Grid, mass float64, ids []int64, xs []g
 }
 
 func (intr *cellCenter) intrTetra(mass float64, g *Grid, cb *geom.CellBounds) {
-	minX := maxInt(cb.Min[0], g.BG.Origin[0])
-	maxX := minInt(cb.Max[0], g.BG.Origin[0] + g.BG.Width)
-	minY := maxInt(cb.Min[1], g.BG.Origin[1])
-	maxY := minInt(cb.Max[1], g.BG.Origin[1] + g.BG.Width)
-	minZ := maxInt(cb.Min[2], g.BG.Origin[2])
-	maxZ := minInt(cb.Max[2], g.BG.Origin[2] + g.BG.Width)
-
-	log.Println(minX, maxX)
-	log.Println(minY, maxY)
-	log.Println(minZ, maxZ)
+	minX := maxInt(cb.Min[0], g.G.Origin[0])
+	maxX := minInt(cb.Max[0], g.G.Origin[0] + g.G.Width - 1)
+	minY := maxInt(cb.Min[1], g.G.Origin[1])
+	maxY := minInt(cb.Max[1], g.G.Origin[1] + g.G.Width - 1)
+	minZ := maxInt(cb.Min[2], g.G.Origin[2])
+	maxZ := minInt(cb.Max[2], g.G.Origin[2] + g.G.Width - 1)
 
 	frac := mass * g.CellVolume / intr.tet.Volume()
+	dx := 0.5 * g.CellWidth
 
 	for x := minX; x <= maxX; x++ {
 		for y := minY; y <= maxY; y++ {
 			for z := minZ; z <= maxZ; z++ {
 				xIdx, yIdx, zIdx := g.BG.Wrap(x, y, z)
-				idx := g.G.Idx(xIdx, yIdx, zIdx)
-				g.Rhos[idx] += frac
+				intr.vBuf[0] = float32(float64(xIdx) * g.CellWidth + dx)
+				intr.vBuf[1] = float32(float64(yIdx) * g.CellWidth + dx)
+				intr.vBuf[2] = float32(float64(zIdx) * g.CellWidth + dx)
+
+				if intr.tet.Contains(&intr.vBuf) {
+					idx := g.G.Idx(xIdx, yIdx, zIdx)
+					g.Rhos[idx] += frac
+				}
 			}
 		}
 	}
@@ -312,11 +317,6 @@ func (intr *mcarlo) Interpolate(gs []Grid, mass float64, ids []int64, xs []geom.
 					intersectGs[intersectNum] = gs[i]
 					intersectNum++
 				}
-			}
-			
-			if intersectNum == 0 {
-				log.Println("Got zero intersections!!")
-				log.Panicf("%v and %v\n", cb, gs[0].G.CellBounds())
 			}
 
 			intr.subIntr.Interpolate(intersectGs[0: intersectNum],
