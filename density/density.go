@@ -20,6 +20,7 @@ type Interpolator interface {
 	// the bounds of the bounding grid and points not within the interpolation
 	// grid will be ignored.
 	Interpolate(gs []Grid, mass float64, ids []int64, xs []geom.Vec)
+	// Count(gs []Grid, ids []int64, xs []geom.Vec, buf []bool)
 }
 
 type Grid struct {
@@ -93,7 +94,7 @@ func MonteCarlo(man *catalog.ParticleManager, countWidth int64,
 	gen *rand.Generator, steps int) Interpolator {
 
 	return &mcarlo{
-		CloudInCell(), man, countWidth, steps,
+		NearestGridPoint(), man, countWidth, steps,
 		gen, geom.TetraIdxs{}, geom.Tetra{}, 
 		make([]float64, steps * 3), make([]geom.Vec, steps),
 	}
