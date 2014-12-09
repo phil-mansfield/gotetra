@@ -1,6 +1,7 @@
 package density
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/phil-mansfield/gotetra/geom"

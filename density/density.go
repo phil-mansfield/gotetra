@@ -188,7 +188,8 @@ func cellPoints(x, y, z, cw float64) (xc, yc, zc float64) {
 func (intr *cellCenter) Interpolate(gs []Grid, mass float64, ids []int64, xs []geom.Vec) {
 	cb := &geom.CellBounds{}
 
-	//log.Println(len(ids))
+	misses, hits := 0, 0
+
 	for _, id := range ids {
 		for dir := 0; dir < 5; dir++ {
 			intr.idxBuf.Init(id, intr.countWidth, dir)
@@ -201,21 +202,6 @@ func (intr *cellCenter) Interpolate(gs []Grid, mass float64, ids []int64, xs []g
 			if p0 == nil || p1 == nil || p2 == nil || p3 == nil {
 				log.Printf("Tetrahedron [%v %v %v %v] not in manager.\n",
 					p0, p1, p2, p3)
-
-				if p0 == nil {
-					log.Printf("Point at index %d not in manager\n",
-						intr.idxBuf[0])
-				} else if p1 == nil {
-					log.Printf("Point at index %d not in manager\n",
-						intr.idxBuf[1])
-				} else if p2 == nil {
-					log.Printf("Point at index %d not in manager\n",
-						intr.idxBuf[2])
-				} else if p3 == nil {
-					log.Printf("Point at index %d not in manager\n",
-						intr.idxBuf[3])
-				}
-
 				continue
 			}
 
@@ -224,17 +210,17 @@ func (intr *cellCenter) Interpolate(gs []Grid, mass float64, ids []int64, xs []g
 
 			for i := range gs {
 				if gs[i].G.Intersect(cb, &gs[i].BG) {
-					//log.Printf("Grid: %v Cell Bounds: %v\n", gs[i].G, cb)
-					//log.Printf("Tet: %v\n", intr.tet.Corners)
-					intr.intrTetra(mass / 6.0, &gs[i], cb)
-					//log.Panicln("Bye bye :3")
+					dm, dh := intr.intrTetra(mass / 6.0, &gs[i], cb)
+					misses += dm
+					hits += dh
 				}
 			}
 		}
 	}
+	log.Println(misses, hits)
 }
 
-func (intr *cellCenter) intrTetra(mass float64, g *Grid, cb *geom.CellBounds) {
+func (intr *cellCenter) intrTetra(mass float64, g *Grid, cb *geom.CellBounds) (int, int) {
 	minX := maxInt(cb.Min[0], g.G.Origin[0])
 	maxX := minInt(cb.Max[0], g.G.Origin[0] + g.G.Width - 1)
 	minY := maxInt(cb.Min[1], g.G.Origin[1])
@@ -244,26 +230,34 @@ func (intr *cellCenter) intrTetra(mass float64, g *Grid, cb *geom.CellBounds) {
 
 	frac := mass * g.CellVolume / intr.tet.Volume()
 
-	//log.Println(minX, maxX, "  ", minY, maxY, "  ", minZ, maxZ)
+	log.Println(g.G)
 
-	for x := minX; x <= maxX; x++ {
+	log.Println(minX, maxX)
+	log.Println(minY, maxY)
+	log.Println(minZ, maxZ)
+
+	misses, hits := 0, 0
+
+	for z := minZ; z <= maxZ; z++ {
 		for y := minY; y <= maxY; y++ {
-			for z := minZ; z <= maxZ; z++ {
+			for x := minX; x <= maxX; x++ {
 				xIdx, yIdx, zIdx := g.BG.Wrap(x, y, z)
 				intr.vBuf[0] = float32((float64(xIdx) + 0.5) * g.CellWidth)
 				intr.vBuf[1] = float32((float64(yIdx) + 0.5) * g.CellWidth)
 				intr.vBuf[2] = float32((float64(zIdx) + 0.5) * g.CellWidth)
 
-				//log.Printf("%d %d %d %v\n", xIdx, yIdx, zIdx, intr.vBuf)
-
 				if intr.tet.Contains(&intr.vBuf) {
-					//log.Println("!!!!")
 					idx := g.G.Idx(xIdx, yIdx, zIdx)
 					g.Rhos[idx] += frac
+					hits++
+				} else {
+					misses++
 				}
 			}
 		}
 	}
+
+	return misses, hits
 }
 
 func maxInt(x, y int) int {
@@ -297,20 +291,6 @@ func (intr *mcarlo) Interpolate(gs []Grid, mass float64, ids []int64, xs []geom.
 			if p0 == nil || p1 == nil || p2 == nil || p3 == nil {
 				log.Printf("Tetrahedron [%v %v %v %v] not in manager.\n",
 					p0, p1, p2, p3)
-
-				if p0 == nil {
-					log.Printf("Point at index %d not in manager\n",
-						intr.idxBuf[0])
-				} else if p1 == nil {
-					log.Printf("Point at index %d not in manager\n",
-						intr.idxBuf[1])
-				} else if p2 == nil {
-					log.Printf("Point at index %d not in manager\n",
-						intr.idxBuf[2])
-				} else if p3 == nil {
-					log.Printf("Point at index %d not in manager\n",
-						intr.idxBuf[3])
-				}
 
 				continue
 			}
