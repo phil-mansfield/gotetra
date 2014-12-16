@@ -7,7 +7,7 @@ import (
 	"log"
 	"math"
 
-	"github.com/phil-mansfield/num/rand"
+	"github.com/phil-mansfield/gotetra/rand"
 	"github.com/phil-mansfield/gotetra/geom"
 	"github.com/phil-mansfield/gotetra/catalog"
 )
@@ -20,7 +20,6 @@ type Interpolator interface {
 	// the bounds of the bounding grid and points not within the interpolation
 	// grid will be ignored.
 	Interpolate(gs []Grid, mass float64, ids []int64, xs []geom.Vec)
-	// Count(gs []Grid, ids []int64, xs []geom.Vec, buf []bool)
 }
 
 type Grid struct {
@@ -36,7 +35,6 @@ type Cell struct {
 type cic struct { }
 type ngp struct { }
 
-
 type mcarlo struct {
 	subIntr Interpolator
 	man *catalog.ParticleManager
@@ -49,6 +47,17 @@ type mcarlo struct {
 	idxBuf geom.TetraIdxs
 	tet geom.Tetra
 	randBuf []float64
+	vecBuf []geom.Vec
+}
+
+type sobol struct {
+	subIntr Interpolator
+	man *catalog.ParticleManager
+	countWidth int64
+
+	idxBuf geom.TetraIdxs
+	tet geom.Tetra
+	xs, ys, zs []float64
 	vecBuf []geom.Vec
 }
 
@@ -102,8 +111,22 @@ func MonteCarlo(man *catalog.ParticleManager, countWidth int64,
 	}
 }
 
-func SubMonteCarlo( gs []Grid, countWidth int, steps int) Interpolator {
-	panic("Not Yet Implemneted.")
+func SobolSequence(man *catalog.ParticleManager, countWidth int64, steps int) Interpolator {
+	seq := rand.NewSobolSequence()
+	buf := []float64{0, 0, 0}
+	xs := make([]float64, steps)
+	ys := make([]float64, steps)
+	zs := make([]float64, steps)
+
+	for i := 0; i < steps; i++ {
+		seq.NextAt(buf)
+		xs[i] = buf[0]
+		ys[i] = buf[1]
+		zs[i] = buf[2]
+	}
+
+	return &sobol{NearestGridPoint(), man, countWidth, geom.TetraIdxs{},
+		geom.Tetra{}, xs, ys, zs, make([]geom.Vec, steps)}
 }
 
 // Interpolate interpolates a sequence of particles onto a density grid via a
@@ -289,7 +312,45 @@ func (intr *mcarlo) Interpolate(gs []Grid, mass float64, ids []int64, xs []geom.
 			}
 
 			intr.tet.Init(&p0.Xs, &p1.Xs, &p2.Xs, &p3.Xs, gs[0].BoxWidth)
-			intr.tet.Sample(intr.gen, intr.randBuf, intr.vecBuf)
+			intr.tet.RandomSample(intr.gen, intr.randBuf, intr.vecBuf)
+			intr.tet.CellBoundsAt(gs[0].CellWidth, cb)
+
+			intersectNum := 0
+			for i := range gs {
+				if gs[i].G.Intersect(cb, &gs[i].BG) {
+					intersectGs[intersectNum] = gs[i]
+					intersectNum++
+				}
+			}
+
+			intr.subIntr.Interpolate(intersectGs[0: intersectNum],
+				ptMass, nil, intr.vecBuf)
+		}
+	}
+}
+
+func (intr *sobol) Interpolate(gs []Grid, mass float64, ids []int64, xs []geom.Vec) {
+	ptMass := mass / float64(len(intr.xs)) / 6.0
+	intersectGs := make([]Grid, len(gs))
+	cb := &geom.CellBounds{}
+
+	for _, id := range ids {
+		for dir := 0; dir < 6; dir++ {
+			intr.idxBuf.Init(id, intr.countWidth, dir)
+			
+			p0 := intr.man.Get(intr.idxBuf[0])
+			p1 := intr.man.Get(intr.idxBuf[1])
+			p2 := intr.man.Get(intr.idxBuf[2])
+			p3 := intr.man.Get(intr.idxBuf[3])
+
+			if p0 == nil || p1 == nil || p2 == nil || p3 == nil {
+				log.Printf("Tetrahedron [%v %v %v %v] not in manager.\n",
+					p0, p1, p2, p3)
+				continue
+			}
+
+			intr.tet.Init(&p0.Xs, &p1.Xs, &p2.Xs, &p3.Xs, gs[0].BoxWidth)
+			intr.tet.Distribute(intr.xs, intr.ys, intr.zs, intr.vecBuf)
 			intr.tet.CellBoundsAt(gs[0].CellWidth, cb)
 
 			intersectNum := 0

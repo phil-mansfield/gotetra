@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/phil-mansfield/num/rand"
+	"github.com/phil-mansfield/gotetra/rand"
 )
 
 // Tetra is a tetrahedron with points inside a box with periodic boundary
@@ -38,6 +38,8 @@ type sampleBuffer struct {
 const (
 	eps = 5e-5
 
+	// TetraDirCount is the number of orientations that a tetrahedron can have
+	// within a cube. Should be iterated over when Calling TetraIdxs.Init().
 	TetraDirCount = 6
 )
 
@@ -205,16 +207,28 @@ func minMax(x, oldMin, oldMax float32) (min, max float32) {
 	}
 }
 
-// Sample fills a buffer of vecotrs with points generated uniformly at random
-// from within a tetrahedron. The length of randBuf must be three times the
-// length of vecBuf.
-func (tet *Tetra) Sample(gen *rand.Generator, randBuf []float64, vecBuf []Vec) {
-	if len(randBuf) != len(vecBuf)*3 {
+// RandomSample fills a buffer of vecotrs with points generated uniformly at
+// random from within a tetrahedron. The length of randBuf must be three times
+// the length of vecBuf.
+func (tet *Tetra) RandomSample(gen *rand.Generator, randBuf []float64, vecBuf []Vec) {
+	N := len(vecBuf)
+	if len(randBuf) != N*3 {
 		panic(fmt.Sprintf("buf len %d not long enough for %d points.",
-			len(randBuf), len(vecBuf)))
+			len(randBuf), N))
 	}
 
 	gen.UniformAt(0.0, 1.0, randBuf)
+
+	xs := randBuf[0: N]
+	ys := randBuf[N: 2*N]
+	zs := randBuf[2*N: 3*N]
+	tet.Distribute(xs, ys, zs, vecBuf)
+}
+
+// Distribute converts a sequences of points generated uniformly within a 
+// unit cube to be distributed uniformly within the base tetrahedron. The
+// results are placed in vecBuf.
+func (tet *Tetra) Distribute(xs, ys, zs []float64, vecBuf []Vec) {
 	bary := tet.Barycenter()
 
 	// Some gross code to prevent allocations. cs are the displacement vectors
@@ -226,9 +240,9 @@ func (tet *Tetra) Sample(gen *rand.Generator, randBuf []float64, vecBuf []Vec) {
 	}
 
 	for i := range vecBuf {
-		// Generate three of the four barycentric coordinates, see
+		// Find three of the four barycentric coordinates, see
 		// C. Rocchini, P. Cignoni, 2001.
-		s, t, u := randBuf[i*3], randBuf[i*3+1], randBuf[i*3+2]
+		s, t, u := xs[i], ys[i], zs[i]
 
 		if s+t > 1 {
 			s, t = 1-s, 1-t

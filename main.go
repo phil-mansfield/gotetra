@@ -16,7 +16,7 @@ import (
 	"github.com/phil-mansfield/gotetra/catalog"
 	"github.com/phil-mansfield/gotetra/scripts/helper"
 
-	"github.com/phil-mansfield/num/rand"
+	"github.com/phil-mansfield/gotetra/rand"
 )
 
 const (
@@ -294,9 +294,8 @@ func compareDensityMain(x, y, z, cells int, sourceDir string) {
 	ngpGs := make([]density.Grid, 1)
 	cicGs := make([]density.Grid, 1)
 	cCenterGs := make([]density.Grid, 1)
-	mc10Gs := make([]density.Grid, 1)
 	mc100Gs := make([]density.Grid, 1)
-	mc1000Gs := make([]density.Grid, 1)
+	seq100Gs := make([]density.Grid, 1)
 
 	ngpGs[0].Init(h0.TotalWidth, int(h0.GridWidth),
 		make([]float64, cells * cells * cells), c)
@@ -304,22 +303,17 @@ func compareDensityMain(x, y, z, cells int, sourceDir string) {
 		make([]float64, cells * cells * cells), c)
 	cCenterGs[0].Init(h0.TotalWidth, int(h0.GridWidth),
 		make([]float64, cells * cells * cells), c)
-	mc10Gs[0].Init(h0.TotalWidth, int(h0.GridWidth),
-		make([]float64, cells * cells * cells), c)
 	mc100Gs[0].Init(h0.TotalWidth, int(h0.GridWidth),
 		make([]float64, cells * cells * cells), c)
-	mc1000Gs[0].Init(h0.TotalWidth, int(h0.GridWidth),
+	seq100Gs[0].Init(h0.TotalWidth, int(h0.GridWidth),
 		make([]float64, cells * cells * cells), c)
 	
 	ngpIntr := density.NearestGridPoint()
 	cicIntr := density.CloudInCell()
 	cCenterIntr := density.CellCenter(man, h0.CountWidth)
-	mc10Intr := density.MonteCarlo(man, h0.CountWidth,
-		rand.NewTimeSeed(rand.Tausworthe), 10)
 	mc100Intr := density.MonteCarlo(man, h0.CountWidth,
 		rand.NewTimeSeed(rand.Tausworthe), 100)
-	mc1000Intr := density.MonteCarlo(man, h0.CountWidth,
-		rand.NewTimeSeed(rand.Tausworthe), 1000)
+	seq100Intr := density.SobolSequence(man, h0.CountWidth, 100)
 
 	xsBuf := make([]geom.Vec, vecBufLen)
 	idsBuf := make([]int64, vecBufLen)
@@ -340,9 +334,8 @@ func compareDensityMain(x, y, z, cells int, sourceDir string) {
 			ngpIntr.Interpolate(ngpGs, h0.Mass, idsBuf, xsBuf)
 			cicIntr.Interpolate(cicGs, h0.Mass, idsBuf, xsBuf)
 			cCenterIntr.Interpolate(cCenterGs, h0.Mass, idsBuf, xsBuf)
-			mc10Intr.Interpolate(mc10Gs, h0.Mass, idsBuf, xsBuf)
 			mc100Intr.Interpolate(mc100Gs, h0.Mass, idsBuf, xsBuf)
-			mc1000Intr.Interpolate(mc1000Gs, h0.Mass, idsBuf, xsBuf)
+			seq100Intr.Interpolate(seq100Gs, h0.Mass, idsBuf, xsBuf)
 			bufIdx = 0
 		} else {
 			bufIdx++
@@ -351,19 +344,18 @@ func compareDensityMain(x, y, z, cells int, sourceDir string) {
 	ngpIntr.Interpolate(ngpGs, h0.Mass, idsBuf[0: bufIdx], xsBuf[0: bufIdx])
 	cicIntr.Interpolate(cicGs, h0.Mass, idsBuf[0: bufIdx], xsBuf[0: bufIdx])
 	cCenterIntr.Interpolate(cCenterGs, h0.Mass, idsBuf[0: bufIdx], xsBuf[0: bufIdx])
-	mc10Intr.Interpolate(mc10Gs, h0.Mass, idsBuf[0: bufIdx], xsBuf[0: bufIdx])
 	mc100Intr.Interpolate(mc100Gs, h0.Mass, idsBuf[0: bufIdx], xsBuf[0: bufIdx])
-	mc1000Intr.Interpolate(mc1000Gs, h0.Mass, idsBuf[0: bufIdx], xsBuf[0: bufIdx])
+	seq100Intr.Interpolate(seq100Gs, h0.Mass, idsBuf[0: bufIdx], xsBuf[0: bufIdx])
 
 
 	log.Println("Finished interpolation.")
 
-	fmt.Printf("# %12s %12s %12s %12s %12s %12s\n",
-		"NGP", "CIC", "Center", "MC - 10", "MC - 100", "MC - 1000")
+	fmt.Printf("# %8s %8s %8s %8s %8s\n",
+		"NGP", "CIC", "Center", "MC - 100", "SS - 100")
 	for i := 0; i < cells * cells * cells; i++ {
-		fmt.Printf("  %12.5g %12.5g %12.5g %12.5g %12.5g %12.5g\n",
+		fmt.Printf("  %8.5g %8.5g %8.5g %8.5g %8.5\n",
 			ngpGs[0].Rhos[i], cicGs[0].Rhos[i], cCenterGs[0].Rhos[i],
-			mc10Gs[0].Rhos[i], mc100Gs[0].Rhos[i], mc1000Gs[0].Rhos[i])
+			mc100Gs[0].Rhos[i], seq100Gs[0].Rhos[i])
 	}
 
 	log.Println("Finished printing density grid.")
