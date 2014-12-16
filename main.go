@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"path"
 	"log"
+	"runtime/pprof"
 	"os"
 	"io/ioutil"
 
@@ -35,8 +36,9 @@ func main() {
 		cells int
 	)
 
-	outPath := flag.String("Log", "", "Location to write log statements to. " + 
+	logPath := flag.String("Log", "", "Location to write log statements to. " + 
 		"Default is /dev/null.")
+	pprofPath := flag.String("PProf", "", "Location to write profile to.")
 
 	flag.IntVar(&x, "X", -1, "z location of operation.")
 	flag.IntVar(&y, "Y", -1, "y location of operation.")
@@ -50,15 +52,22 @@ func main() {
 
 	flag.Parse()
 
-	if *outPath == "" {
+	if *logPath == "" {
 		log.SetOutput(ioutil.Discard)
 	} else {
-		if lf, err := os.Create(*outPath); err != nil {
+		if lf, err := os.Create(*logPath); err != nil {
 			log.Fatalln(err.Error())
 		} else {
 			log.SetOutput(lf)
 			defer lf.Close()
 		}
+	}
+
+	if *pprofPath != "" {
+		f, err := os.Create(*pprofPath)
+		if err != nil { log.Fatal(err) }
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
 	}
 
 	modeName := checkMode(createCatalog, compareDensity)
@@ -296,6 +305,7 @@ func compareDensityMain(x, y, z, cells int, sourceDir string) {
 	cCenterGs := make([]density.Grid, 1)
 	mc100Gs := make([]density.Grid, 1)
 	seq100Gs := make([]density.Grid, 1)
+	mc2500Gs := make([]density.Grid, 1)
 
 	ngpGs[0].Init(h0.TotalWidth, int(h0.GridWidth),
 		make([]float64, cells * cells * cells), c)
@@ -307,6 +317,8 @@ func compareDensityMain(x, y, z, cells int, sourceDir string) {
 		make([]float64, cells * cells * cells), c)
 	seq100Gs[0].Init(h0.TotalWidth, int(h0.GridWidth),
 		make([]float64, cells * cells * cells), c)
+	mc2500Gs[0].Init(h0.TotalWidth, int(h0.GridWidth),
+		make([]float64, cells * cells * cells), c)
 	
 	ngpIntr := density.NearestGridPoint()
 	cicIntr := density.CloudInCell()
@@ -314,6 +326,8 @@ func compareDensityMain(x, y, z, cells int, sourceDir string) {
 	mc100Intr := density.MonteCarlo(man, h0.CountWidth,
 		rand.NewTimeSeed(rand.Tausworthe), 100)
 	seq100Intr := density.SobolSequence(man, h0.CountWidth, 100)
+	mc2500Intr := density.MonteCarlo(man, h0.CountWidth,
+		rand.NewTimeSeed(rand.Tausworthe), 2500)
 
 	xsBuf := make([]geom.Vec, vecBufLen)
 	idsBuf := make([]int64, vecBufLen)
@@ -336,6 +350,7 @@ func compareDensityMain(x, y, z, cells int, sourceDir string) {
 			cCenterIntr.Interpolate(cCenterGs, h0.Mass, idsBuf, xsBuf)
 			mc100Intr.Interpolate(mc100Gs, h0.Mass, idsBuf, xsBuf)
 			seq100Intr.Interpolate(seq100Gs, h0.Mass, idsBuf, xsBuf)
+			mc2500Intr.Interpolate(mc2500Gs, h0.Mass, idsBuf, xsBuf)
 			bufIdx = 0
 		} else {
 			bufIdx++
@@ -346,16 +361,17 @@ func compareDensityMain(x, y, z, cells int, sourceDir string) {
 	cCenterIntr.Interpolate(cCenterGs, h0.Mass, idsBuf[0: bufIdx], xsBuf[0: bufIdx])
 	mc100Intr.Interpolate(mc100Gs, h0.Mass, idsBuf[0: bufIdx], xsBuf[0: bufIdx])
 	seq100Intr.Interpolate(seq100Gs, h0.Mass, idsBuf[0: bufIdx], xsBuf[0: bufIdx])
+	mc2500Intr.Interpolate(mc2500Gs, h0.Mass, idsBuf[0: bufIdx], xsBuf[0: bufIdx])
 
 
 	log.Println("Finished interpolation.")
 
-	fmt.Printf("# %8s %8s %8s %8s %8s\n",
-		"NGP", "CIC", "Center", "MC - 100", "SS - 100")
+	fmt.Printf("# %8s %8s %8s %8s %8s %8s\n",
+		"NGP", "CIC", "Center", "MC - 100", "SS - 100", "MC - 2500")
 	for i := 0; i < cells * cells * cells; i++ {
-		fmt.Printf("  %8.5g %8.5g %8.5g %8.5g %8.5\n",
+		fmt.Printf("  %8.4g %8.4g %8.4g %8.4g %8.4g %8.4g\n",
 			ngpGs[0].Rhos[i], cicGs[0].Rhos[i], cCenterGs[0].Rhos[i],
-			mc100Gs[0].Rhos[i], seq100Gs[0].Rhos[i])
+			mc100Gs[0].Rhos[i], seq100Gs[0].Rhos[i], mc2500Gs[0].Rhos[i])
 	}
 
 	log.Println("Finished printing density grid.")
