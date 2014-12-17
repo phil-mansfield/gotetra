@@ -3,11 +3,11 @@ package geom
 import (
 	"testing"
 
-	"github.com/phil-mansfield/num/rand"
+	"github.com/phil-mansfield/gotetra/rand"
 )
 
 const (
-	genType = rand.Xorshift
+	genType = rand.Tausworthe
 	testEps = 1e-6
 )
 
@@ -122,7 +122,7 @@ func BenchmarkSample1(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		t := &ts[i%len(ts)]
 		t.baryValid = false
-		t.Sample(gen, randBuf, vecBuf)
+		t.RandomSample(gen, randBuf, vecBuf)
 	}
 }
 
@@ -140,7 +140,7 @@ func BenchmarkSample10(b *testing.B) {
 	for i := 0; i < b.N/10+1; i++ {
 		t := &ts[i%len(ts)]
 		t.baryValid = false
-		t.Sample(gen, randBuf, vecBuf)
+		t.RandomSample(gen, randBuf, vecBuf)
 	}
 }
 
@@ -158,7 +158,7 @@ func BenchmarkSample100(b *testing.B) {
 	for i := 0; i < b.N/100+1; i++ {
 		t := &ts[i%len(ts)]
 		t.baryValid = false
-		t.Sample(gen, randBuf, vecBuf)
+		t.RandomSample(gen, randBuf, vecBuf)
 	}
 }
 
@@ -176,7 +176,7 @@ func BenchmarkSample1000(b *testing.B) {
 	for i := 0; i < b.N/1000+1; i++ {
 		t := &ts[i%len(ts)]
 		t.baryValid = false
-		t.Sample(gen, randBuf, vecBuf)
+		t.RandomSample(gen, randBuf, vecBuf)
 	}
 }
 

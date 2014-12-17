@@ -96,9 +96,27 @@ func NewTetraIdxs(idx, countWidth int64, dir int) *TetraIdxs {
 
 // This wastes an integer multiplication. Oh no!
 func compressCoords(x, y, z, dx, dy, dz, countWidth int64) int64 {
-	newX := (x + dx + countWidth) % countWidth
-	newY := (y + dy + countWidth) % countWidth
-	newZ := (z + dz + countWidth) % countWidth
+	newX := x + dx
+	newY := y + dy
+	newZ := z + dz
+
+	if newX >= countWidth {
+		newX -= countWidth
+	} else if newX < 0 {
+		newX += countWidth
+	}
+
+	if newY >= countWidth {
+		newY -= countWidth
+	} else if newY < 0 {
+		newY += countWidth
+	}
+
+	if newZ >= countWidth {
+		newZ -= countWidth
+	} else if newZ < 0 {
+		newZ += countWidth
+	}
 
 	return newX + newY*countWidth + newZ*countWidth*countWidth
 }
@@ -262,8 +280,8 @@ func (tet *Tetra) Distribute(xs, ys, zs []float64, vecBuf []Vec) {
 		tet.sb.c[3].ScaleAt(v, &tet.sb.d[3])
 
 		tet.sb.d[0].AddAt(bary, &vecBuf[i])
-		vecBuf[i].AddSelf(&tet.sb.d[1]).AddSelf(&tet.sb.d[2])
-		vecBuf[i].AddSelf(&tet.sb.d[3]).ModSelf(tet.width)
+		vecBuf[i].AddAt(&tet.sb.d[1], &vecBuf[i]).AddAt(&tet.sb.d[2], &vecBuf[i])
+		vecBuf[i].AddAt(&tet.sb.d[3], &vecBuf[i]).ModAt(tet.width, &vecBuf[i])
 	}
 }
 
