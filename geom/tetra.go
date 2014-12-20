@@ -338,3 +338,28 @@ func (t *Tetra) CellBoundsAt(cellWidth float64, cb *CellBounds) {
 		cb.Max[j] = int(math.Ceil(float64(t.sb.d[1][j]) / cellWidth))
 	}
 }
+
+func (t *Tetra) MinMaxLeg() (min, max float64) {
+	legBuf := &t.vb.buf1
+	min, max = math.MaxFloat64, 0.0
+
+	for i := 0; i < 4; i++ {
+		for j := i + 1; j < 4; j++ {
+			t.Corners[i].SubAt(&t.Corners[j], t.width, legBuf)
+
+			norm := 0.0
+			for k := 0; k < 3; k++ {
+				norm += float64(legBuf[k] * legBuf[k])
+			}
+			norm = math.Sqrt(norm)
+
+			if norm < min {
+				min = norm
+			}
+			if norm > max {
+				max = norm
+			}
+		}
+	}
+	return min, max
+}
