@@ -32,7 +32,7 @@ var (
 func main() {
 	var (
 		x, y, z int
-		createCatalog, compareDensity, density, tetraStats bool
+		createCatalog, compareDensity, densityMode, tetraStats bool
 		cells int
 	)
 
@@ -49,7 +49,7 @@ func main() {
 		"Generate gotetra catalogs from gadget catalogs.")
 	flag.BoolVar(&compareDensity, "CompareDensity", false,
 		"Compare different methods of calculating densities.")
-	flag.BoolVar(&density, "Density", false,
+	flag.BoolVar(&densityMode, "Density", false,
 		"Compute density of a cell. Requires Method flag to be set.")
 	flag.BoolVar(&tetraStats, "TetraStats", false,
 		"Print basic geometry statistics about the tetrahedra in a given cell.")
@@ -58,6 +58,9 @@ func main() {
 		"(CloudInCell | NearestGridPoint | MonteCarlo | SubRandom)." + 
 		"MonteCarlo and SubRandom also allow the Points flag to be set.")
 	points := flag.Int("Points", 100, "Number of points to use for method.")
+	pointSelector := flag.String("PointSelector", "Flat", "Method used to " + 
+		"select the number of points per tetrahedron in Monte Carlo " + 
+		"integration. Can be (Flat | PropToCells)")
 
 	flag.Parse()
 
@@ -77,7 +80,8 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	modeName := checkMode(createCatalog, compareDensity, tetraStats, density)
+	modeName := checkMode(createCatalog, compareDensity,
+		tetraStats, densityMode)
 
 	switch {
 	case createCatalog:
@@ -95,7 +99,7 @@ func main() {
 		targetDir := args[len(args) - 1]
 
 		createCatalogsMain(cells, sources, targetDir)
-	case density:
+	case densityMode:
 		checkCells(cells, modeName)
 		checkCoords(x, y, z, modeName)
 
@@ -104,9 +108,13 @@ func main() {
 			log.Fatalf("Mode %s requires a source and target directory.",
 				modeName)
 		}
+	
+		psFlag := density.PointSelectorFromString(*pointSelector)
+
 		source := args[0]
 		target := args[1]
-		densityMain(x, y, z, cells, *method, *points, source, target)
+		densityMain(x, y, z, cells, *method, *points, psFlag,
+			source, target)
 	case compareDensity:
 		checkCells(cells, modeName)
 		checkCoords(x, y, x, modeName)
@@ -339,6 +347,7 @@ func tetraStatsMain(x, y, z, cells int, sourceDir string) {
 
 	vs := make([]float64, 6 * len(centerPs))
 	cvs := make([]float64, 6 * len(centerPs))
+	mins := make([]float64, 6 * len(centerPs))
 	cb := &geom.CellBounds{}
 
 	for i := range centerPs {
@@ -367,24 +376,36 @@ func tetraStatsMain(x, y, z, cells int, sourceDir string) {
 				(cb.Max[1] - cb.Min[1]) *
 				(cb.Max[2] - cb.Min[2]))
 
+			min, _ := tet.MinMaxLeg()
+			if min <= 0.0 {
+				misses++
+				continue
+			}
+
 			vs[6*i + dir - misses] = math.Log10(vol)
 			cvs[6*i + dir - misses] = math.Log10(cv)
+			mins[6*i + dir - misses] = math.Log10(min)
 		}
 	}
 
 	vs = vs[0: len(vs) - misses]
+	cvs = cvs[0: len(cvs) - misses]
+	mins = mins[0: len(mins) - misses]
 	vBins, vCounts := binSample(vs)
 	cvBins, cvCounts := binSample(cvs)
+	minBins, minCounts := binSample(mins)
 
 	for i := range vBins { vBins[i] = math.Pow(10, vBins[i]) }
 	for i := range cvBins { cvBins[i] = math.Pow(10, cvBins[i]) }
+	for i := range minBins { minBins[i] = math.Pow(10, minBins[i]) }
 
 	fmt.Printf("# Misses: %d Total: %d Frac %g\n",
 		misses, 6 * h0.Count, float64(misses) / float64(h0.Count) / 6)
 
 	for i := range vBins {
-		fmt.Printf("%10.4g %8d %10.5g %8d\n",
-			vBins[i], vCounts[i], cvBins[i], cvCounts[i])
+		fmt.Printf("%10.4g %8d %10.5g %8d %10.4g %8d\n",
+			vBins[i], vCounts[i], cvBins[i], cvCounts[i],
+			minBins[i], minCounts[i])
 	}
 }
 
@@ -424,7 +445,7 @@ func max(x, y float64) float64 {
 }
 
 func densityMain(x, y, z, cells int, method string,
-	points int, sourceDir, outDir string) {
+	points int, psFlag density.PointSelectorFlag, sourceDir, outDir string) {
 
 	if points <= 0 {
 		log.Fatalf("Positive value for Points is required.")
@@ -453,7 +474,7 @@ func densityMain(x, y, z, cells int, method string,
 
 	for wID := 0; wID < workers; wID++ {
 		// This is horrifying:
-		gs, intr := setupIntr(method, h0, man, cells, points, c)
+		gs, intr := setupIntr(method, h0, man, cells, points, psFlag, c)
 
 		start, end = end, end + blockLen
 		if wID == 0 { end += len(centerPs) % workers }
@@ -488,7 +509,8 @@ func addDensityGrid(ds [][]float64, gs []density.Grid) {
 }
 
 func setupIntr(method string, h0 *catalog.Header, man *catalog.ParticleManager,
-	cells, points int, c *density.Cell) ([]density.Grid, density.Interpolator) {
+	cells, points int, psFlag density.PointSelectorFlag,
+	c *density.Cell) ([]density.Grid, density.Interpolator) {
 
 	gs := make([]density.Grid, 1)
 	for i := range gs {
@@ -505,7 +527,7 @@ func setupIntr(method string, h0 *catalog.Header, man *catalog.ParticleManager,
 		intr = density.CloudInCell()
 	case "MonteCarlo":
 		intr = density.MonteCarlo(man, h0.CountWidth,
-			rand.NewTimeSeed(rand.Xorshift), points)
+			rand.NewTimeSeed(rand.Xorshift), points, psFlag)
 	case "SubRandom":
 		intr = density.SobolSequence(man, h0.CountWidth, points)
 	default:
@@ -588,14 +610,14 @@ func compareDensityMain(x, y, z, cells int, sourceDir string) {
 	cicIntr := density.CloudInCell()
 	cCenterIntr := density.CellCenter(man, h0.CountWidth)
 	mc100Intr := density.MonteCarlo(man, h0.CountWidth,
-		rand.NewTimeSeed(rand.Tausworthe), 100)
+		rand.NewTimeSeed(rand.Tausworthe), 100, density.Flat)
 	seq100Intr := density.SobolSequence(man, h0.CountWidth, 100)
 	mc2500Intr := density.MonteCarlo(man, h0.CountWidth,
-		rand.NewTimeSeed(rand.Tausworthe), 2500)
+		rand.NewTimeSeed(rand.Tausworthe), 2500, density.Flat)
 
 	xsBuf := make([]geom.Vec, vecBufLen)
 	idsBuf := make([]int64, vecBufLen)
-		
+	
 	log.Println("Set up interpolators and buffers.")
 	checkLen := len(centerPs) / 20
 
