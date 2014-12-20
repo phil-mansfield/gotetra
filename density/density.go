@@ -35,6 +35,14 @@ type Cell struct {
 type cic struct { }
 type ngp struct { }
 
+type pointSelector func(*mcarlo, *geom.CellBounds) int
+type PointSelectorFlag int
+
+const (
+	Flat PointSelectorFlag = iota
+	PropToCells
+)
+
 type mcarlo struct {
 	subIntr Interpolator
 	man *catalog.ParticleManager
@@ -42,6 +50,8 @@ type mcarlo struct {
 	steps int
 
 	gen *rand.Generator
+
+	pointSelect pointSelector
 
 	// Buffers
 	idxBuf geom.TetraIdxs
@@ -101,12 +111,53 @@ func CellCenter(man *catalog.ParticleManager, countWidth int64) Interpolator {
 		geom.Tetra{}, geom.Vec{}}
 }
 
+func PointSelectorFromString(str string) PointSelectorFlag {
+	switch str {
+	case "Flat":
+		return Flat
+	case "PropToCells":
+		return PropToCells
+	}
+	log.Fatalf("Unrecognized PointSelector string, '%s'", str)
+	panic("Impossible")
+}
+
+func flat(intr *mcarlo, cb *geom.CellBounds) int {
+	return intr.steps
+}
+
+func propToCell(intr *mcarlo, cb *geom.CellBounds) int {
+	//vol := intr.tet.Volume()
+	//if vol < 3e-4 {
+	//	return intr.steps / 5
+	//}
+	min, _ := intr.tet.MinMaxLeg()
+	
+	//if rat >= 60 && rat < 600 {
+	//	return intr.steps
+	//}
+
+	if min >= 0.251 {
+		return intr.steps
+	}
+
+	return 0
+}
+
 func MonteCarlo(man *catalog.ParticleManager, countWidth int64,
-	gen *rand.Generator, steps int) Interpolator {
+	gen *rand.Generator, steps int, flag PointSelectorFlag) Interpolator {
+
+	var pointSelect pointSelector
+	switch flag {
+	case Flat:
+		pointSelect = flat
+	case PropToCells:
+		pointSelect = propToCell
+	}
 
 	return &mcarlo{
 		NearestGridPoint(), man, countWidth, steps,
-		gen, geom.TetraIdxs{}, geom.Tetra{}, 
+		gen, pointSelect, geom.TetraIdxs{}, geom.Tetra{}, 
 		make([]float64, steps * 3), make([]geom.Vec, steps),
 	}
 }
@@ -214,7 +265,7 @@ func (intr *cellCenter) Interpolate(gs []Grid, mass float64, ids []int64, xs []g
 	misses, hits := 0, 0
 
 	for _, id := range ids {
-		for dir := 0; dir < 5; dir++ {
+		for dir := 0; dir < 6; dir++ {
 			intr.idxBuf.Init(id, intr.countWidth, dir)
 
 			p0 := intr.man.Get(intr.idxBuf[0])
@@ -240,7 +291,6 @@ func (intr *cellCenter) Interpolate(gs []Grid, mass float64, ids []int64, xs []g
 			}
 		}
 	}
-	log.Println(misses, hits)
 }
 
 func (intr *cellCenter) intrTetra(mass float64, g *Grid, cb *geom.CellBounds) (int, int) {
@@ -252,12 +302,6 @@ func (intr *cellCenter) intrTetra(mass float64, g *Grid, cb *geom.CellBounds) (i
 	maxZ := minInt(cb.Max[2], g.G.Origin[2] + g.G.Width - 1)
 
 	frac := mass * g.CellVolume / intr.tet.Volume()
-
-	log.Println(g.G)
-
-	log.Println(minX, maxX)
-	log.Println(minY, maxY)
-	log.Println(minZ, maxZ)
 
 	misses, hits := 0, 0
 
@@ -298,7 +342,6 @@ func minInt(x, y int) int {
 }
 
 func (intr *mcarlo) Interpolate(gs []Grid, mass float64, ids []int64, xs []geom.Vec) {
-	ptMass := mass / float64(intr.steps) / 6.0
 	intersectGs := make([]Grid, len(gs))
 	cb := &geom.CellBounds{}
 
@@ -319,8 +362,15 @@ func (intr *mcarlo) Interpolate(gs []Grid, mass float64, ids []int64, xs []geom.
 			}
 
 			intr.tet.Init(&p0.Xs, &p1.Xs, &p2.Xs, &p3.Xs, gs[0].BoxWidth)
-			intr.tet.RandomSample(intr.gen, intr.randBuf, intr.vecBuf)
 			intr.tet.CellBoundsAt(gs[0].CellWidth, cb)
+
+			pts := intr.pointSelect(intr, cb)
+			if pts == 0 { continue }
+
+			ptMass := mass / float64(pts) / 6.0
+
+			intr.tet.RandomSample(intr.gen, intr.randBuf[0: 3*pts],
+				intr.vecBuf[0: pts])
 
 			intersectNum := 0
 			for i := range gs {
@@ -331,7 +381,7 @@ func (intr *mcarlo) Interpolate(gs []Grid, mass float64, ids []int64, xs []geom.
 			}
 
 			intr.subIntr.Interpolate(intersectGs[0: intersectNum],
-				ptMass, nil, intr.vecBuf)
+				ptMass, nil, intr.vecBuf[0: pts])
 		}
 	}
 }

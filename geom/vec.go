@@ -40,13 +40,15 @@ func (v *Vec) ModSelf(width float64) *Vec {
 }
 
 func (v *Vec) ModAt(width float64, out *Vec) *Vec {
+	w := float32(width)
 	for i := 0; i < 3; i++ {
-		out[i] = float32(math.Mod(float64(v[i]), width))
-		if out[i] < 0 {
-			out[i] += float32(width)
+		out[i] = v[i]
+		if out[i] >= w {
+			out[i] -= w
+		} else if out[i] < 0 {
+			out[i] += w
 		}
 	}
-
 	return out
 }
 
@@ -78,17 +80,23 @@ func (v1 *Vec) SubSelf(v2 *Vec, width float64) *Vec {
 }
 
 func (v1 *Vec) SubAt(v2 *Vec, width float64, out *Vec) *Vec {
-	w2 := width / 2.0
+	w := float32(width)
+	w2 := float32(width) / 2.0
 	for i := 0; i < 3; i++ {
-		diff := math.Mod(float64(v1[i]-v2[i]), width)
-
-		if diff > w2 {
-			diff -= width
-		} else if diff < -w2 {
-			diff += width
+		diff := v1[i] - v2[i]
+		if diff < -w {
+			diff += w
+		} else if diff >= w {
+			diff -= w
 		}
 
-		out[i] = float32(diff)
+		if diff > w2 {
+			diff -= w
+		} else if diff < -w2 {
+			diff += w
+		}
+
+		out[i] = diff
 	}
 
 	return out

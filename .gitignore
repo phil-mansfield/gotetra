@@ -12,6 +12,8 @@ scripts/out
 out
 plots
 doc
+log
+gotetra
 
 # Architecture specific extensions/prefixes
 *.[568vq]
