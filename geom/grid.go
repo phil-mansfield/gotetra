@@ -98,7 +98,7 @@ func (g *Grid) Coords(idx int) (x, y, z int) {
 	return x, y, z
 }
 
-// pMod computes the positive module x % y.
+// pMod computes the positive modulo x % y.
 func pMod(x, y int) int {
 	m := x % y
 	if m < 0 {
