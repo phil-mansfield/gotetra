@@ -10,7 +10,7 @@ import (
 // float32s is used only for memory efficiency. All calculations should be done
 // with float64s.
 type Particle struct {
-	Xs geom.Vec
+	Xs, Vs geom.Vec
 	Id int64
 }
 

@@ -23,6 +23,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 	"os"
 
 	"unsafe"
@@ -152,8 +153,15 @@ func ReadGadgetParticlesAt(
 	}
 
 	_ = readInt32(f, order)
-	f.Seek(int64(unsafe.Sizeof(floatBuf[0])) * int64(len(floatBuf)), 1)
+	binary.Read(f, order, floatBuf)
 	_ = readInt32(f, order)
+
+	rootA := float32(math.Sqrt(float64(gh.Time)))
+	for i := range ps {
+		ps[i].Vs[0] = floatBuf[3*i+0] * rootA
+		ps[i].Vs[1] = floatBuf[3*i+1] * rootA
+		ps[i].Vs[2] = floatBuf[3*i+2] * rootA
+	}
 
 	_ = readInt32(f, order)
 	binary.Read(f, order, intBuf)
