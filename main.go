@@ -32,7 +32,7 @@ var (
 func main() {
 	var (
 		x, y, z int
-		createCatalog, compareDensity, densityMode, tetraStats bool
+		createSheet, createCatalog, compareDensity, densityMode, tetraStats bool
 		cells int
 	)
 
@@ -47,6 +47,8 @@ func main() {
 
 	flag.BoolVar(&createCatalog, "CreateCatalog", false,
 		"Generate gotetra catalogs from gadget catalogs.")
+	flag.BoolVar(&createSheet, "CreateSheet", false,
+		"Generate gotetra sheets from gadget catalogs.")
 	flag.BoolVar(&compareDensity, "CompareDensity", false,
 		"Compare different methods of calculating densities.")
 	flag.BoolVar(&densityMode, "Density", false,
@@ -661,4 +663,40 @@ func compareDensityMain(x, y, z, cells int, sourceDir string) {
 	}
 
 	log.Println("Finished printing density grid.")
+}
+
+func createSheetMain(cells int, matches []string, outPath string) {
+	hd, xs, vs := createGrids(matches)
+
+	// Parse, parse, parse, parse...
+	snapDir := path.Base(path.Dir(matches[0]))
+	paramDir := path.Base(path.Dir(path.Dir(path.Dir(matches[0]))))
+
+	l, n, str, err := parseDir(paramDir)
+	if err != nil {
+		log.Fatalf(err.Error())
+	}
+
+	outParamDir := fmt.Sprintf("Box_L%04d_N%04d_G%04d_%s", l, n, cells, str)
+	outParamPath := path.Join(outPath, outParamDir)
+	outSnapPath := path.Join(outParamPath, snapDir)
+
+	outDir := path.Join(outParamPath, snapDir)
+	if err = os.MkdirAll(outDir, 0777); err != nil {
+		log.Fatalf(err.Error())
+	}
+
+	writeGrids(outDir, hd, cells, xs, vs)
+}
+
+func createGrids(catalogs []string) (hd *catalog.Header, xs, vs []float64) {
+	hd := catalog.ReadGadgetheader(catalogs[0], gadgetEndianness)
+	xs := make([]geom.Vec, hd.TotalCount)
+	vs := make([]geom.Vec, hd.TotalCount)
+	
+	fmt.Println("Okay, we're good to go.")
+	os.Exit(1)
+}
+
+func writeGrids(outDir string, hd *catalog.Header, cells int, xs, vs []float64) {
 }
