@@ -16,7 +16,7 @@ import (
 	"github.com/phil-mansfield/gotetra/geom"
 	"github.com/phil-mansfield/gotetra/catalog"
 	"github.com/phil-mansfield/gotetra/scripts/helper"
-
+	"github.com/phil-mansfield/gotetra/sheet"
 	"github.com/phil-mansfield/gotetra/rand"
 )
 
@@ -82,7 +82,7 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	modeName := checkMode(createCatalog, compareDensity,
+	modeName := checkMode(createCatalog, createSheet, compareDensity,
 		tetraStats, densityMode)
 
 	switch {
@@ -97,10 +97,25 @@ func main() {
 			)
 		}
 
-		sources := args[1: len(args) - 1]
+		sources := args[0: len(args) - 1]
 		targetDir := args[len(args) - 1]
 
 		createCatalogsMain(cells, sources, targetDir)
+	case createSheet:
+		checkCells(cells, modeName)
+
+		args := flag.Args()
+		if len(args) <= 1 {
+			log.Fatalf(
+				"Mode %s requires source files and a target directory.",
+				modeName,
+			)
+		}
+
+		sources := args[0: len(args) - 1]
+		targetDir := args[len(args) - 1]
+
+		createSheetMain(cells, sources, targetDir)
 	case densityMode:
 		checkCells(cells, modeName)
 		checkCoords(x, y, z, modeName)
@@ -157,13 +172,19 @@ func checkCoords(x, y, z int, modeName string) {
 	}
 }
 
-func checkMode(createCatalog, compareDensity, tetraStats, density bool) string {
+func checkMode(createCatalog, createSheet, compareDensity,
+	tetraStats, density bool) string {
 	n := 0
 	modeStr := ""
 
 	if createCatalog {
 		n++
 		modeStr = "CreateCatalog"
+	}
+
+	if createSheet {
+		n++
+		modeStr = "CreateSheet"
 	}
 
 	if compareDensity {
@@ -287,7 +308,6 @@ func rebinParticles(inFiles, outFiles []string, gridWidth int64) {
 	psBufMax := make([]catalog.Particle, maxLen)
 
 	bufs := createBuffers(outFiles, catalogBufLen)
-
 
 	for i, inFile := range inFiles {
 		if i % 25 == 0 {
@@ -676,12 +696,13 @@ func createSheetMain(cells int, matches []string, outPath string) {
 	if err != nil {
 		log.Fatalf(err.Error())
 	}
+	hd.CountWidth = int64(n)
 
 	outParamDir := fmt.Sprintf("Box_L%04d_N%04d_G%04d_%s", l, n, cells, str)
 	outParamPath := path.Join(outPath, outParamDir)
 	outSnapPath := path.Join(outParamPath, snapDir)
 
-	outDir := path.Join(outParamPath, snapDir)
+	outDir := path.Join(outSnapPath, snapDir)
 	if err = os.MkdirAll(outDir, 0777); err != nil {
 		log.Fatalf(err.Error())
 	}
@@ -689,14 +710,158 @@ func createSheetMain(cells int, matches []string, outPath string) {
 	writeGrids(outDir, hd, cells, xs, vs)
 }
 
-func createGrids(catalogs []string) (hd *catalog.Header, xs, vs []float64) {
-	hd := catalog.ReadGadgetheader(catalogs[0], gadgetEndianness)
-	xs := make([]geom.Vec, hd.TotalCount)
-	vs := make([]geom.Vec, hd.TotalCount)
+func createGrids(catalogs []string) (hd *catalog.Header, xs, vs []geom.Vec) {
+	hs := make([]catalog.Header, len(catalogs))
+	for i := range hs {
+		hs[i] = *catalog.ReadGadgetHeader(catalogs[i], gadgetEndianness)
+	}
+
+	maxLen := int64(0)
+	for _, h := range hs {
+		if h.Count > maxLen {
+			maxLen = h.Count
+		}
+	}
+
+	xs = make([]geom.Vec, hs[0].TotalCount)
+	vs = make([]geom.Vec, hs[0].TotalCount)
 	
-	fmt.Println("Okay, we're good to go.")
-	os.Exit(1)
+	pBuf := make([]catalog.Particle, maxLen)
+	intBuf := make([]int64, maxLen)
+	floatBuf := make([]float32, maxLen * 3)
+
+	buf := sheet.NewParticleBuffer(xs, vs, catalogBufLen)
+
+	for i, cat := range catalogs {
+
+		if i % 25 == 0 {
+			log.Printf("Read %d/%d catalogs", i, len(catalogs))
+		}
+
+		N := hs[i].Count
+		floatBuf = floatBuf[0: 3*N]
+		intBuf = intBuf[0: N]
+		pBuf = pBuf[0: N]
+
+		catalog.ReadGadgetParticlesAt(cat, gadgetEndianness,
+			floatBuf, intBuf, pBuf)
+		runtime.GC()
+		buf.Append(pBuf)
+	}
+
+	if len(catalogs) % 25 != 0 {
+		log.Printf("Read %d/%d catalogs", len(catalogs), len(catalogs))
+	}
+
+	return &hs[0], xs, vs
 }
 
-func writeGrids(outDir string, hd *catalog.Header, cells int, xs, vs []float64) {
+func writeGrids(outDir string, hd *catalog.Header,
+	cells int, xs, vs []geom.Vec) {
+
+	log.Println("Writing to directory", outDir)
+
+	segmentWidth := int(hd.CountWidth) / cells
+	gridWidth := segmentWidth + 1
+
+	xsSeg := make([]geom.Vec, gridWidth * gridWidth * gridWidth)
+	vsSeg := make([]geom.Vec, gridWidth * gridWidth * gridWidth)
+
+	shd := &sheet.Header{}
+	shd.Cosmo = hd.Cosmo
+	shd.Count = hd.Count
+	shd.CountWidth = hd.CountWidth
+	shd.Mass = hd.Mass
+	shd.TotalWidth = hd.TotalWidth
+
+	shd.SegmentWidth = int64(segmentWidth)
+	shd.GridWidth = int64(gridWidth)
+	shd.GridCount = int64(shd.GridWidth * shd.GridWidth * shd.GridWidth)
+	shd.Cells = int64(cells)
+
+	for shd.Idx = 0; shd.Idx < shd.Cells * shd.Cells * shd.Cells; shd.Idx++ {
+		copyToSegment(shd, xs, vs, xsSeg, vsSeg)
+		// WRITE FILE HEREE!!!!!!!!1!!11!
+		log.Println("Wrote file", shd.Idx, "without problems.",
+			shd.Mins, shd.Widths)
+	}
+}
+
+// Note, this only works for the collections of points where each point is
+// relatively close to the existing bounding box.
+type boundingBox struct {
+	Width float64
+	Center geom.Vec
+	ToMax, ToMin, ToPt geom.Vec
+}
+
+func (box *boundingBox) Init(pt *geom.Vec, width float64) {
+	box.Width = width
+	box.Center = *pt
+}
+
+func (box *boundingBox) Add(pt *geom.Vec) {
+	pt.SubAt(&box.Center, box.Width, &box.ToPt)
+
+	for i := 0; i < 3; i++ {
+		box.ToMin[i], box.ToMax[i] = minMax(
+			box.ToMin[i], box.ToMax[i], box.ToPt[i],
+		)
+	}
+
+	//ToPt is now a buffer for the neccesary shift in the center
+	box.ToMax.AddAt(&box.ToMin, &box.ToPt)
+	box.ToPt.ScaleSelf(0.5)
+	box.Center.AddSelf(&box.ToPt)
+    box.ToMax.SubSelf(&box.ToPt, box.Width)
+    box.ToMin.SubSelf(&box.ToPt, box.Width)
+}
+
+
+func minMax(min, max, x float32) (outMin, outMax float32) {
+	if x > max {
+		return min, x
+	} else if x < min {
+		return x, max
+	} else {
+		return min, max
+	}
+}
+
+func copyToSegment(shd *sheet.Header, xs, vs, xsSeg, vsSeg []geom.Vec) {
+	xStart := shd.SegmentWidth * (shd.Idx % shd.Cells)
+	yStart := shd.SegmentWidth * ((shd.Idx / shd.Cells) % shd.Cells)
+	zStart := shd.SegmentWidth * (shd.Idx / (shd.Cells * shd.Cells))
+
+	N, N2 := shd.CountWidth, shd.CountWidth * shd.CountWidth
+
+	box := &boundingBox{}
+	box.Init(&xs[xStart + N * yStart + N2 * zStart], shd.TotalWidth)
+
+	smallIdx := 0
+	for z := zStart; z < zStart + shd.GridWidth; z++ {
+		zIdx := z
+		if zIdx == shd.CountWidth { zIdx = 0 }
+		for y := yStart; y < yStart + shd.GridWidth; y++ {
+			yIdx := y
+			if yIdx == shd.CountWidth { yIdx = 0 }
+			for x := xStart; x < xStart + shd.GridWidth; x++ {
+				xIdx := x
+				if xIdx == shd.CountWidth { xIdx = 0 }
+
+				largeIdx := xIdx + yIdx * N + zIdx * N2
+				
+				xsSeg[smallIdx] = xs[largeIdx]
+				vsSeg[smallIdx] = vs[largeIdx]
+
+				box.Add(&xsSeg[smallIdx])
+
+				smallIdx++
+			}
+		}	
+	}
+	
+	box.Center.AddAt(&box.ToMin, &shd.Mins)
+	shd.Mins.ModSelf(shd.TotalWidth)
+	box.ToMax.ScaleAt(2.0, &shd.Widths)
 }
