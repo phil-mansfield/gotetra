@@ -36,8 +36,8 @@ func (pb *ParticleBuffer) Append(ps []catalog.Particle) {
 // be called automatically whenever the buffer fills.
 func (pb *ParticleBuffer) Flush() {
 	for i := 0; i < pb.idx; i++ {
-		pb.xs[pb.buf[i].Id] = pb.buf[i].Xs
-		pb.vs[pb.buf[i].Id] = pb.buf[i].Vs
+		pb.xs[pb.buf[i].Id - 1] = pb.buf[i].Xs
+		pb.vs[pb.buf[i].Id - 1] = pb.buf[i].Vs
 	}
 	pb.idx = 0
 }

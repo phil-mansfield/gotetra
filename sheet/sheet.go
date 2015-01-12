@@ -27,13 +27,13 @@ The binary format used is as follows:
 type Header struct {
 	Cosmo catalog.CosmologyHeader
 	Count, CountWidth int64
-	SubCount, SubCountWidth int64
-	Idx, GridWidth int64
+	SegmentWidth, GridWidth, GridCount int64
+	Idx, Cells int64
 
 	Mass float64
 	TotalWidth float64
-	Mins [3]float64
-	Maxs [3]float64
+	Mins geom.Vec
+	Widths geom.Vec
 }
 
 func readHeaderAt(file string, hdBuf *Header) (*os.File, binary.ByteOrder) {
@@ -112,15 +112,15 @@ func ReadVelocitiesAt(file string, vsBuf []geom.Vec) {
 // Write writes a grid of position and velocity vectors to a file, defined
 // by the given header.
 func Write(file string, h *Header, xs, vs []geom.Vec) {
-	if int(h.SubCount) != len(xs) {
+	if int(h.GridCount) != len(xs) {
 		log.Fatalf("Header count %d for file %s does not match xs length, %d",
-			h.SubCount, file, len(xs))
-	} else if int(h.SubCount) != len(vs) {
+			h.GridCount, file, len(xs))
+	} else if int(h.GridCount) != len(vs) {
 		log.Fatalf("Header count %d for file %s does not match vs length, %d",
-			h.SubCount, file, len(xs))
-	} else if h.SubCountWidth*h.SubCountWidth*h.SubCountWidth != h.SubCount {
+			h.GridCount, file, len(xs))
+	} else if h.GridWidth*h.GridWidth*h.GridWidth != h.GridCount {
 		log.Fatalf("Header CountWidth %d doesn't match Count %d",
-			h.SubCountWidth, h.SubCount)
+			h.GridWidth, h.GridCount)
 	}
 
 	f, err := os.Create(file)
