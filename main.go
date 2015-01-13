@@ -700,9 +700,7 @@ func createSheetMain(cells int, matches []string, outPath string) {
 
 	outParamDir := fmt.Sprintf("Box_L%04d_N%04d_G%04d_%s", l, n, cells, str)
 	outParamPath := path.Join(outPath, outParamDir)
-	outSnapPath := path.Join(outParamPath, snapDir)
-
-	outDir := path.Join(outSnapPath, snapDir)
+	outDir := path.Join(outParamPath, snapDir)
 	if err = os.MkdirAll(outDir, 0777); err != nil {
 		log.Fatalf(err.Error())
 	}
@@ -779,11 +777,27 @@ func writeGrids(outDir string, hd *catalog.Header,
 	shd.GridCount = int64(shd.GridWidth * shd.GridWidth * shd.GridWidth)
 	shd.Cells = int64(cells)
 
-	for shd.Idx = 0; shd.Idx < shd.Cells * shd.Cells * shd.Cells; shd.Idx++ {
-		copyToSegment(shd, xs, vs, xsSeg, vsSeg)
-		// WRITE FILE HEREE!!!!!!!!1!!11!
-		log.Println("Wrote file", shd.Idx, "without problems.",
-			shd.Mins, shd.Widths)
+	for z := int64(0); z < shd.Cells; z++ {
+		for y := int64(0); y < shd.Cells; y++ {
+			for x := int64(0); x < shd.Cells; x++ {
+				copyToSegment(shd, xs, vs, xsSeg, vsSeg)
+				file := path.Join(outDir, fmt.Sprintf("sheet%d%d%d.dat", x, y,z))
+				sheet.Write(file, shd, xsSeg, vsSeg)
+				runtime.GC()
+
+				if shd.Idx % 25 == 0 {
+					log.Printf("Wrote %d/%d sheet segments.",
+						shd.Idx, shd.Cells * shd.Cells * shd.Cells,
+					)
+				}
+				shd.Idx++
+			}
+		}
+	}
+	if shd.Idx % 25 != 0 {
+		log.Printf("Wrote %d/%d sheet segments.",
+			shd.Idx, shd.Cells * shd.Cells * shd.Cells,
+		)
 	}
 }
 
