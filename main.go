@@ -23,6 +23,7 @@ import (
 const (
 	vecBufLen = 1<<10
 	catalogBufLen = 1<<12
+	maxRhoWidth = 1<<8
 )
 
 var (
@@ -33,6 +34,7 @@ func main() {
 	var (
 		x, y, z int
 		createSheet, createCatalog, compareDensity, densityMode, tetraStats bool
+		sheetDensity bool
 		cells int
 	)
 
@@ -878,4 +880,29 @@ func copyToSegment(shd *sheet.Header, xs, vs, xsSeg, vsSeg []geom.Vec) {
 	box.Center.AddAt(&box.ToMin, &shd.Mins)
 	shd.Mins.ModSelf(shd.TotalWidth)
 	box.ToMax.ScaleAt(2.0, &shd.Widths)
+}
+
+func densitySheetMain(x, y, z, cells int, points int, sourceDir, outDir string) {
+
+	if points <= 0 {
+		log.Fatalf("Positive value for Points is required.")
+	}
+
+	hd := &sheet.Header{}
+
+	for z = 0; z < cells; z++ {
+		for y = 0; y < cells; y++ {
+			for x = 0; x < cells; x++ {
+				file := fmt.Sprintf("sheet%d%d%d.dat", x, y, z)
+				sheet.ReadHeaderAt(file, hd)
+				
+				cellWidth := float32(hd.TotalWidth / float64(cells))
+				
+				vol := int(hd.Widths[0] / cellWidth) *
+					int(hd.Widths[1] / cellWidth) *
+					int(hd.Widths[2] / cellWidth)
+				log.Println(vol)
+			}
+		}
+	}
 }
