@@ -73,9 +73,9 @@ func ReadHeaderAt(file string, hdBuf *Header) {
 func ReadPositionsAt(file string, xsBuf []geom.Vec) {
 	h := &Header{}
 	f, order := readHeaderAt(file, h)
-	if h.Count != int64(len(xsBuf)) {
+	if h.GridCount != int64(len(xsBuf)) {
 		log.Fatalf("Position buffer has length %d, but file %s has %d vectors.",
-			len(xsBuf), file, h.Count)
+			len(xsBuf), file, h.GridCount)
 	}
 
 	// Go to block 4 in the file.
@@ -94,9 +94,9 @@ func ReadPositionsAt(file string, xsBuf []geom.Vec) {
 func ReadVelocitiesAt(file string, vsBuf []geom.Vec) {
 	h := &Header{}
 	f, order := readHeaderAt(file, h)
-	if h.Count != int64(len(vsBuf)) {
+	if h.GridCount != int64(len(vsBuf)) {
 		log.Fatalf("Velocity buffer has length %d, but file %s has %d vectors.",
-			len(vsBuf), file, h.Count)
+			len(vsBuf), file, h.GridCount)
 	}
 
 	// Go to block 5 in the file.
