@@ -248,7 +248,7 @@ func (tet *Tetra) RandomSample(gen *rand.Generator, randBuf []float64, vecBuf []
 // results are placed in vecBuf.
 func (tet *Tetra) Distribute(xs, ys, zs []float64, vecBuf []Vec) {
 	bary := tet.Barycenter()
-
+	w := float32(tet.width)
 	// Some gross code to prevent allocations. cs are the displacement vectors
 	// to the corners and the ds are the barycentric components of the random
 	// points.
@@ -257,10 +257,11 @@ func (tet *Tetra) Distribute(xs, ys, zs []float64, vecBuf []Vec) {
 		tet.sb.d[i].ScaleSelf(0.0)
 	}
 
+	// Note: this inner loop is very optimized. Don't try to "fix" it.
 	for i := range vecBuf {
 		// Find three of the four barycentric coordinates, see
 		// C. Rocchini, P. Cignoni, 2001.
-		s, t, u := xs[i], ys[i], zs[i]
+		s, t, u := float32(xs[i]), float32(ys[i]), float32(zs[i])
 
 		if s+t > 1 {
 			s, t = 1-s, 1-t
@@ -271,17 +272,82 @@ func (tet *Tetra) Distribute(xs, ys, zs []float64, vecBuf []Vec) {
 		} else if s+t+u > 1 {
 			s, u = 1-t-u, s+t+u-1
 		}
-
 		v := 1 - s - t - u
 
-		tet.sb.c[0].ScaleAt(s, &tet.sb.d[0])
-		tet.sb.c[1].ScaleAt(t, &tet.sb.d[1])
-		tet.sb.c[2].ScaleAt(u, &tet.sb.d[2])
-		tet.sb.c[3].ScaleAt(v, &tet.sb.d[3])
+		// Could break loop here, but that flushes the cache and
+		// registers.
 
-		tet.sb.d[0].AddAt(bary, &vecBuf[i])
-		vecBuf[i].AddAt(&tet.sb.d[1], &vecBuf[i]).AddAt(&tet.sb.d[2], &vecBuf[i])
-		vecBuf[i].AddAt(&tet.sb.d[3], &vecBuf[i]).ModAt(tet.width, &vecBuf[i])
+		for j := 0; j < 3; j++ {
+			d0 := tet.sb.c[0][j] * s
+			d1 := tet.sb.c[1][j] * t
+			d2 := tet.sb.c[2][j] * u
+			d3 := tet.sb.c[3][j] * v
+			
+			val := bary[j] + d0 + d1 + d2 + d3
+			if val >= w {
+				val -= w
+			} else if val < 0 {
+				val += w
+			}
+
+			vecBuf[i][j] = val
+		}
+	}
+}
+
+// DistributeUnit distributes a set of points in a unit cube across a unit
+// tetrahedron and stores the results to vecBuf.
+func DistributeUnit(xs, ys, zs []float64, vecBuf []Vec) {
+	for i := range vecBuf {
+		s, t, u := float32(xs[i]), float32(ys[i]), float32(zs[i])
+	
+		if s+t > 1 {
+			s, t = 1-s, 1-t
+		}
+	
+		if t+u > 1 {
+			t, u = 1-u, 1-s-t
+		} else if s+t+u > 1 {
+			s, u = 1-t-u, s+t+u-1
+		}
+		
+		vecBuf[i][0], vecBuf[i][1], vecBuf[i][2] = s, t, u
+	}
+}
+
+// DistributeTetra takes a set of points distributed across a unit tetrahedron
+// and distributed them across the given tetrahedron through barycentric
+// coordinate transformations.
+func (tet *Tetra) DistributeTetra(pts []Vec) {
+	bary := tet.Barycenter()
+	w := float32(tet.width)
+	// Some gross code to prevent allocations. cs are the displacement vectors
+	// to the corners and the ds are the barycentric components of the random
+	// points.
+	for i := 0; i < 4; i++ {
+		tet.Corners[i].SubAt(bary, tet.width, &tet.sb.c[i])
+		tet.sb.d[i].ScaleSelf(0.0)
+	}
+	for i := range pts {
+		pt := &pts[i]
+		s, t, u := pt[0], pt[1], pt[2]
+		v := 1 - s - t - u
+
+		for j := 0; j < 3; j++ {
+			d0 := tet.sb.c[0][j] * s
+			d1 := tet.sb.c[1][j] * t
+			d2 := tet.sb.c[2][j] * u
+			d3 := tet.sb.c[3][j] * v
+			
+			val := bary[j] + d0 + d1 + d2 + d3
+			if val >= w {
+				val -= w
+			} else if val < 0 {
+				val += w
+			}
+
+			pt[j] = val
+		}
 	}
 }
 
