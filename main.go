@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"runtime/pprof"
 	"os"
+	"io/ioutil"
 
 	"github.com/phil-mansfield/gotetra/density"
 	"github.com/phil-mansfield/gotetra/geom"
@@ -23,7 +24,7 @@ import (
 const (
 	vecBufLen = 1<<10
 	catalogBufLen = 1<<12
-	maxRhoWidth = 1<<8
+	maxRhoWidth = 1<<9
 )
 
 var (
@@ -32,7 +33,7 @@ var (
 
 func main() {
 	var (
-		x, y, z int
+		x, y, z, minSheet, maxSheet int
 		createSheet, createCatalog, compareDensity, densityMode, tetraStats bool
 		sheetDensity bool
 		cells int
@@ -46,7 +47,12 @@ func main() {
 	flag.IntVar(&y, "Y", -1, "y location of operation.")
 	flag.IntVar(&z, "Z", -1, "z location of operation.")
 	flag.IntVar(&cells, "Cells", -1, "Width of grid in cells.")
+	flag.IntVar(&minSheet, "MinSheet", 0, "Lowest index of a sheet file that will be read.")
+	flag.IntVar(&maxSheet, "MaxSheet", 511, "Highest index of a sheet file that will be read.")
 
+	// This was a bad idea.
+	flag.BoolVar(&sheetDensity, "SheetDensity", false,
+		"Compute density using sheet%d%d%d.dat files.")
 	flag.BoolVar(&createCatalog, "CreateCatalog", false,
 		"Generate gotetra catalogs from gadget catalogs.")
 	flag.BoolVar(&createSheet, "CreateSheet", false,
@@ -84,8 +90,9 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
+	// This is terribly designed.
 	modeName := checkMode(createCatalog, createSheet, compareDensity,
-		tetraStats, densityMode)
+		tetraStats, densityMode, sheetDensity)
 
 	switch {
 	case createCatalog:
@@ -134,6 +141,20 @@ func main() {
 		target := args[1]
 		densityMain(x, y, z, cells, *method, *points, psFlag,
 			source, target)
+	case sheetDensity:
+		checkCells(cells, modeName)
+		checkCoords(x, y, z, modeName)
+		args := flag.Args()
+		if len(args) != 2 {
+			log.Fatalf("Mode %s requires a source and target directory.",
+				modeName)
+		}
+
+		source := args[0]
+		target := args[1]
+		sheetDensityMain(x, y, z, cells, *points, source, target,
+			minSheet, maxSheet)
+
 	case compareDensity:
 		checkCells(cells, modeName)
 		checkCoords(x, y, x, modeName)
@@ -175,7 +196,8 @@ func checkCoords(x, y, z int, modeName string) {
 }
 
 func checkMode(createCatalog, createSheet, compareDensity,
-	tetraStats, density bool) string {
+	tetraStats, density, sheetDensity bool) string {
+	// This function is not a good idea.
 	n := 0
 	modeStr := ""
 
@@ -202,6 +224,11 @@ func checkMode(createCatalog, createSheet, compareDensity,
 	if density {
 		n++
 		modeStr = "Density"
+	}
+
+	if sheetDensity {
+		n++
+		modeStr = "SheetDensity"
 	}
 
 	if n != 1 {
@@ -516,7 +543,7 @@ func densityMain(x, y, z, cells int, method string,
 		addDensityGrid(ds, <- out)
 	}
 
-	writeDensity(outDir, x, y, z, ds[0])
+	writeDensity(path.Join(outDir, fmt.Sprintf("density_%d%d%d.dat", x, y, z)), ds[0])
 }
 
 func addDensityGrid(ds [][]float64, gs []density.Grid) {
@@ -561,11 +588,8 @@ func setupIntr(method string, h0 *catalog.Header, man *catalog.ParticleManager,
 	return gs, intr
 }
 
-func writeDensity(outDir string, x, y, z int, d []float64) {
-	fname := fmt.Sprintf("density_%d%d%d.dat", x, y, z)
-	path := path.Join(outDir, fname)
-
-	f, err := os.Create(path)
+func writeDensity(fname string, d []float64) {
+	f, err := os.Create(fname)
 	if err != nil { log.Fatal(err.Error()) }
 	defer f.Close()
 
@@ -769,7 +793,6 @@ func writeGrids(outDir string, hd *catalog.Header,
 
 	shd := &sheet.Header{}
 	shd.Cosmo = hd.Cosmo
-	shd.Count = hd.Count
 	shd.CountWidth = hd.CountWidth
 	shd.Mass = hd.Mass
 	shd.TotalWidth = hd.TotalWidth
@@ -882,27 +905,95 @@ func copyToSegment(shd *sheet.Header, xs, vs, xsSeg, vsSeg []geom.Vec) {
 	box.ToMax.ScaleAt(2.0, &shd.Widths)
 }
 
-func densitySheetMain(x, y, z, cells int, points int, sourceDir, outDir string) {
+func validCellNum(cells int) bool {
+	for cells > 1 { cells /= 2 }
+	return cells == 1
+}
 
-	if points <= 0 {
-		log.Fatalf("Positive value for Points is required.")
-	}
+func minMaxCells(hs []sheet.Header, cells int) (int, int) {
+	max := 0
+	min := math.MaxInt32 // We have problems if this is too big.
+	for i := range hs {
+		hd := &hs[i]
+		cellWidth := float32(hd.TotalWidth / float64(cells))
+		
+		vol := int(hd.Widths[0] / cellWidth) *
+			int(hd.Widths[1] / cellWidth) *
+			int(hd.Widths[2] / cellWidth)
+	
+		if vol > math.MaxInt32 {
+			log.Fatalf("Header %d would have more than %d cells in it.",
+				i, math.MaxInt32)
+		}
 
-	hd := &sheet.Header{}
-
-	for z = 0; z < cells; z++ {
-		for y = 0; y < cells; y++ {
-			for x = 0; x < cells; x++ {
-				file := fmt.Sprintf("sheet%d%d%d.dat", x, y, z)
-				sheet.ReadHeaderAt(file, hd)
-				
-				cellWidth := float32(hd.TotalWidth / float64(cells))
-				
-				vol := int(hd.Widths[0] / cellWidth) *
-					int(hd.Widths[1] / cellWidth) *
-					int(hd.Widths[2] / cellWidth)
-				log.Println(vol)
-			}
+		if vol > max {
+			max = vol
+		}
+		if vol < min {
+			min = vol
 		}
 	}
+
+	return min, max
+}
+
+func sheetDensityMain(x, y, z, cells int, points int, sourceDir, outDir string,
+	minSheet, maxSheet int) {
+	if points <= 0 {
+		log.Fatalf("Positive value for Points is required.")
+	} else if !validCellNum(cells) {
+		log.Fatalf("Invalid cell number %d (sorry!).", cells)
+	} else if cells > maxRhoWidth {
+		log.Fatalf("Cell count is too big. Let's die for the time being.")
+	}
+
+	log.Println("Running SheetDensity mainloop.")
+
+	ms := &runtime.MemStats{}
+
+	infos, err := ioutil.ReadDir(sourceDir)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	hs := make([]sheet.Header, len(infos))
+	for i, info := range infos {
+		sheet.ReadHeaderAt(path.Join(sourceDir, info.Name()), &hs[i])
+	}
+
+	minCells, maxCells := minMaxCells(hs, cells)
+	log.Printf("MaxCells: %d, MinCells: %d", minCells, maxCells)
+
+	rhos := make([]float64, cells * cells * cells)
+	// Oh God, this is the most confusing of all functions.
+	g := sheet.NewGrid(hs[0].TotalWidth, 1, rhos,
+		&sheet.Cell{cells, 0, 0, 0})
+
+	xs := make([]geom.Vec, hs[0].GridCount)
+	intr := sheet.MonteCarlo(hs[0].SegmentWidth,
+		rand.NewTimeSeed(rand.Xorshift), points)
+
+	log.Printf("Initial Alloc: %d MB, Initial Sys: %d MB",
+		ms.Alloc >> 20, ms.Sys >> 20)
+
+	for i := range infos {
+		if i < minSheet || i > maxSheet { continue }
+
+		runtime.GC()
+
+		log.Printf("Reading %s", infos[i].Name())
+		runtime.ReadMemStats(ms)
+		log.Printf("Alloc: %d MB, Sys: %d MB",
+			ms.Alloc >> 20, ms.Sys >> 20)
+
+		file := path.Join(sourceDir, infos[i].Name())
+		sheet.ReadPositionsAt(file, xs)
+		intr.Interpolate(g, hs[0].Mass, xs)
+	}
+
+
+	out := path.Join(outDir,
+		fmt.Sprintf("density_%d_%d.dat", minSheet, maxSheet))
+	log.Printf("Writing %s", out)
+	writeDensity(out, rhos)
 }
