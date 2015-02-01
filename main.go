@@ -13,7 +13,6 @@ import (
 	"os"
 	"io/ioutil"
 
-	"github.com/phil-mansfield/gotetra/density"
 	"github.com/phil-mansfield/gotetra/geom"
 	"github.com/phil-mansfield/gotetra/catalog"
 	"github.com/phil-mansfield/gotetra/sheet"
@@ -469,4 +468,12 @@ func sheetDensityMain(cells, points, skip int,
 		fmt.Sprintf("density_%d_%d_skip%d.dat", minSheet, maxSheet, skip))
 	log.Printf("Writing %s", out)
 	writeDensity(out, rhos)
+}
+
+func writeDensity(fname string, d []float64) {
+	f, err := os.Create(fname)
+	if err != nil { log.Fatal(err.Error()) }
+	defer f.Close()
+
+	binary.Write(f, binary.LittleEndian, d)
 }
