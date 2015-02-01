@@ -24,7 +24,6 @@ The binary format used is as follows:
     5 - ([][3]float32) Contiguous block of v_x, v_y, v_z coordinates.
  */
 
-
 type Header struct {
 	Cosmo catalog.CosmologyHeader
 	Count, CountWidth int64

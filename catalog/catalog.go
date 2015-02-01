@@ -1,22 +1,3 @@
-/*package catalog contains funcitons for reading from and writing to
-files containing catalogs of particle locations and velocities.
-
-Catalogs written by external programs are standardized to a single type when
-read. Currently the only such extrenal catalog type that is supported the
-Gadget 2 particle catalog.
-
-The binary format used is as follows:
-    |-- 1 --||-- 2 --||-- 3 --||-- ... 4 ... --||-- ... 5 ... --|
-
-    1 - (int32) Flag indicating the endianness of the file. 0 indicates a big
-        endian byte ordering and -1 indicates a little endian byte order.
-    2 - (int32) Size of a Header struct. Should be checked for consistency.
-    3 - (int32) Size of a Particle struct. Should be checked for consistency.
-    4 - (tetra.Header) Header file containing meta-information about the
-        particle catalog.
-    5 - ([]tetra.Particle) Contiguous block of particles. Garuanteed to be
-        of size unsafe.Sizeof(Particle{}) * header.Count.
-*/
 package catalog
 
 import (
@@ -26,7 +7,7 @@ import (
 	"math"
 	"os"
 
-	"unsafe"
+	"github.com/phil-mansfield/gotetra/geom"
 )
 
 const (
@@ -34,6 +15,37 @@ const (
 	// endianness can be read.
 	DefaultEndiannessFlag int32 = -1
 )
+
+// This is a terrible idea and shouldn't exist.
+type Particle struct {
+	Xs, Vs geom.Vec
+	Id int64
+}
+
+// Header describes meta-information about the current catalog.
+type Header struct {
+	Cosmo CosmologyHeader
+
+	Mass       float64 // Mass of one particle
+	Count      int64   // Number of particles in catalog
+	TotalCount int64   // Number of particles in all catalogs
+	CountWidth int64   // Number of particles "on one side": TotalCount^(1/3)
+
+	Idx        int64   // Index of catalog: x-major ordering is used
+	GridWidth  int64   // Number of gird cells "on one side"
+	Width      float64 // Width of the catalog's bounding box
+	TotalWidth float64 // Width of the sim's bounding box
+}
+
+// CosmologyHeader contains information describing the cosmological
+// context in which the simulation was run.
+type CosmologyHeader struct {
+	Z      float64
+	OmegaM float64
+	OmegaL float64
+	H100   float64
+}
+
 
 // gadgetHeader is the formatting for meta-information used by Gadget 2.
 type gadgetHeader struct {
@@ -89,6 +101,8 @@ func (h *gadgetHeader) WrapDistance(x float64) float64 {
 	return x
 }
 
+// ReadGadgetHeader reads a Gadget catalog and returns a standardized
+// gotetra containing its information.
 func ReadGadgetHeader(path string, order binary.ByteOrder) *Header {
 	f, err := os.Open(path)
 	if err != nil {
@@ -105,6 +119,13 @@ func ReadGadgetHeader(path string, order binary.ByteOrder) *Header {
 	return h
 }
 
+// ReadGadgetParticlesAt reads a Gadget file and writes all the particles within
+// it to the given particle buffer, ps. floatBuf and intBuf are used internally.
+// The length of all three buffers must be equal to  the number of particles in
+// the catalog.
+//
+// This call signature, and espeically the Particle type are all a consequence
+// of soem shockingly poor early design decisions.
 func ReadGadgetParticlesAt(
 	path string,
 	order binary.ByteOrder,
@@ -181,131 +202,6 @@ func ReadGadget(path string, order binary.ByteOrder) (*Header, []Particle) {
 	intBuf := make([]int64, h.Count)
 	ps := make([]Particle, h.Count)
 	ReadGadgetParticlesAt(path, order, floatBuf, intBuf, ps)
-	return h, ps
-}
-
-// Write writes the given header and particle sequence to the specified file.
-func Write(path string, h *Header, ps []Particle) {
-	f, err := os.Create(path)
-	if err != nil {
-		panic(err)
-	}
-	defer f.Close()
-
-	h.Count = int64(len(ps))
-	order := endianness(DefaultEndiannessFlag)
-
-	err = binary.Write(f, order, DefaultEndiannessFlag)
-	if err != nil {
-		panic(err.Error())
-	}
-	err = binary.Write(f, order, int32(unsafe.Sizeof(Header{})))
-	if err != nil {
-		panic(err.Error())
-	}
-	err = binary.Write(f, order, int32(unsafe.Sizeof(ps[0])))
-	if err != nil {
-		panic(err.Error())
-	}
-	err = binary.Write(f, order, h)
-	if err != nil {
-		panic(err.Error())
-	}
-	err = binary.Write(f, order, ps)
-	if err != nil {
-		panic(err.Error())
-	}
-}
-
-// readHeader reads only the header from the given file.
-func readHeader(path string, flag int) (*Header, *os.File, binary.ByteOrder) {
-	f, err := os.OpenFile(path, flag, os.ModePerm)
-	if err != nil {
-		panic(err)
-	}
-
-	order := endianness(readInt32(f, binary.LittleEndian))
-
-	// Sanity checks:
-	headerSize := readInt32(f, order)
-	particleSize := readInt32(f, order)
-	if int32(unsafe.Sizeof(Header{})) != headerSize {
-		panic(fmt.Sprintf(
-			"Size of header in code, %d, does not match size in catalog, %d.",
-			unsafe.Sizeof(Header{}), headerSize,
-		))
-	} else if int32(unsafe.Sizeof(Particle{})) != particleSize {
-		panic(fmt.Sprintf(
-			"Size of header in code, %d, does not match size in catalog, %d.",
-			unsafe.Sizeof(Particle{}), particleSize,
-		))
-	}
-
-	h := &Header{}
-	err = binary.Read(f, order, h)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	return h, f, order
-}
-
-func ReadHeader(path string) *Header {
-	h, f, _ := readHeader(path, os.O_RDONLY)
-	if err := f.Close(); err != nil {
-		panic(err)
-	}
-	return h
-}
-
-// Append appends a particle sequence to the end of the given file.
-func Append(path string, ps []Particle) {
-	if len(ps) == 0 {
-		return
-	}
-
-	h, f, order := readHeader(path, os.O_RDWR)
-	defer f.Close()
-
-	_, err := f.Seek(0, 2)
-	if err != nil {
-		panic(err.Error())
-	}
-	err = binary.Write(f, order, ps)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	_, err = f.Seek(12, 0)
-	if err != nil {
-		panic(err.Error())
-	}
-	h.Count += int64(len(ps))
-	err = binary.Write(f, order, h)
-	if err != nil {
-		panic(err.Error())
-	}
-}
-
-// Read reads a header and particle sequence from the given file.
-func ReadParticlesAt(path string, ps []Particle) {
-	h, f, order := readHeader(path, os.O_RDONLY)
-	defer f.Close()
-
-	if int64(len(ps)) != h.Count {
-		panic("Incorrect Particle buffer length.")
-	}
-
-	err := binary.Read(f, order, ps)
-	if err != nil {
-		panic(err.Error())
-	}
-}
-
-func Read(path string) (*Header, []Particle) {
-	h := ReadHeader(path)
-	ps := make([]Particle, h.Count)
-	ReadParticlesAt(path, ps)
 	return h, ps
 }
 

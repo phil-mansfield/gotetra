@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import sys
 
 
-rhos = np.loadtxt(sys.argv[1])
+#rhos = np.loadtxt(sys.argv[1])
 N = int(sys.argv[2])
 rhos = np.reshape(rhos, (N, N, N)) / np.mean(rhos)
 # rhos = np.clip(rhos, np.min(1e-2), np.max(rhos))
