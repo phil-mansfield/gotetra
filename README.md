@@ -16,17 +16,13 @@ Project Structure
 
  This project contains the following subpackages:
 
-- Package `catalog` handles reading to and writing from different formats of
-particle catalogs.
+- Package `io` handles all catalog and phase sheet io.
 
 - Package `geom` provides functions for computing properties of 3D objects
 within domains with periodic boundary conditions.
 
-- Package `scripts` contains numerous large scripts for actually computing
-quantities.
-
-- Package `scripts/helper` contains helper functions for script writing which
-are too specific to the IO model to inlcude in a direct subpackage.
+- Package `rand` contains functions for computing random floating point
+numbers.
 
 - Package `density` interpolates particle sequences onto density grids.
 
