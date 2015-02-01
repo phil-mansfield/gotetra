@@ -12,7 +12,7 @@ type Grid struct {
 
 // CellBounds represents a bounding box aligned to grid cells.
 type CellBounds struct {
-	Min, Max [3]int
+	Origin, Width [3]int
 }
 
 // NewGrid returns a new Grid instance.
@@ -43,9 +43,9 @@ func (g *Grid) CellBounds() *CellBounds {
 
 // BoundsAt puts a Grid' bounding box at the specified location.
 func (g *Grid) CellBoundsAt(out *CellBounds) {
-	out.Min = g.Origin
+	out.Origin = g.Origin
 	for d := 0; d < 3; d++ {
-		out.Max[d] = out.Min[d]
+		out.Width[d] = g.Width
 	}
 }
 
@@ -65,7 +65,7 @@ func (g *Grid) IdxCheck(x, y, z int) (idx int, ok bool) {
 	return g.Idx(x, y, z), true
 }
 
-// TODO: make this correct.
+// TODO: make this correct. Doesn't account for the origin.
 func (g *Grid) Wrap(x, y, z int) (wx, wy, wz int) {
 	wx = x % g.Width
 	if wx < 0 {
@@ -107,35 +107,21 @@ func pMod(x, y int) int {
 	return m
 }
 
-func (g *Grid) Intersect(cb *CellBounds, bounds *Grid) bool {
-	allContained := true
+func (cb1 *CellBounds) Intersect(cb2 *CellBounds, width int) bool {
+	intersect := true
+	w2 := width / 2
 
-	for i := 0; i < 3; i++ {
-		allContained = allContained && wrapOverlap(cb.Min[i], cb.Max[i],
-			g.Origin[i], g.uBounds[i], bounds.Width)
+	for i := 0; intersect && i < 3; i++ {
+		diff := cb1.Origin[i] - cb2.Origin[i]
+		if diff > w2 { 
+			diff -= width 
+		} else if diff < -w2 {
+			diff += width
+		}
+
+		intersect = intersect &&
+			((diff >= 0 && diff < cb2.Width[i]) || 
+			(diff < 0 && -diff < cb1.Width[i]))
 	}
-
-	return allContained
-}
-
-func wrapOverlap(wMin, wMax, min, max, width int) bool {
-	if overlap(wMin, wMax, min, max) {
-		return true
-	}
-
-	if wMax >= width {
-		wMin -= width
-		wMax -= width
-		return overlap(wMin, wMax, min, max)
-	} else if wMin < 0 {
-		wMin += width
-		wMax += width
-		return overlap(wMin, wMax, min, max)
-	}
-
-	return false
-}
-
-func overlap(min1, max1, min2, max2 int) bool {
-	return !(min1 > max2 || min2 > max1)
+	return intersect
 }

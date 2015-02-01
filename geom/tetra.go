@@ -383,30 +383,47 @@ func (t *Tetra) CellBounds(cellWidth float64) *CellBounds {
 }
 
 func (t *Tetra) CellBoundsAt(cellWidth float64, cb *CellBounds) {
-	bary := t.Barycenter()
+	pivot := &t.Corners[0]
 
-	for i := 0; i < 4; i++ {
-		t.Corners[i].SubAt(bary, t.width, &t.sb.c[i]).AddSelf(bary)
+	maxDiffs := &t.sb.d[0]
+	minDiffs := &t.sb.d[1]
+	buf := &t.sb.d[2]
+
+	// Ideally, the tetrahedron corners should already be in a
+	// configuration which doesn't require the modulo. Fix that
+	// next time.
+	t.Corners[1].SubAt(pivot, t.width, buf)
+	for j := 0; j < 3; j++ {
+		x := buf[j]
+		maxDiffs[j], minDiffs[j] = x, x
 	}
 
-	for i, vec := range t.sb.c {
-		if i == 0 {
-			for j := 0; j < 3; j++ {
-				// d[0] = Min, d[1] = Max
-				t.sb.d[0][j], t.sb.d[1][j] = vec[j], vec[j]
-			}
-			continue
-		}
-
+	for i := 2; i < 4; i++ {
+		t.Corners[i].SubAt(pivot, t.width, buf)
 		for j := 0; j < 3; j++ {
-			t.sb.d[0][j], t.sb.d[1][j] = minMax(vec[j],
-				t.sb.d[0][j], t.sb.d[1][j])
+			x := buf[j]
+			if x > maxDiffs[j] {
+				maxDiffs[j] = x
+			} else if x < minDiffs[j] {
+				minDiffs[j] = x
+			}
 		}
 	}
+
+	// This is somewhat slow due to repreated for loops.
+	// Benchmark, benchmark, benchmark.
+	maxDiffs.SubSelf(minDiffs, t.width)
+	minDiffs.AddSelf(pivot).ModSelf(t.width)
+	floatWidth := maxDiffs
+	floatOrigin := minDiffs
 
 	for j := 0; j < 3; j++ {
-		cb.Min[j] = int(math.Floor(float64(t.sb.d[0][j]) / cellWidth))
-		cb.Max[j] = int(math.Ceil(float64(t.sb.d[1][j]) / cellWidth))
+		cb.Origin[j] = int(math.Floor(float64(floatOrigin[j]) / cellWidth))
+		cb.Width[j] = 1 + int(math.Floor(
+			float64(floatWidth[j] + floatOrigin[j]) / cellWidth),
+		)
+		
+		cb.Width[j] -= cb.Origin[j]
 	}
 }
 

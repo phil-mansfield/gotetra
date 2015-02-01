@@ -85,7 +85,28 @@ func BenchmarkCellBoundsAt(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		t := &ts[i%len(ts)]
 		t.baryValid = false
-		t.CellBoundsAt(1.0, cb)
+		t.CellBoundsAt(0.01, cb)
+	}
+}
+
+func BenchmarkIntersect(b *testing.B) {
+	ts := make([]Tetra, b.N/20 + 1)
+	gen := rand.NewTimeSeed(genType)
+	for i := range ts {
+		ts[i].random(gen, 1.0, 1.0)
+	}
+
+	cbs := make([]CellBounds, b.N/20 + 1)
+ 	for i := range cbs {
+		ts[i].CellBoundsAt(0.01, &cbs[i])
+	}
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		cb1 := &cbs[i % len(cbs)]
+		cb2 := &cbs[(i+1) % len(cbs)]
+		cb1.Intersect(cb2, 100)
 	}
 }
 
@@ -360,13 +381,13 @@ func TestCellBounds(t *testing.T) {
 		cb               *CellBounds
 	}{
 		{&Vec{50, 50, 50}, &Vec{51, 50, 50}, &Vec{50, 51, 50}, &Vec{50, 50, 51},
-			100.0, 1.0, &CellBounds{[3]int{50, 50, 50}, [3]int{51, 51, 51}}},
+			100.0, 1.0, &CellBounds{[3]int{50, 50, 50}, [3]int{2, 2, 2}}},
 		{&Vec{80, 80, 80}, &Vec{110, 80, 80}, &Vec{80, 110, 80}, &Vec{80, 80, 110},
-			100.0, 1.0, &CellBounds{[3]int{80, 80, 80}, [3]int{110, 110, 110}}},
+			100.0, 1.0, &CellBounds{[3]int{80, 80, 80}, [3]int{31, 31, 31}}},
 		{&Vec{80, 80, 80}, &Vec{10, 80, 80}, &Vec{80, 10, 80}, &Vec{80, 80, 10},
-			100.0, 1.0, &CellBounds{[3]int{80, 80, 80}, [3]int{110, 110, 110}}},
+			100.0, 1.0, &CellBounds{[3]int{80, 80, 80}, [3]int{31, 31, 31}}},
 		{&Vec{80, 80, 80}, &Vec{10, 80, 80}, &Vec{80, 20, 80}, &Vec{80, 80, 25},
-			100.0, 1.0, &CellBounds{[3]int{80, 80, 80}, [3]int{110, 120, 125}}},
+			100.0, 1.0, &CellBounds{[3]int{80, 80, 80}, [3]int{31, 41, 46}}},
 	}
 
 	for i, test := range table {
@@ -381,37 +402,39 @@ func TestCellBounds(t *testing.T) {
 }
 
 func TestIntersect(t *testing.T) {
-	g := NewGrid(&[3]int{5, 5, 5}, 10)
-	bg := NewGrid(&[3]int{0, 0, 0}, 20)
+	width := 20
+	ref := &CellBounds{[3]int{5, 5, 5}, [3]int{11, 11, 11}}
 
 	table := []struct {
 		cb *CellBounds
 		res bool
 	} {
-		{&CellBounds{[3]int{5, 5, 5}, [3]int{15, 15, 15}}, true},
-		{&CellBounds{[3]int{15, 15, 15}, [3]int{15, 15, 15}}, true},
-		{&CellBounds{[3]int{5, 5, 5}, [3]int{5, 5, 5}}, true},
+		{&CellBounds{[3]int{5, 5, 5}, [3]int{11, 11, 11}}, true},
+		{&CellBounds{[3]int{15, 15, 15}, [3]int{1, 1, 1}}, true},
+		{&CellBounds{[3]int{5, 5, 5}, [3]int{1, 1, 1}}, true},
 
-		{&CellBounds{[3]int{17, 17, 17}, [3]int{18, 18, 18}}, false},
-		{&CellBounds{[3]int{2, 2, 2}, [3]int{3, 3, 3}}, false},
-		{&CellBounds{[3]int{5, 5, 5}, [3]int{15, 15, 15}}, true},
-		{&CellBounds{[3]int{6, 6, 6}, [3]int{14, 14, 14}}, true},
-		{&CellBounds{[3]int{4, 4, 4}, [3]int{16, 16, 16}}, true},
+		{&CellBounds{[3]int{17, 17, 17}, [3]int{2, 2, 2}}, false},
+		{&CellBounds{[3]int{2, 2, 2}, [3]int{2, 2, 2}}, false},
+		{&CellBounds{[3]int{5, 5, 5}, [3]int{11, 11, 11}}, true},
+		{&CellBounds{[3]int{6, 6, 6}, [3]int{8, 8, 8}}, true},
+		{&CellBounds{[3]int{4, 4, 4}, [3]int{13, 13, 13}}, true},
 
-		{&CellBounds{[3]int{6, 16, 6}, [3]int{14, 17, 14}}, false},
-		{&CellBounds{[3]int{4, 16, 4}, [3]int{16, 17, 16}}, false},
-		{&CellBounds{[3]int{6, 3, 6}, [3]int{14, 4, 14}}, false},
-		{&CellBounds{[3]int{4, 3, 4}, [3]int{16, 4, 16}}, false},
+		{&CellBounds{[3]int{6, 16, 6}, [3]int{8, 2, 8}}, false},
+		{&CellBounds{[3]int{4, 16, 4}, [3]int{13, 2, 13}}, false},
+		{&CellBounds{[3]int{6, 3, 6}, [3]int{9, 2, 9}}, false},
+		{&CellBounds{[3]int{4, 3, 4}, [3]int{13, 2, 13}}, false},
 
-		{&CellBounds{[3]int{-10, -10, -10}, [3]int{1, 1, 1}}, true},
-		{&CellBounds{[3]int{19, 19, 19}, [3]int{30, 30, 30}}, true},
+		{&CellBounds{[3]int{-10, -10, -10}, [3]int{12, 12, 12}}, true},
+		{&CellBounds{[3]int{19, 19, 19}, [3]int{12, 12, 12}}, true},
 
-		{&CellBounds{[3]int{-3, -3, -3}, [3]int{1, 1, 1}}, false},
-		{&CellBounds{[3]int{19, 19, 19}, [3]int{23, 23, 23}}, false},
+		{&CellBounds{[3]int{-3, -3, -3}, [3]int{5, 5, 5}}, false},
+		{&CellBounds{[3]int{19, 19, 19}, [3]int{5, 5, 5}}, false},
 	}
 
 	for i, test := range table {
-		if g.Intersect(test.cb, bg) != test.res {
+		if ref.Intersect(test.cb, width) != test.res ||
+			test.cb.Intersect(ref, width) != test.res {
+
 			t.Errorf("%d) Got incorrect Intersect result for %v.\n", i, test.cb)
 		}
 	}
