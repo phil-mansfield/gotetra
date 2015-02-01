@@ -44,6 +44,7 @@ const (
 )
 
 var (
+	// Yeah, this one was fun to figure out.
 	dirs = [TetraDirCount][2][3]int64{
 		{{1, 0, 0}, {1, 1, 0}},
 		{{1, 0, 0}, {1, 0, 1}},
@@ -79,7 +80,7 @@ func (t *Tetra) Init(c1, c2, c3, c4 *Vec, width float64) (ok bool) {
 	c4.ModAt(width, &t.Corners[3])
 
 	t.width = width
-
+	
 	// Remaining fields are buffers and need not be initialized.
 
 	return true
@@ -89,9 +90,9 @@ func (t *Tetra) Init(c1, c2, c3, c4 *Vec, width float64) (ok bool) {
 // with an anchor point at the given index. The parameter dir selects a
 // particular tetrahedron configuration and must line in the range
 // [0, TetraDirCount).
-func NewTetraIdxs(idx, countWidth int64, dir int) *TetraIdxs {
+func NewTetraIdxs(idx, countWidth, skip int64, dir int) *TetraIdxs {
 	idxs := &TetraIdxs{}
-	return idxs.Init(idx, countWidth, dir)
+	return idxs.Init(idx, countWidth, skip, dir)
 }
 
 // This wastes an integer multiplication. Oh no!
@@ -122,7 +123,7 @@ func compressCoords(x, y, z, dx, dy, dz, countWidth int64) int64 {
 }
 
 // Init initializes a TetraIdxs collection using the same rules as NewTetraIdxs.
-func (idxs *TetraIdxs) Init(idx, countWidth int64, dir int) *TetraIdxs {
+func (idxs *TetraIdxs) Init(idx, countWidth, skip int64, dir int) *TetraIdxs {
 	if dir < 0 || dir >= 6 {
 		panic(fmt.Sprintf("Unknown direction %d", dir))
 	}
@@ -134,12 +135,16 @@ func (idxs *TetraIdxs) Init(idx, countWidth int64, dir int) *TetraIdxs {
 	z := idx / countArea
 
 	idxs[0] = compressCoords(
-		x, y, z, dirs[dir][0][0], dirs[dir][0][1], dirs[dir][0][2], countWidth,
+		x, y, z,
+		skip * dirs[dir][0][0], skip * dirs[dir][0][1], skip * dirs[dir][0][2],
+		countWidth,
 	)
 	idxs[1] = compressCoords(
-		x, y, z, dirs[dir][1][0], dirs[dir][1][1], dirs[dir][1][2], countWidth,
+		x, y, z,
+		skip * dirs[dir][1][0], skip * dirs[dir][1][1], skip * dirs[dir][1][2],
+		countWidth,
 	)
-	idxs[2] = compressCoords(x, y, z, 1, 1, 1, countWidth)
+	idxs[2] = compressCoords(x, y, z, skip, skip, skip, countWidth)
 	idxs[3] = idx
 
 	return idxs
@@ -318,7 +323,7 @@ func DistributeUnit(xs, ys, zs []float64, vecBuf []Vec) {
 // DistributeTetra takes a set of points distributed across a unit tetrahedron
 // and distributed them across the given tetrahedron through barycentric
 // coordinate transformations.
-func (tet *Tetra) DistributeTetra(pts []Vec) {
+func (tet *Tetra) DistributeTetra(pts []Vec, out []Vec) {
 	bary := tet.Barycenter()
 	w := float32(tet.width)
 	// Some gross code to prevent allocations. cs are the displacement vectors
@@ -346,7 +351,7 @@ func (tet *Tetra) DistributeTetra(pts []Vec) {
 				val += w
 			}
 
-			pt[j] = val
+			out[i][j] = val
 		}
 	}
 }

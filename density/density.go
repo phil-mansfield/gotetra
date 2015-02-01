@@ -266,7 +266,7 @@ func (intr *cellCenter) Interpolate(gs []Grid, mass float64, ids []int64, xs []g
 
 	for _, id := range ids {
 		for dir := 0; dir < 6; dir++ {
-			intr.idxBuf.Init(id, intr.countWidth, dir)
+			intr.idxBuf.Init(id, intr.countWidth, 1, dir)
 
 			p0 := intr.man.Get(intr.idxBuf[0])
 			p1 := intr.man.Get(intr.idxBuf[1])
@@ -347,7 +347,7 @@ func (intr *mcarlo) Interpolate(gs []Grid, mass float64, ids []int64, xs []geom.
 
 	for _, id := range ids {
 		for dir := 0; dir < 6; dir++ {
-			intr.idxBuf.Init(id, intr.countWidth, dir)
+			intr.idxBuf.Init(id, intr.countWidth, 1, dir)
 			
 			p0 := intr.man.Get(intr.idxBuf[0])
 			p1 := intr.man.Get(intr.idxBuf[1])
@@ -393,7 +393,7 @@ func (intr *sobol) Interpolate(gs []Grid, mass float64, ids []int64, xs []geom.V
 
 	for _, id := range ids {
 		for dir := 0; dir < 6; dir++ {
-			intr.idxBuf.Init(id, intr.countWidth, dir)
+			intr.idxBuf.Init(id, intr.countWidth, 1, dir)
 			
 			p0 := intr.man.Get(intr.idxBuf[0])
 			p1 := intr.man.Get(intr.idxBuf[1])

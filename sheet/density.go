@@ -10,6 +10,12 @@ import (
 	"github.com/phil-mansfield/gotetra/geom"
 )
 
+const (
+	// An arbitrarily chosen prime number indicating the number of precomputed
+	// random sequences to use for the MonteCarlo interpolator.
+	UnitBuffers = 54779
+)
+
 // Interpolator creates a grid-based density distribution from seqeunces of
 // positions.
 type Interpolator interface {
@@ -33,6 +39,7 @@ type Cell struct {
 type cic struct { }
 type ngp struct { }
 
+// The ordering of these fields makes no goddamned sense.
 type mcarlo struct {
 	subIntr Interpolator
 	segWidth int64
@@ -40,10 +47,12 @@ type mcarlo struct {
 
 	gen *rand.Generator
 
+	skip int64
 	// Buffers
 	idxBuf geom.TetraIdxs
 	tet geom.Tetra
-	randBuf []float64
+
+	unitBufs [UnitBuffers][]geom.Vec
 	vecBuf []geom.Vec
 }
 
@@ -74,13 +83,34 @@ func NearestGridPoint() Interpolator {
 	return &ngp{}
 }
 
-func MonteCarlo(segWidth int64, gen *rand.Generator, points int) Interpolator {
-	return &mcarlo{
-		NearestGridPoint(), segWidth, points, gen,
+func MonteCarlo(
+	segWidth int64,
+	gen *rand.Generator,
+	points int,
+	skip int64,
+) Interpolator {
+	mc := &mcarlo{
+		NearestGridPoint(), segWidth, points, gen, skip,
 		geom.TetraIdxs{}, geom.Tetra{},
-		make([]float64, points * 3),
+		[UnitBuffers][]geom.Vec{},
 		make([]geom.Vec, points),
 	}
+
+	xs := make([]float64, points)
+	ys := make([]float64, points)
+	zs := make([]float64, points)
+
+	for i := range mc.unitBufs {
+		buf := make([]geom.Vec, points)
+		gen.UniformAt(0.0, 1.0, xs)
+		gen.UniformAt(0.0, 1.0, ys)
+		gen.UniformAt(0.0, 1.0, zs)
+		geom.DistributeUnit(xs, ys, zs, buf)
+		
+		mc.unitBufs[i] = buf
+	}
+
+	return mc
 }
 
 // Interpolate interpolates a sequence of particles onto a density grid via a
@@ -157,20 +187,23 @@ func cellPoints(x, y, z, cw float64) (xc, yc, zc float64) {
 }
 
 func (intr *mcarlo) Interpolate(g *Grid, mass float64, xs []geom.Vec) {
-	cb := &geom.CellBounds{}
-
 	segWidth := intr.segWidth
 	gridWidth := segWidth + 1
-	pts := len(intr.vecBuf)
+	idxWidth := intr.segWidth / intr.skip
 
-	for z := int64(0); z < segWidth; z++ {
-		for y := int64(0); y < segWidth; y++ {
-			for x := int64(0); x < segWidth; x++ {
+	ptMass := mass / float64(len(intr.vecBuf)) / 6.0 *
+		float64(intr.skip * intr.skip * intr.skip)
 
-				idx := x + y * gridWidth + z * gridWidth * gridWidth
+	for z := int64(0); z < idxWidth; z++ {
+		for y := int64(0); y < idxWidth; y++ {
+			for x := int64(0); x < idxWidth; x++ {
+
+				idx := (x * intr.skip) +
+					(y * intr.skip) * gridWidth +
+					(z * intr.skip) * gridWidth * gridWidth
 
 				for dir := 0; dir < 6; dir++ {
-					intr.idxBuf.Init(idx, gridWidth, dir)
+					intr.idxBuf.Init(idx, gridWidth, intr.skip, dir)
 					
 					intr.tet.Init(
 						&xs[intr.idxBuf[0]],
@@ -180,12 +213,12 @@ func (intr *mcarlo) Interpolate(g *Grid, mass float64, xs []geom.Vec) {
 						g.BoxWidth,
 					)
 					
-					intr.tet.CellBoundsAt(g.CellWidth, cb)
-					ptMass := mass / float64(pts) / 6.0
-					intr.tet.RandomSample(intr.gen, intr.randBuf, intr.vecBuf)
+					intr.tet.DistributeTetra(
+						intr.unitBufs[idx % UnitBuffers],
+						intr.vecBuf,
+					)
 					intr.subIntr.Interpolate(g, ptMass, intr.vecBuf)
 				}
-
 			}
 		}
 	}

@@ -35,8 +35,8 @@ func main() {
 	var (
 		x, y, z, minSheet, maxSheet int
 		createSheet, createCatalog, compareDensity, densityMode, tetraStats bool
-		sheetDensity bool
-		cells int
+		sheetDensity, sheetStats bool
+		cells, skip int
 	)
 
 	logPath := flag.String("Log", "", "Location to write log statements to. " + 
@@ -47,6 +47,7 @@ func main() {
 	flag.IntVar(&y, "Y", -1, "y location of operation.")
 	flag.IntVar(&z, "Z", -1, "z location of operation.")
 	flag.IntVar(&cells, "Cells", -1, "Width of grid in cells.")
+	flag.IntVar(&skip, "Skip", 1, "Width of a tetrahedron in particles.")
 	flag.IntVar(&minSheet, "MinSheet", 0, "Lowest index of a sheet file that will be read.")
 	flag.IntVar(&maxSheet, "MaxSheet", 511, "Highest index of a sheet file that will be read.")
 
@@ -62,6 +63,8 @@ func main() {
 	flag.BoolVar(&densityMode, "Density", false,
 		"Compute density of a cell. Requires Method flag to be set.")
 	flag.BoolVar(&tetraStats, "TetraStats", false,
+		"Print basic geometry statistics about the tetrahedra in a given cell.")
+	flag.BoolVar(&sheetStats, "SheetStats", false,
 		"Print basic geometry statistics about the tetrahedra in a given cell.")
 
 	method := flag.String("Method", "", "Estimator method. Can be set to" + 
@@ -92,7 +95,7 @@ func main() {
 
 	// This is terribly designed.
 	modeName := checkMode(createCatalog, createSheet, compareDensity,
-		tetraStats, densityMode, sheetDensity)
+		tetraStats, densityMode, sheetDensity, sheetStats)
 
 	switch {
 	case createCatalog:
@@ -143,7 +146,6 @@ func main() {
 			source, target)
 	case sheetDensity:
 		checkCells(cells, modeName)
-		checkCoords(x, y, z, modeName)
 		args := flag.Args()
 		if len(args) != 2 {
 			log.Fatalf("Mode %s requires a source and target directory.",
@@ -152,9 +154,17 @@ func main() {
 
 		source := args[0]
 		target := args[1]
-		sheetDensityMain(x, y, z, cells, *points, source, target,
+		sheetDensityMain(cells, *points, skip, source, target,
 			minSheet, maxSheet)
+	case sheetStats:
+		checkCells(cells, modeName)
+		args := flag.Args()
+		if len(args) != 1 {
+			log.Fatalf("Mode %s requires a source directory.")
+		}
 
+		source := args[0]
+		sheetStatsMain(cells, skip, source, minSheet, maxSheet)
 	case compareDensity:
 		checkCells(cells, modeName)
 		checkCoords(x, y, x, modeName)
@@ -196,7 +206,7 @@ func checkCoords(x, y, z int, modeName string) {
 }
 
 func checkMode(createCatalog, createSheet, compareDensity,
-	tetraStats, density, sheetDensity bool) string {
+	tetraStats, density, sheetDensity, sheetStats bool) string {
 	// This function is not a good idea.
 	n := 0
 	modeStr := ""
@@ -229,6 +239,11 @@ func checkMode(createCatalog, createSheet, compareDensity,
 	if sheetDensity {
 		n++
 		modeStr = "SheetDensity"
+	}
+
+	if sheetStats {
+		n++
+		modeStr = "SheetStats"
 	}
 
 	if n != 1 {
@@ -403,7 +418,7 @@ func tetraStatsMain(x, y, z, cells int, sourceDir string) {
 
 	for i := range centerPs {
 		for dir := 0; dir < 6; dir++ {
-			idxBuf.Init(centerPs[i].Id, h0.CountWidth, dir)
+			idxBuf.Init(centerPs[i].Id, h0.CountWidth, 1, dir)
 			p0 := man.Get(idxBuf[0])
 			p1 := man.Get(idxBuf[1])
 			p2 := man.Get(idxBuf[2])
@@ -937,8 +952,140 @@ func minMaxCells(hs []sheet.Header, cells int) (int, int) {
 	return min, max
 }
 
-func sheetDensityMain(x, y, z, cells int, points int, sourceDir, outDir string,
-	minSheet, maxSheet int) {
+func sheetStatsMain(cells, skipi int, sourceDir string, minSheet, maxSheet int) {
+	if !validCellNum(cells) {
+		log.Fatalf("Invalid cell number %d (sorry!).", cells)
+	} else if cells > maxRhoWidth {
+		log.Fatalf("Cell count is too big. Let's die for the time being.")
+	}
+
+	infos, err := ioutil.ReadDir(sourceDir)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	h := &sheet.Header{}
+	sheet.ReadHeaderAt(path.Join(sourceDir, infos[0].Name()), h)
+
+	xs := make([]geom.Vec, h.GridWidth * h.GridWidth * h.GridWidth)
+	vs := make([]geom.Vec, h.GridWidth * h.GridWidth * h.GridWidth)
+
+	skip := int64(skipi)
+	idxWidth := h.SegmentWidth / int64(skip)
+	idxs := &geom.TetraIdxs{}
+	tet := &geom.Tetra{}
+
+	bigVVal := 1e6
+	binNum := 200
+
+	minDx, maxDx := float32(math.MaxFloat32), float32(0.0)
+	minDv, maxDv := float32(math.MaxFloat32), float32(0.0)
+	minDxdv, maxDxdv := float32(math.MaxFloat32), float32(0.0)
+	dxZero, dvZero := 0, 0
+
+	xLogMin, xLogMax := float32(-15.0), float32(2.0)
+	vLogMin, vLogMax := float32(-8.0), float32(11.0)
+	vxLogMin, vxLogMax := float32(-13.0), float32(10.0)
+	xLogWidth := float32(xLogMax - xLogMin) / float32(binNum)
+	vLogWidth := float32(vLogMax - vLogMin) / float32(binNum)
+	vxLogWidth := float32(vxLogMax - vxLogMin) / float32(binNum)
+
+	xCounts, vCounts := make([]int, binNum), make([]int, binNum)
+	xBins, vBins := make([]float32, binNum), make([]float32, binNum)
+	// whatever
+	vxCounts, vxBins := make([]int, binNum), make([]float32, binNum)
+
+	for i := 0; i < binNum; i++ {
+		xBins[i] = float32(math.Pow(10, float64(float32(i) * xLogWidth + xLogMin)))
+		vBins[i] = float32(math.Pow(10, float64(float32(i) * vLogWidth + vLogMin)))
+		vxBins[i] = float32(math.Pow(10, float64(float32(i) * vxLogWidth + vxLogMin)))
+	}
+
+	log.Println("Starting number crunching.")
+
+	for i := range infos {
+		if i < minSheet || i > maxSheet { continue }
+		file := path.Join(sourceDir, infos[i].Name())
+		log.Printf("Reading %s", file)
+		log.Printf("Min Dx^3 = %g, Max Dx^3 = %g", minDx, maxDx)
+		log.Printf("Min Dv^3 = %g, Max Dv^3 = %g", minDv, maxDv)
+		log.Printf("Min Dv^3Dx^3 = %g, Max Dv^3Dx^3 = %g", minDxdv, maxDxdv)
+
+		sheet.ReadPositionsAt(file, xs)
+		sheet.ReadVelocitiesAt(file, vs)
+		runtime.GC()
+
+		for z := int64(0); z < idxWidth; z++ {
+			for y := int64(0); y < idxWidth; y++ {
+				for x := int64(0); x < idxWidth; x++ {
+					
+					idx := (x * skip) +
+						(y * skip) * h.GridWidth +
+						(z * skip) * h.GridWidth * h.GridWidth
+					
+					for dir := 0; dir < 6; dir++ {
+						idxs.Init(idx, h.GridWidth, skip, dir)
+					
+						tet.Init(
+							&xs[idxs[0]], &xs[idxs[1]],
+							&xs[idxs[2]], &xs[idxs[3]],
+							h.TotalWidth,
+						)
+						
+						dx := float32(tet.Volume())
+						if dx <= 0 {
+							dxZero++
+							continue
+						}
+						minDx, maxDx = minMax(minDx, maxDx, float32(dx))
+
+						tet.Init(
+							&vs[idxs[0]], &vs[idxs[1]],
+							&vs[idxs[2]], &vs[idxs[3]],
+							bigVVal,
+						)
+						
+						dv := float32(tet.Volume())
+						if dv <= 0 {
+							dvZero++
+							continue
+						}
+						minDv, maxDv = minMax(minDv, maxDv, dv)
+						minDxdv, maxDxdv = minMax(minDxdv, maxDxdv, dv * dx)
+						
+						xi := int((float32(math.Log10(float64(dx))) - xLogMin) / xLogWidth)
+						vi := int((float32(math.Log10(float64(dv))) - vLogMin) / vLogWidth)
+						vxi := int((float32(math.Log10(float64(dv * dx))) - vxLogMin) / vxLogWidth)
+
+						vCounts[vi]++
+						xCounts[xi]++
+						vxCounts[vxi]++
+					}
+				}
+			}
+		}
+	}
+
+	fmt.Printf("# Min Dx^3 = %g, Max Dx^3 = %g", minDx, maxDx)
+	fmt.Printf("# Dx^3 = 0 for %d tetrahedra", dxZero)
+	fmt.Printf("# Min Dv^3 = %g, Max Dv^3 = %g", minDv, maxDv)
+	fmt.Printf("# Dv^3 = 0 for %d tetrahedra", dvZero)
+	fmt.Printf("# Min Dv^3Dx^3 = %g, Max Dv^3Dx^3 = %g", minDxdv, maxDxdv)
+
+	fmt.Println("#")
+	fmt.Printf("# %10s %8s %10s %8s %10s %8s\n",
+		"xBins", "xCounts", "vBins", "vCounts", "vxBins", "vxCounts")
+	for i := range vBins {
+		fmt.Printf("%10.4g %8d %10.5g %8d %10.4g %8d\n",
+			xBins[i], xCounts[i], vBins[i], vCounts[i],
+			vxBins[i], vxCounts[i])
+	}
+}
+
+func sheetDensityMain(cells, points, skip int,
+	sourceDir, outDir string,
+	minSheet, maxSheet int,
+) {
 	if points <= 0 {
 		log.Fatalf("Positive value for Points is required.")
 	} else if !validCellNum(cells) {
@@ -971,7 +1118,7 @@ func sheetDensityMain(x, y, z, cells int, points int, sourceDir, outDir string,
 
 	xs := make([]geom.Vec, hs[0].GridCount)
 	intr := sheet.MonteCarlo(hs[0].SegmentWidth,
-		rand.NewTimeSeed(rand.Xorshift), points)
+		rand.NewTimeSeed(rand.Xorshift), points, int64(skip))
 
 	log.Printf("Initial Alloc: %d MB, Initial Sys: %d MB",
 		ms.Alloc >> 20, ms.Sys >> 20)
@@ -993,7 +1140,7 @@ func sheetDensityMain(x, y, z, cells int, points int, sourceDir, outDir string,
 
 
 	out := path.Join(outDir,
-		fmt.Sprintf("density_%d_%d.dat", minSheet, maxSheet))
+		fmt.Sprintf("density_%d_%d_skip%d.dat", minSheet, maxSheet, skip))
 	log.Printf("Writing %s", out)
 	writeDensity(out, rhos)
 }
