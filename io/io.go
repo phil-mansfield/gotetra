@@ -1,11 +1,14 @@
-package catalog
+package io
 
 import (
 	"encoding/binary"
 	"fmt"
 	"io"
 	"math"
+	"log"
 	"os"
+
+	"unsafe"
 
 	"github.com/phil-mansfield/gotetra/geom"
 )
@@ -22,8 +25,8 @@ type Particle struct {
 	Id int64
 }
 
-// Header describes meta-information about the current catalog.
-type Header struct {
+// CatalogHeader describes meta-information about the current catalog.
+type CatalogHeader struct {
 	Cosmo CosmologyHeader
 
 	Mass       float64 // Mass of one particle
@@ -73,8 +76,8 @@ func readInt32(r io.Reader, order binary.ByteOrder) int32 {
 
 // Standardize returns a Header that corresponds to the source
 // Gadget 2 header.
-func (gh *gadgetHeader) Standardize() *Header {
-	h := &Header{}
+func (gh *gadgetHeader) Standardize() *CatalogHeader {
+	h := &CatalogHeader{}
 
 	h.Count = int64(gh.NPart[1] + gh.NPart[0]<<32)
 	h.TotalCount = int64(gh.NPartTotal[1] + gh.NPartTotal[0]<<32)
@@ -103,7 +106,7 @@ func (h *gadgetHeader) WrapDistance(x float64) float64 {
 
 // ReadGadgetHeader reads a Gadget catalog and returns a standardized
 // gotetra containing its information.
-func ReadGadgetHeader(path string, order binary.ByteOrder) *Header {
+func ReadGadgetHeader(path string, order binary.ByteOrder) *CatalogHeader {
 	f, err := os.Open(path)
 	if err != nil {
 		panic(err)
@@ -196,7 +199,10 @@ func ReadGadgetParticlesAt(
 // ReadGadget reads the gadget particle catalog located at the given location
 // and written with the given endianness. Its header and particle sequence
 // are returned in a standardized format.
-func ReadGadget(path string, order binary.ByteOrder) (*Header, []Particle) {
+func ReadGadget(
+	path string, order binary.ByteOrder,
+) (*CatalogHeader, []Particle) {
+
 	h := ReadGadgetHeader(path, order)
 	floatBuf := make([]float32, 3 * h.Count)
 	intBuf := make([]int64, h.Count)
@@ -214,5 +220,141 @@ func endianness(flag int32) binary.ByteOrder {
 		return binary.BigEndian
 	} else {
 		panic("Unrecognized endianness flag.")
+	}
+}
+
+/* 
+The binary format used for phase sheets is as follows:
+    |-- 1 --||-- 2 --||-- ... 3 ... --||-- ... 4 ... --||-- ... 5 ... --|
+
+    1 - (int32) Flag indicating the endianness of the file. 0 indicates a big
+        endian byte ordering and -1 indicates a little endian byte order.
+    2 - (int32) Size of a Header struct. Should be checked for consistency.
+    3 - (sheet.Header) Header dile containing meta-information about the
+        sheet fragment.
+    4 - ([][3]float32) Contiguous block of x, y, z coordinates. Given in Mpc.
+    5 - ([][3]float32) Contiguous block of v_x, v_y, v_z coordinates.
+ */
+type SheetHeader struct {
+	Cosmo CosmologyHeader
+	Count, CountWidth int64
+	SegmentWidth, GridWidth, GridCount int64
+	Idx, Cells int64
+
+	Mass float64
+	TotalWidth float64
+	Mins geom.Vec
+	Widths geom.Vec
+}
+
+func readSheetHeaderAt(
+	file string, hdBuf *SheetHeader,
+) (*os.File, binary.ByteOrder) {
+	f, err := os.OpenFile(file, os.O_RDONLY, os.ModePerm)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	// order doesn't matter for this read, since flags are symmetric.
+	order := endianness(readInt32(f, binary.LittleEndian))
+
+	headerSize := readInt32(f, order)
+	if headerSize != int32(unsafe.Sizeof(SheetHeader{})) {
+		log.Fatalf("Expected catalog.SheetHeader size of %d, found %d.",
+			unsafe.Sizeof(SheetHeader{}), headerSize)
+	}
+
+	_, err = f.Seek(4 + 4, 0)
+	if err != nil {
+		log.Fatalf(err.Error())
+	}
+
+	binary.Read(f, order, hdBuf)
+
+	return f, order
+}
+
+// ReadHeaderAt reads the header in the given file into the target Header.
+func ReadSheetHeaderAt(file string, hdBuf *SheetHeader) {
+	f, _ := readSheetHeaderAt(file, hdBuf)
+	if err := f.Close(); err != nil {
+		log.Fatalf(err.Error())
+	}
+}
+
+// ReadPositionsAt reads the velocities in the given file into a buffer.
+func ReadSheetPositionsAt(file string, xsBuf []geom.Vec) {
+	h := &SheetHeader{}
+	f, order := readSheetHeaderAt(file, h)
+	if h.GridCount != int64(len(xsBuf)) {
+		log.Fatalf("Position buffer has length %d, but file %s has %d vectors.",
+			len(xsBuf), file, h.GridCount)
+	}
+
+	// Go to block 4 in the file.
+	// The file pointer should already be here, but let's just be safe, okay?
+	f.Seek(int64(4 + 4 + int(unsafe.Sizeof(SheetHeader{}))), 0)
+	if err := binary.Read(f, order, xsBuf); err != nil {
+		log.Fatalf(err.Error())
+	}
+
+	if err := f.Close(); err != nil {
+		log.Fatalf(err.Error())
+	}
+}
+
+// ReadVelocitiesAt reads the velocities in the given file into a buffer.
+func ReadSheetVelocitiesAt(file string, vsBuf []geom.Vec) {
+	h := &SheetHeader{}
+	f, order := readSheetHeaderAt(file, h)
+	if h.GridCount != int64(len(vsBuf)) {
+		log.Fatalf("Velocity buffer has length %d, but file %s has %d vectors.",
+			len(vsBuf), file, h.GridCount)
+	}
+
+	// Go to block 5 in the file.
+	f.Seek(int64(4 + 4 + int(unsafe.Sizeof(SheetHeader{})) +
+		3 * 4 * len(vsBuf)), 0)
+	if err := binary.Read(f, order, vsBuf); err != nil {
+		log.Fatalf(err.Error())
+	}
+
+	if err := f.Close(); err != nil {
+		log.Fatalf(err.Error())
+	}
+}
+
+// Write writes a grid of position and velocity vectors to a file, defined
+// by the given header.
+func WriteSheet(file string, h *SheetHeader, xs, vs []geom.Vec) {
+	if int(h.GridCount) != len(xs) {
+		log.Fatalf("Header count %d for file %s does not match xs length, %d",
+			h.GridCount, file, len(xs))
+	} else if int(h.GridCount) != len(vs) {
+		log.Fatalf("Header count %d for file %s does not match vs length, %d",
+			h.GridCount, file, len(xs))
+	} else if h.GridWidth*h.GridWidth*h.GridWidth != h.GridCount {
+		log.Fatalf("Header CountWidth %d doesn't match Count %d",
+			h.GridWidth, h.GridCount)
+	}
+
+	f, err := os.Create(file)
+	endiannessFlag := int32(0)
+	order := endianness(endiannessFlag)
+
+	if err = binary.Write(f, order, endiannessFlag); err != nil {
+		log.Fatalf(err.Error())
+	}
+	if err = binary.Write(f, order, int32(unsafe.Sizeof(SheetHeader{}))); err != nil {
+		log.Fatalf(err.Error())
+	}
+	if err = binary.Write(f, order, h); err != nil {
+		log.Fatalf(err.Error())
+	}
+	if err = binary.Write(f, order, xs); err != nil {
+		log.Fatalf(err.Error())
+	}
+	if err = binary.Write(f, order, vs); err != nil {
+		log.Fatalf(err.Error())
 	}
 }

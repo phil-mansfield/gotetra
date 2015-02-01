@@ -1,7 +1,6 @@
-package sheet
+package io
 
 import (
-	"github.com/phil-mansfield/gotetra/catalog"
 	"github.com/phil-mansfield/gotetra/geom"
 )
 
@@ -9,20 +8,20 @@ import (
 // appended to files on the fly without much overhead from I/O or without
 // excessive memory usage/reallocating.
 type ParticleBuffer struct {
-	buf  []catalog.Particle
+	buf  []Particle
 	idx  int
 	xs, vs []geom.Vec
 }
 
 // NewParticleBuffer creates a ParticleBuffer associated with the given file.
 func NewParticleBuffer(xs, vs []geom.Vec, bufSize int) *ParticleBuffer {
-	pb := &ParticleBuffer{make([]catalog.Particle, bufSize), 0, xs, vs}
+	pb := &ParticleBuffer{make([]Particle, bufSize), 0, xs, vs}
 	return pb
 }
 
 // Append adds a value to the float buffer, which will eventually be
 // written to the target file.
-func (pb *ParticleBuffer) Append(ps []catalog.Particle) {
+func (pb *ParticleBuffer) Append(ps []Particle) {
 	for _, p := range ps {
 		pb.buf[pb.idx] = p
 		pb.idx++

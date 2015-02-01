@@ -1,7 +1,7 @@
 /*package density interpolates sequences of particle positions onto a density
 grid.
 */
-package sheet
+package density
 
 import (
 	"math"
@@ -13,6 +13,9 @@ import (
 const (
 	// An arbitrarily chosen prime number indicating the number of precomputed
 	// random sequences to use for the MonteCarlo interpolator.
+	//
+	// Some more thought should be put into this because it gets prohibitively
+	// large for high particle counts.
 	UnitBuffers = 54779
 )
 

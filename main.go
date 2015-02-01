@@ -14,8 +14,8 @@ import (
 	"io/ioutil"
 
 	"github.com/phil-mansfield/gotetra/geom"
-	"github.com/phil-mansfield/gotetra/catalog"
-	"github.com/phil-mansfield/gotetra/sheet"
+	"github.com/phil-mansfield/gotetra/io"
+	"github.com/phil-mansfield/gotetra/density"
 	"github.com/phil-mansfield/gotetra/rand"
 )
 
@@ -204,10 +204,10 @@ func createSheetMain(cells int, matches []string, outPath string) {
 	writeGrids(outDir, hd, cells, xs, vs)
 }
 
-func createGrids(catalogs []string) (hd *catalog.Header, xs, vs []geom.Vec) {
-	hs := make([]catalog.Header, len(catalogs))
+func createGrids(catalogs []string) (hd *io.CatalogHeader, xs, vs []geom.Vec) {
+	hs := make([]io.CatalogHeader, len(catalogs))
 	for i := range hs {
-		hs[i] = *catalog.ReadGadgetHeader(catalogs[i], gadgetEndianness)
+		hs[i] = *io.ReadGadgetHeader(catalogs[i], gadgetEndianness)
 	}
 
 	maxLen := int64(0)
@@ -220,11 +220,11 @@ func createGrids(catalogs []string) (hd *catalog.Header, xs, vs []geom.Vec) {
 	xs = make([]geom.Vec, hs[0].TotalCount)
 	vs = make([]geom.Vec, hs[0].TotalCount)
 	
-	pBuf := make([]catalog.Particle, maxLen)
+	pBuf := make([]io.Particle, maxLen)
 	intBuf := make([]int64, maxLen)
 	floatBuf := make([]float32, maxLen * 3)
 
-	buf := sheet.NewParticleBuffer(xs, vs, catalogBufLen)
+	buf := io.NewParticleBuffer(xs, vs, catalogBufLen)
 
 	for i, cat := range catalogs {
 
@@ -237,7 +237,7 @@ func createGrids(catalogs []string) (hd *catalog.Header, xs, vs []geom.Vec) {
 		intBuf = intBuf[0: N]
 		pBuf = pBuf[0: N]
 
-		catalog.ReadGadgetParticlesAt(cat, gadgetEndianness,
+		io.ReadGadgetParticlesAt(cat, gadgetEndianness,
 			floatBuf, intBuf, pBuf)
 		runtime.GC()
 		buf.Append(pBuf)
@@ -250,7 +250,7 @@ func createGrids(catalogs []string) (hd *catalog.Header, xs, vs []geom.Vec) {
 	return &hs[0], xs, vs
 }
 
-func writeGrids(outDir string, hd *catalog.Header,
+func writeGrids(outDir string, hd *io.CatalogHeader,
 	cells int, xs, vs []geom.Vec) {
 
 	log.Println("Writing to directory", outDir)
@@ -261,7 +261,7 @@ func writeGrids(outDir string, hd *catalog.Header,
 	xsSeg := make([]geom.Vec, gridWidth * gridWidth * gridWidth)
 	vsSeg := make([]geom.Vec, gridWidth * gridWidth * gridWidth)
 
-	shd := &sheet.Header{}
+	shd := &io.SheetHeader{}
 	shd.Cosmo = hd.Cosmo
 	shd.CountWidth = hd.CountWidth
 	shd.Mass = hd.Mass
@@ -277,7 +277,7 @@ func writeGrids(outDir string, hd *catalog.Header,
 			for x := int64(0); x < shd.Cells; x++ {
 				copyToSegment(shd, xs, vs, xsSeg, vsSeg)
 				file := path.Join(outDir, fmt.Sprintf("sheet%d%d%d.dat", x, y,z))
-				sheet.Write(file, shd, xsSeg, vsSeg)
+				io.WriteSheet(file, shd, xsSeg, vsSeg)
 				runtime.GC()
 
 				if shd.Idx % 25 == 0 {
@@ -337,7 +337,7 @@ func minMax(min, max, x float32) (outMin, outMax float32) {
 	}
 }
 
-func copyToSegment(shd *sheet.Header, xs, vs, xsSeg, vsSeg []geom.Vec) {
+func copyToSegment(shd *io.SheetHeader, xs, vs, xsSeg, vsSeg []geom.Vec) {
 	xStart := shd.SegmentWidth * (shd.Idx % shd.Cells)
 	yStart := shd.SegmentWidth * ((shd.Idx / shd.Cells) % shd.Cells)
 	zStart := shd.SegmentWidth * (shd.Idx / (shd.Cells * shd.Cells))
@@ -380,7 +380,7 @@ func validCellNum(cells int) bool {
 	return cells == 1
 }
 
-func minMaxCells(hs []sheet.Header, cells int) (int, int) {
+func minMaxCells(hs []io.SheetHeader, cells int) (int, int) {
 	max := 0
 	min := math.MaxInt32 // We have problems if this is too big.
 	for i := range hs {
@@ -428,9 +428,9 @@ func sheetDensityMain(cells, points, skip int,
 		log.Fatal(err.Error())
 	}
 
-	hs := make([]sheet.Header, len(infos))
+	hs := make([]io.SheetHeader, len(infos))
 	for i, info := range infos {
-		sheet.ReadHeaderAt(path.Join(sourceDir, info.Name()), &hs[i])
+		io.ReadSheetHeaderAt(path.Join(sourceDir, info.Name()), &hs[i])
 	}
 
 	minCells, maxCells := minMaxCells(hs, cells)
@@ -438,11 +438,11 @@ func sheetDensityMain(cells, points, skip int,
 
 	rhos := make([]float64, cells * cells * cells)
 	// Oh God, this is the most confusing of all functions.
-	g := sheet.NewGrid(hs[0].TotalWidth, 1, rhos,
-		&sheet.Cell{cells, 0, 0, 0})
+	g := density.NewGrid(hs[0].TotalWidth, 1, rhos,
+		&density.Cell{cells, 0, 0, 0})
 
 	xs := make([]geom.Vec, hs[0].GridCount)
-	intr := sheet.MonteCarlo(hs[0].SegmentWidth,
+	intr := density.MonteCarlo(hs[0].SegmentWidth,
 		rand.NewTimeSeed(rand.Xorshift), points, int64(skip))
 
 	log.Printf("Initial Alloc: %d MB, Initial Sys: %d MB",
@@ -459,7 +459,7 @@ func sheetDensityMain(cells, points, skip int,
 			ms.Alloc >> 20, ms.Sys >> 20)
 
 		file := path.Join(sourceDir, infos[i].Name())
-		sheet.ReadPositionsAt(file, xs)
+		io.ReadSheetPositionsAt(file, xs)
 		intr.Interpolate(g, hs[0].Mass, xs)
 	}
 
