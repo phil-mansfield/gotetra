@@ -97,14 +97,25 @@ func (cb1 *CellBounds) Intersect(cb2 *CellBounds, width int) bool {
 }
 
 func (cb *CellBounds) ScaleVecs(vs []Vec, cells int, boxWidth float64) {
-	cellWidth := boxWidth / float64(cells)
+	scale := float64(cells) / boxWidth
+	fCells := float64(cells)
 
 	origin := &Vec{
 		float32(cb.Origin[0]), float32(cb.Origin[1]), float32(cb.Origin[2]),
 	}
 
 	for i := range vs {
-		vs[i].SubSelf(origin, boxWidth)
-		vs[i].ScaleSelf(cellWidth)
+		vs[i].ScaleSelf(scale)
+		vs[i].SubSelf(origin, fCells)
 	}
+}
+
+func fMinMax(min, max, x float32) (float32, float32) {
+	if x < min {
+		return x, max
+	}
+	if x > max {
+		return min, x
+	}
+	return min, max
 }

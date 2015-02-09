@@ -24,7 +24,7 @@ type Interpolator interface {
 	// density grid used by the Interpolator. Particles should all be within
 	// the bounds of the bounding grid and points not within the interpolation
 	// grid will be ignored.
-	Interpolate(rhos []float32, cb *geom.CellBounds, mass float64, xs []geom.Vec)
+	Interpolate(rhos []float64, cb *geom.CellBounds, mass float64, xs []geom.Vec)
 }
 
 type ngp struct { }
@@ -83,27 +83,26 @@ func MonteCarlo(
 // Interpolate interpolates a sequence of particles onto a density grid via a
 // nearest grid point scheme.
 func (intr *ngp) Interpolate(
-	rhos []float32, cb *geom.CellBounds, mass float64, xs []geom.Vec,
+	rhos []float64, cb *geom.CellBounds, ptRho float64, xs []geom.Vec,
 ) {
 	length := cb.Width[0]
 	area := cb.Width[0] * cb.Width[1]
-	m := float32(mass)
 	for _, pt := range xs {
 		i := int(pt[0])
 		j := int(pt[1])
 		k := int(pt[2])
-		rhos[i + j * length + k * area] += m
+		rhos[i + j * length + k * area] += ptRho
 	}
 }
 
 func (intr *mcarlo) Interpolate(
-	rhos []float32, cb *geom.CellBounds, mass float64, xs []geom.Vec,
+	rhos []float64, cb *geom.CellBounds, ptRho float64, xs []geom.Vec,
 ) {
 	segWidth := intr.segWidth
 	gridWidth := segWidth + 1
 	idxWidth := intr.segWidth / intr.skip
 
-	ptMass := mass / float64(len(intr.vecBuf)) / 6.0 *
+	ptRho = ptRho / float64(len(intr.vecBuf)) / 6.0 *
 		float64(intr.skip * intr.skip * intr.skip)
 
 	for z := int64(0); z < idxWidth; z++ {
@@ -130,7 +129,7 @@ func (intr *mcarlo) Interpolate(
 						intr.vecBuf,
 					)
 
-					intr.subIntr.Interpolate(rhos, cb, ptMass, intr.vecBuf)
+					intr.subIntr.Interpolate(rhos, cb, ptRho, intr.vecBuf)
 				}
 			}
 		}
@@ -139,10 +138,11 @@ func (intr *mcarlo) Interpolate(
 
 // AddBuffer adds the contents of a density buffer constrained by the given
 // CellBounds to a periodic grid with the given number of cells.
-func AddBuffer(grid, buf []float32, cb *geom.CellBounds, cells int) {
+func AddBuffer(grid, buf []float64, cb *geom.CellBounds, cells int) {
 	for z := 0; z < cb.Width[2]; z++ {
 		zBufIdx := z * cb.Width[0] * cb.Width[1]
 		zGridIdx := ((z + cb.Origin[2]) % cells) * cells * cells
+
 		for y := 0; y < cb.Width[1]; y++ {
 			yBufIdx := y * cb.Width[0]
 			yGridIdx := ((y + cb.Origin[1]) % cells) * cells
@@ -155,7 +155,7 @@ func AddBuffer(grid, buf []float32, cb *geom.CellBounds, cells int) {
 				bufIdx := xBufIdx + yBufIdx + zBufIdx
 				gridIdx := xGridIdx + yGridIdx + zGridIdx
 				
-				grid[gridIdx] += buf[bufIdx]
+				grid[gridIdx] += float64(buf[bufIdx])
 			}
 		}
 	}

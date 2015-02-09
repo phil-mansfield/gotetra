@@ -406,9 +406,11 @@ func sheetDensityMain(cells, points, skip int,
 	// There's got to be a better way to do this.
 	io.ReadSheetHeaderAt(path.Join(sourceDir, infos[0].Name()), hd)
 
-	grid := make([]float32, cells * cells * cells)
+	grid := make([]float64, cells * cells * cells)
 	buf := densityBuffer(sourceDir, cells)
 
+	cellWidth := hd.TotalWidth / float64(cells)
+	ptRho := hd.Mass / cellWidth / cellWidth / cellWidth
 	xs := make([]geom.Vec, hd.GridCount)
 	intr := density.MonteCarlo(hd.SegmentWidth,
 		rand.NewTimeSeed(rand.Xorshift), points, int64(skip))
@@ -429,12 +431,13 @@ func sheetDensityMain(cells, points, skip int,
 		runtime.GC() // Goddammit, Go.
 
 		cb := hd.CellBounds(cells)
+		log.Println()
+		log.Println(hd.Origin, hd.Width)
 		cb.ScaleVecs(xs, cells, hd.TotalWidth)
-		checkVecs(xs, cb)
-		continue
 
-		intr.Interpolate(buf, cb, hd.Mass, xs)
+		intr.Interpolate(buf, cb, ptRho, xs)
 		density.AddBuffer(grid, buf, cb, cells)
+		clearBuffer(buf, cb)
 	}
 
 	out := path.Join(outDir,
@@ -443,7 +446,7 @@ func sheetDensityMain(cells, points, skip int,
 	writeDensity(out, grid)
 }
 
-func densityBuffer(sourceDir string, cells int) []float32 {
+func densityBuffer(sourceDir string, cells int) []float64 {
 	infos, err := ioutil.ReadDir(sourceDir)
 	if err != nil {
 		log.Fatal(err.Error())
@@ -456,7 +459,12 @@ func densityBuffer(sourceDir string, cells int) []float32 {
 
 	_, maxCells := minMaxCells(hs, cells)
 
-	return make([]float32, maxCells)
+	return make([]float64, maxCells)
+}
+
+func clearBuffer(buf []float64, cb *geom.CellBounds) {
+	vol := cb.Width[0] * cb.Width[1] * cb.Width[2]
+	for i := 0; i < vol; i++ { buf[i] = 0 }
 }
 
 func checkVecs(xs []geom.Vec, cb *geom.CellBounds) {
@@ -500,7 +508,7 @@ func minMaxCells(hs []io.SheetHeader, cells int) (int, int) {
 	return min, max
 }
 
-func writeDensity(fname string, d []float32) {
+func writeDensity(fname string, d []float64) {
 	f, err := os.Create(fname)
 	if err != nil { log.Fatal(err.Error()) }
 	defer f.Close()

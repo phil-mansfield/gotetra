@@ -209,8 +209,6 @@ func epsEq(x, y, eps float64) bool {
 		(x != 0 && y != 0 && math.Abs((x-y)/x) <= eps)
 }
 
-// TODO: Think about whether or not this actually does what you want with the
-// sign bit.
 func (t *Tetra) signedVolume(c1, c2, c3, c4 *Vec) float64 {
 	c2.SubAt(c1, t.width, &t.vb.buf1)
 	c3.SubAt(c1, t.width, &t.vb.buf2)
@@ -325,7 +323,8 @@ func DistributeUnit(xs, ys, zs []float64, vecBuf []Vec) {
 // coordinate transformations.
 func (tet *Tetra) DistributeTetra(pts []Vec, out []Vec) {
 	bary := tet.Barycenter()
-	w := float32(tet.width)
+	//w := float32(tet.width)
+
 	// Some gross code to prevent allocations. cs are the displacement vectors
 	// to the corners and the ds are the barycentric components of the random
 	// points.
@@ -345,11 +344,12 @@ func (tet *Tetra) DistributeTetra(pts []Vec, out []Vec) {
 			d3 := tet.sb.c[3][j] * v
 			
 			val := bary[j] + d0 + d1 + d2 + d3
+			/*
 			if val >= w {
 				val -= w
 			} else if val < 0 {
 				val += w
-			}
+			} */
 
 			out[i][j] = val
 		}
@@ -410,8 +410,6 @@ func (t *Tetra) CellBoundsAt(cellWidth float64, cb *CellBounds) {
 		}
 	}
 
-	// This is somewhat slow due to repreated for loops.
-	// Benchmark, benchmark, benchmark.
 	maxDiffs.SubSelf(minDiffs, t.width)
 	minDiffs.AddSelf(pivot).ModSelf(t.width)
 	floatWidth := maxDiffs
