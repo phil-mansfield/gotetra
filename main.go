@@ -13,9 +13,9 @@ import (
 	"os"
 	"io/ioutil"
 
+	"github.com/phil-mansfield/gotetra/density"
 	"github.com/phil-mansfield/gotetra/geom"
 	"github.com/phil-mansfield/gotetra/io"
-	"github.com/phil-mansfield/gotetra/density"
 	"github.com/phil-mansfield/gotetra/rand"
 )
 
@@ -370,9 +370,9 @@ func copyToSegment(shd *io.SheetHeader, xs, vs, xsSeg, vsSeg []geom.Vec) {
 		}	
 	}
 	
-	box.Center.AddAt(&box.ToMin, &shd.Mins)
-	shd.Mins.ModSelf(shd.TotalWidth)
-	box.ToMax.ScaleAt(2.0, &shd.Widths)
+	box.Center.AddAt(&box.ToMin, &shd.Origin)
+	shd.Origin.ModSelf(shd.TotalWidth)
+	box.ToMax.ScaleAt(2.0, &shd.Width)
 }
 
 func validCellNum(cells int) bool {
@@ -380,17 +380,110 @@ func validCellNum(cells int) bool {
 	return cells == 1
 }
 
+func sheetDensityMain(cells, points, skip int,
+	sourceDir, outDir string,
+	minSheet, maxSheet int,
+) {
+	if points <= 0 {
+		log.Fatalf("Positive value for Points is required.")
+	} else if !validCellNum(cells) {
+		log.Fatalf("Invalid cell number %d (sorry!).", cells)
+	} else if cells > maxRhoWidth {
+		log.Fatalf("Cell count is too big. Let's die for the time being.")
+	}
+	log.Printf(
+		"Running SheetDensity mainloop from %d to %d.", minSheet, maxSheet,
+	)
+
+	// Set up system info.
+	infos, err := ioutil.ReadDir(sourceDir)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+	hd := &io.SheetHeader{}
+	ms := &runtime.MemStats{}
+
+	// There's got to be a better way to do this.
+	io.ReadSheetHeaderAt(path.Join(sourceDir, infos[0].Name()), hd)
+
+	grid := make([]float32, cells * cells * cells)
+	buf := densityBuffer(sourceDir, cells)
+
+	xs := make([]geom.Vec, hd.GridCount)
+	intr := density.MonteCarlo(hd.SegmentWidth,
+		rand.NewTimeSeed(rand.Xorshift), points, int64(skip))
+
+	for i := range infos {
+		if i < minSheet || i > maxSheet { continue }
+
+		if i % 10 == 0 {
+			log.Printf("Reading %s", infos[i].Name())
+			runtime.ReadMemStats(ms)
+			log.Printf("Alloc: %d MB, Sys: %d MB",
+				ms.Alloc >> 20, ms.Sys >> 20)
+		}
+
+		file := path.Join(sourceDir, infos[i].Name())
+		io.ReadSheetHeaderAt(file, hd)
+		io.ReadSheetPositionsAt(file, xs)
+		runtime.GC() // Goddammit, Go.
+
+		cb := hd.CellBounds(cells)
+		cb.ScaleVecs(xs, cells, hd.TotalWidth)
+		checkVecs(xs, cb)
+		continue
+
+		intr.Interpolate(buf, cb, hd.Mass, xs)
+		density.AddBuffer(grid, buf, cb, cells)
+	}
+
+	out := path.Join(outDir,
+		fmt.Sprintf("density_%d_%d_skip%d.dat", minSheet, maxSheet, skip))
+	log.Printf("Writing %s", out)
+	writeDensity(out, grid)
+}
+
+func densityBuffer(sourceDir string, cells int) []float32 {
+	infos, err := ioutil.ReadDir(sourceDir)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	hs := make([]io.SheetHeader, len(infos))
+	for i, info := range infos {
+		io.ReadSheetHeaderAt(path.Join(sourceDir, info.Name()), &hs[i])
+	}
+
+	_, maxCells := minMaxCells(hs, cells)
+
+	return make([]float32, maxCells)
+}
+
+func checkVecs(xs []geom.Vec, cb *geom.CellBounds) {
+	xMax := float32(cb.Width[0])
+	yMax := float32(cb.Width[1])
+	zMax := float32(cb.Width[2])
+
+	for i := range xs {
+		x, y, z := xs[i][0], xs[i][1], xs[i][2]
+		
+		if x > xMax || y > yMax || z > zMax || x < 0 || y < 0 || z < 0 {
+			log.Fatalf("%v out of bounds for %v.", xs[i], cb)
+		}
+	}
+}
+
+// minMaxCells returns the minimum and maximum number of cells which make up
+// each of the target sheet segments.
 func minMaxCells(hs []io.SheetHeader, cells int) (int, int) {
 	max := 0
-	min := math.MaxInt32 // We have problems if this is too big.
+	min := math.MaxInt32 // We have problems if this is too small.
+
+
 	for i := range hs {
-		hd := &hs[i]
-		cellWidth := float32(hd.TotalWidth / float64(cells))
-		
-		vol := int(hd.Widths[0] / cellWidth) *
-			int(hd.Widths[1] / cellWidth) *
-			int(hd.Widths[2] / cellWidth)
-	
+		cb := hs[i].CellBounds(cells)
+		vol := cb.Width[0] * cb.Width[1] * cb.Width[2]
+
 		if vol > math.MaxInt32 {
 			log.Fatalf("Header %d would have more than %d cells in it.",
 				i, math.MaxInt32)
@@ -407,70 +500,7 @@ func minMaxCells(hs []io.SheetHeader, cells int) (int, int) {
 	return min, max
 }
 
-func sheetDensityMain(cells, points, skip int,
-	sourceDir, outDir string,
-	minSheet, maxSheet int,
-) {
-	if points <= 0 {
-		log.Fatalf("Positive value for Points is required.")
-	} else if !validCellNum(cells) {
-		log.Fatalf("Invalid cell number %d (sorry!).", cells)
-	} else if cells > maxRhoWidth {
-		log.Fatalf("Cell count is too big. Let's die for the time being.")
-	}
-
-	log.Println("Running SheetDensity mainloop.")
-
-	ms := &runtime.MemStats{}
-
-	infos, err := ioutil.ReadDir(sourceDir)
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-
-	hs := make([]io.SheetHeader, len(infos))
-	for i, info := range infos {
-		io.ReadSheetHeaderAt(path.Join(sourceDir, info.Name()), &hs[i])
-	}
-
-	minCells, maxCells := minMaxCells(hs, cells)
-	log.Printf("MaxCells: %d, MinCells: %d", minCells, maxCells)
-
-	rhos := make([]float64, cells * cells * cells)
-	// Oh God, this is the most confusing of all functions.
-	g := density.NewGrid(hs[0].TotalWidth, 1, rhos,
-		&density.Cell{cells, 0, 0, 0})
-
-	xs := make([]geom.Vec, hs[0].GridCount)
-	intr := density.MonteCarlo(hs[0].SegmentWidth,
-		rand.NewTimeSeed(rand.Xorshift), points, int64(skip))
-
-	log.Printf("Initial Alloc: %d MB, Initial Sys: %d MB",
-		ms.Alloc >> 20, ms.Sys >> 20)
-
-	for i := range infos {
-		if i < minSheet || i > maxSheet { continue }
-
-		runtime.GC()
-
-		log.Printf("Reading %s", infos[i].Name())
-		runtime.ReadMemStats(ms)
-		log.Printf("Alloc: %d MB, Sys: %d MB",
-			ms.Alloc >> 20, ms.Sys >> 20)
-
-		file := path.Join(sourceDir, infos[i].Name())
-		io.ReadSheetPositionsAt(file, xs)
-		intr.Interpolate(g, hs[0].Mass, xs)
-	}
-
-
-	out := path.Join(outDir,
-		fmt.Sprintf("density_%d_%d_skip%d.dat", minSheet, maxSheet, skip))
-	log.Printf("Writing %s", out)
-	writeDensity(out, rhos)
-}
-
-func writeDensity(fname string, d []float64) {
+func writeDensity(fname string, d []float32) {
 	f, err := os.Create(fname)
 	if err != nil { log.Fatal(err.Error()) }
 	defer f.Close()

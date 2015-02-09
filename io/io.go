@@ -40,6 +40,31 @@ type CatalogHeader struct {
 	TotalWidth float64 // Width of the sim's bounding box
 }
 
+/* 
+The binary format used for phase sheets is as follows:
+    |-- 1 --||-- 2 --||-- ... 3 ... --||-- ... 4 ... --||-- ... 5 ... --|
+
+    1 - (int32) Flag indicating the endianness of the file. 0 indicates a big
+        endian byte ordering and -1 indicates a little endian byte order.
+    2 - (int32) Size of a Header struct. Should be checked for consistency.
+    3 - (sheet.Header) Header dile containing meta-information about the
+        sheet fragment.
+    4 - ([][3]float32) Contiguous block of x, y, z coordinates. Given in Mpc.
+    5 - ([][3]float32) Contiguous block of v_x, v_y, v_z coordinates.
+ */
+type SheetHeader struct {
+	Cosmo CosmologyHeader
+	Count, CountWidth int64
+	SegmentWidth, GridWidth, GridCount int64
+	Idx, Cells int64
+
+	Mass float64
+	TotalWidth float64
+
+	Origin geom.Vec
+	Width geom.Vec
+}
+
 // CosmologyHeader contains information describing the cosmological
 // context in which the simulation was run.
 type CosmologyHeader struct {
@@ -223,30 +248,6 @@ func endianness(flag int32) binary.ByteOrder {
 	}
 }
 
-/* 
-The binary format used for phase sheets is as follows:
-    |-- 1 --||-- 2 --||-- ... 3 ... --||-- ... 4 ... --||-- ... 5 ... --|
-
-    1 - (int32) Flag indicating the endianness of the file. 0 indicates a big
-        endian byte ordering and -1 indicates a little endian byte order.
-    2 - (int32) Size of a Header struct. Should be checked for consistency.
-    3 - (sheet.Header) Header dile containing meta-information about the
-        sheet fragment.
-    4 - ([][3]float32) Contiguous block of x, y, z coordinates. Given in Mpc.
-    5 - ([][3]float32) Contiguous block of v_x, v_y, v_z coordinates.
- */
-type SheetHeader struct {
-	Cosmo CosmologyHeader
-	Count, CountWidth int64
-	SegmentWidth, GridWidth, GridCount int64
-	Idx, Cells int64
-
-	Mass float64
-	TotalWidth float64
-	Mins geom.Vec
-	Widths geom.Vec
-}
-
 func readSheetHeaderAt(
 	file string, hdBuf *SheetHeader,
 ) (*os.File, binary.ByteOrder) {
@@ -357,4 +358,22 @@ func WriteSheet(file string, h *SheetHeader, xs, vs []geom.Vec) {
 	if err = binary.Write(f, order, vs); err != nil {
 		log.Fatalf(err.Error())
 	}
+}
+
+func (hd *SheetHeader) CellBounds(cells int) *geom.CellBounds {
+	cb := &geom.CellBounds{}
+	cellWidth := hd.TotalWidth / float64(cells)
+
+	for j := 0; j < 3; j++ {
+		cb.Origin[j] = int(
+			math.Floor(float64(hd.Origin[j]) / cellWidth),
+		)
+		cb.Width[j] = 1 + int(
+			math.Floor(float64(hd.Origin[j] + hd.Width[j]) / cellWidth),
+		)
+
+		cb.Width[j] -= cb.Origin[j]
+	}
+
+	return cb
 }
