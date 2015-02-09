@@ -322,8 +322,9 @@ func DistributeUnit(xs, ys, zs []float64, vecBuf []Vec) {
 // and distributed them across the given tetrahedron through barycentric
 // coordinate transformations.
 func (tet *Tetra) DistributeTetra(pts []Vec, out []Vec) {
+	// TODO: Now that we don't need to worry about boundaries, this can probably
+	// be cleaned up.
 	bary := tet.Barycenter()
-	//w := float32(tet.width)
 
 	// Some gross code to prevent allocations. cs are the displacement vectors
 	// to the corners and the ds are the barycentric components of the random
@@ -344,13 +345,6 @@ func (tet *Tetra) DistributeTetra(pts []Vec, out []Vec) {
 			d3 := tet.sb.c[3][j] * v
 			
 			val := bary[j] + d0 + d1 + d2 + d3
-			/*
-			if val >= w {
-				val -= w
-			} else if val < 0 {
-				val += w
-			} */
-
 			out[i][j] = val
 		}
 	}

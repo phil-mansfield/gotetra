@@ -431,8 +431,6 @@ func sheetDensityMain(cells, points, skip int,
 		runtime.GC() // Goddammit, Go.
 
 		cb := hd.CellBounds(cells)
-		log.Println()
-		log.Println(hd.Origin, hd.Width)
 		cb.ScaleVecs(xs, cells, hd.TotalWidth)
 
 		intr.Interpolate(buf, cb, ptRho, xs)
@@ -465,20 +463,6 @@ func densityBuffer(sourceDir string, cells int) []float64 {
 func clearBuffer(buf []float64, cb *geom.CellBounds) {
 	vol := cb.Width[0] * cb.Width[1] * cb.Width[2]
 	for i := 0; i < vol; i++ { buf[i] = 0 }
-}
-
-func checkVecs(xs []geom.Vec, cb *geom.CellBounds) {
-	xMax := float32(cb.Width[0])
-	yMax := float32(cb.Width[1])
-	zMax := float32(cb.Width[2])
-
-	for i := range xs {
-		x, y, z := xs[i][0], xs[i][1], xs[i][2]
-		
-		if x > xMax || y > yMax || z > zMax || x < 0 || y < 0 || z < 0 {
-			log.Fatalf("%v out of bounds for %v.", xs[i], cb)
-		}
-	}
 }
 
 // minMaxCells returns the minimum and maximum number of cells which make up
