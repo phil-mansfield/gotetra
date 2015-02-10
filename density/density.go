@@ -8,15 +8,6 @@ import (
 	"github.com/phil-mansfield/gotetra/geom"
 )
 
-const (
-	// An arbitrarily chosen prime number indicating the number of precomputed
-	// random sequences to use for the MonteCarlo interpolator.
-	//
-	// Some more thought should be put into this because it gets prohibitively
-	// large for high particle counts.
-	UnitBuffers = 7919
-)
-
 // Interpolator creates a grid-based density distribution from seqeunces of
 // positions.
 type Interpolator interface {
@@ -24,7 +15,10 @@ type Interpolator interface {
 	// density grid used by the Interpolator. Particles should all be within
 	// the bounds of the bounding grid and points not within the interpolation
 	// grid will be ignored.
-	Interpolate(rhos []float64, cb *geom.CellBounds, mass float64, xs []geom.Vec)
+	Interpolate(
+		rhos []float64, cb *geom.CellBounds, mass float64, xs []geom.Vec,
+		low, high int,
+	)
 }
 
 type ngp struct { }
@@ -33,7 +27,7 @@ type ngp struct { }
 type mcarlo struct {
 	subIntr Interpolator
 	segWidth int64
-	steps int
+	points int
 
 	gen *rand.Generator
 
@@ -42,7 +36,7 @@ type mcarlo struct {
 	idxBuf geom.TetraIdxs
 	tet geom.Tetra
 
-	unitBufs [UnitBuffers][]geom.Vec
+	unitBufs [][]geom.Vec
 	vecBuf []geom.Vec
 }
 
@@ -52,29 +46,15 @@ func NearestGridPoint() Interpolator {
 
 func MonteCarlo(
 	segWidth int64,
-	gen *rand.Generator,
 	points int,
 	skip int64,
+	unitBufs [][]geom.Vec,
 ) Interpolator {
 	mc := &mcarlo{
-		NearestGridPoint(), segWidth, points, gen, skip,
+		NearestGridPoint(), segWidth, points,
+		rand.NewTimeSeed(rand.Golang), skip,
 		geom.TetraIdxs{}, geom.Tetra{},
-		[UnitBuffers][]geom.Vec{},
-		make([]geom.Vec, points),
-	}
-
-	xs := make([]float64, points)
-	ys := make([]float64, points)
-	zs := make([]float64, points)
-
-	for i := range mc.unitBufs {
-		buf := make([]geom.Vec, points)
-		gen.UniformAt(0.0, 1.0, xs)
-		gen.UniformAt(0.0, 1.0, ys)
-		gen.UniformAt(0.0, 1.0, zs)
-		geom.DistributeUnit(xs, ys, zs, buf)
-		
-		mc.unitBufs[i] = buf
+		unitBufs, make([]geom.Vec, points),
 	}
 
 	return mc
@@ -84,10 +64,12 @@ func MonteCarlo(
 // nearest grid point scheme.
 func (intr *ngp) Interpolate(
 	rhos []float64, cb *geom.CellBounds, ptRho float64, xs []geom.Vec,
+	low, high int,
 ) {
 	length := cb.Width[0]
 	area := cb.Width[0] * cb.Width[1]
-	for _, pt := range xs {
+	for idx := low; idx < high; idx++ {
+		pt := xs[idx]
 		i := int(pt[0])
 		j := int(pt[1])
 		k := int(pt[2])
@@ -97,43 +79,52 @@ func (intr *ngp) Interpolate(
 
 func (intr *mcarlo) Interpolate(
 	rhos []float64, cb *geom.CellBounds, ptRho float64, xs []geom.Vec,
+	low, high int,
 ) {
 	segWidth := intr.segWidth
 	gridWidth := segWidth + 1
 	idxWidth := intr.segWidth / intr.skip
 
-	ptRho = ptRho / float64(len(intr.vecBuf)) / 6.0 *
+	ptRho = ptRho / float64(intr.points) / 6.0 *
 		float64(intr.skip * intr.skip * intr.skip)
 
-	for z := int64(0); z < idxWidth; z++ {
-		for y := int64(0); y < idxWidth; y++ {
-			for x := int64(0); x < idxWidth; x++ {
+	for idx := int64(low); idx < int64(high); idx++ {
+		x, y, z := coords(idx, idxWidth)
+		gridIdx := index(x, y, z, gridWidth)
 
-				idx := (x * intr.skip) +
-					(y * intr.skip) * gridWidth +
-					(z * intr.skip) * gridWidth * gridWidth
-
-				for dir := 0; dir < 6; dir++ {
-					intr.idxBuf.Init(idx, gridWidth, intr.skip, dir)
+		for dir := 0; dir < 6; dir++ {
+			intr.idxBuf.Init(gridIdx, gridWidth, intr.skip, dir)
 					
-					intr.tet.Init(
-						&xs[intr.idxBuf[0]],
-						&xs[intr.idxBuf[1]],
-						&xs[intr.idxBuf[2]],
-						&xs[intr.idxBuf[3]],
-						1e6,
-					)
+			intr.tet.Init(
+				&xs[intr.idxBuf[0]],
+				&xs[intr.idxBuf[1]],
+				&xs[intr.idxBuf[2]],
+				&xs[intr.idxBuf[3]],
+				1e6,
+			)
 					
-					intr.tet.DistributeTetra(
-						intr.unitBufs[idx % UnitBuffers],
-						intr.vecBuf,
-					)
+			bufIdx := intr.gen.UniformInt(0, len(intr.unitBufs))
+			intr.tet.DistributeTetra(
+				intr.unitBufs[bufIdx],
+				intr.vecBuf,
+			)
 
-					intr.subIntr.Interpolate(rhos, cb, ptRho, intr.vecBuf)
-				}
-			}
+			intr.subIntr.Interpolate(
+				rhos, cb, ptRho, intr.vecBuf, 0, intr.points,
+			)
 		}
 	}
+}
+
+func index(x, y, z, cells int64) int64 {
+	return x + y * cells + z * cells * cells
+}
+
+func coords(idx, cells int64) (x, y, z int64) {
+	x = idx % cells
+	y = (idx % (cells * cells)) / cells
+	z = idx / (cells * cells)
+	return x, y, z
 }
 
 // AddBuffer adds the contents of a density buffer constrained by the given

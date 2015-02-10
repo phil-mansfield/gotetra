@@ -1,6 +1,7 @@
 package rand
 
 import (
+	"math"
 	"time"
 )
 
@@ -50,6 +51,12 @@ func New(gt GeneratorType, seed uint64) *Generator {
 	backend.Init(seed)
 	gen := &Generator{ backend, false, -1 }
 	return gen
+}
+
+func (gen *Generator) UniformInt(low, high int) int {
+	f := gen.backend.Next()
+	return int(math.Floor(float64(high - low) * f + float64(low)))
+	
 }
 
 func (gen *Generator) Uniform(low, high float64) float64 {

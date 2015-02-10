@@ -1,7 +1,6 @@
 package main
 import (
 	"flag"
-	"math"
 	"fmt"
 	"path"
 	"encoding/binary"
@@ -13,10 +12,9 @@ import (
 	"os"
 	"io/ioutil"
 
-	"github.com/phil-mansfield/gotetra/density"
+	"github.com/phil-mansfield/gotetra"
 	"github.com/phil-mansfield/gotetra/geom"
 	"github.com/phil-mansfield/gotetra/io"
-	"github.com/phil-mansfield/gotetra/rand"
 )
 
 const (
@@ -380,6 +378,46 @@ func validCellNum(cells int) bool {
 	return cells == 1
 }
 
+func sheetDensityMain(
+	cells, points, skip int,
+	sourceDir, outDir string,
+	minSheet, maxSheet int,
+) {
+	infos, err := ioutil.ReadDir(sourceDir)
+	if err != nil { log.Fatalf(err.Error()) }
+	files := make([]string, len(infos))
+	for i := range infos { files[i] = path.Join(sourceDir, infos[i].Name()) }
+
+	// gotetra code starts here
+
+	boxes := make([]gotetra.Box, 1)
+	boxes[0].InitFullFromFile(files[0], cells)	
+	man := gotetra.NewManager(files, cells, points)
+	man.Skip(skip)
+
+	for i := minSheet; i <= maxSheet; i++ {
+		man.Load(files[i])
+		man.Density(boxes)
+	}
+
+	// gotetra coee ends here
+
+    out := path.Join(outDir,
+        fmt.Sprintf("G%d_NP%d_S%d.dat", cells, points, skip))
+    log.Printf("Writing %s", out)
+    writeDensity(out, boxes[0].Vals) 
+}
+
+
+func writeDensity(fname string, d []float64) {
+	f, err := os.Create(fname)
+	if err != nil { log.Fatal(err.Error()) }
+	defer f.Close()
+
+	binary.Write(f, binary.LittleEndian, d)
+}
+
+/*
 func sheetDensityMain(cells, points, skip int,
 	sourceDir, outDir string,
 	minSheet, maxSheet int,
@@ -491,11 +529,4 @@ func minMaxCells(hs []io.SheetHeader, cells int) (int, int) {
 
 	return min, max
 }
-
-func writeDensity(fname string, d []float64) {
-	f, err := os.Create(fname)
-	if err != nil { log.Fatal(err.Error()) }
-	defer f.Close()
-
-	binary.Write(f, binary.LittleEndian, d)
-}
+*/
