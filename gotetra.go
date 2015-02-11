@@ -30,6 +30,7 @@ type Manager struct {
 	unitBufs [][]geom.Vec
 	intrs []density.Interpolator
 	pts, skip, workers int
+	ptRho float64
 }
 type Tetra struct { geom.Tetra }
 
@@ -191,10 +192,14 @@ func (man *Manager) Density(rhos []Box) {
 	man.cb = man.hd.CellBounds(grid.cells)
 	man.cb.ScaleVecs(man.xs, grid.cells, man.hd.TotalWidth)
 
+	frac := float64(grid.cells) / float64(man.hd.CountWidth)
+	man.ptRho = frac * frac * frac
+
 	for id := 0; id < man.workers - 1; id++ {
 		low, high := chunkLen * id, chunkLen * (id + 1)
 		go man.chanInterpolate(id, low, high, out)
 	}
+
 	id := man.workers - 1
 	low, high := chunkLen * id, int(segLen)
 	man.chanInterpolate(id, low, high, out)
@@ -210,7 +215,7 @@ func (man *Manager) chanInterpolate(id, low, high int, out chan<- int) {
 	buf := man.rhoBufs[id]
 	for i := range buf { buf[i] = 0.0 }
 	intr := man.intrs[id]
-	intr.Interpolate(buf, man.cb, 1.0, man.xs, low, high)
+	intr.Interpolate(buf, man.cb, man.ptRho, man.xs, low, high)
 	out <- id
 }
 
