@@ -177,41 +177,38 @@ func (man *Manager) TetraAt(x, y, z int, dir Direction, tet *Tetra) {
 }
 
 func (man *Manager) Density(rhos []Box) {
-	if len(rhos) != 1 {
-		log.Fatalf("For now you can only interpolate onto one box.")
-	} else if !rhos[0].full {
-		log.Fatalf("For now, you need to only interpolate onto full boxes.")
-	}
-
-	grid := rhos[0]
-
 	out := make(chan int, man.workers)
 	segLen := man.hd.SegmentWidth * man.hd.SegmentWidth * man.hd.SegmentWidth
 	chunkLen :=  int(segLen) / man.workers
 
-	man.cb = man.hd.CellBounds(grid.cells)
-	man.cb.ScaleVecs(man.xs, grid.cells, man.hd.TotalWidth)
+	for _, grid := range rhos {
+		if grid.full {
+			man.cb = man.hd.CellBounds(grid.cells)
 
-	frac := float64(grid.cells) / float64(man.hd.CountWidth)
-	man.ptRho = frac * frac * frac
+			frac := float64(grid.cells) / float64(man.hd.CountWidth)
+			man.ptRho = frac * frac * frac
 
-	for id := 0; id < man.workers - 1; id++ {
-		low, high := chunkLen * id, chunkLen * (id + 1)
-		go man.chanInterpolate(id, low, high, out)
-	}
-
-	id := man.workers - 1
-	low, high := chunkLen * id, int(segLen)
-	man.chanInterpolate(id, low, high, out)
-
-	for i := 0; i < man.workers; i++ {
-		id := <-out
-		buf := man.rhoBufs[id]
-		density.AddBuffer(grid.Vals, buf, man.cb, grid.cells)
+			for id := 0; id < man.workers - 1; id++ {
+				low, high := chunkLen * id, chunkLen * (id + 1)
+				go man.chanInterpolate(id, low, high, grid.cells, out)
+			}
+		
+			id := man.workers - 1
+			low, high := chunkLen * id, int(segLen)
+			man.chanInterpolate(id, low, high, grid.cells, out)
+		
+			for i := 0; i < man.workers; i++ {
+				id := <-out
+				buf := man.rhoBufs[id]
+				density.AddBuffer(grid.Vals, buf, man.cb, grid.cells)
+			}
+		}
 	}
 }
 
-func (man *Manager) chanInterpolate(id, low, high int, out chan<- int) {
+func (man *Manager) chanInterpolate(id, low, high, cells int, out chan<- int) {
+	man.cb.ScaleVecs(man.xs[low: high], cells, man.hd.TotalWidth)
+
 	buf := man.rhoBufs[id]
 	for i := range buf { buf[i] = 0.0 }
 	intr := man.intrs[id]
