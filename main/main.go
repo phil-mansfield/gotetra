@@ -383,6 +383,8 @@ func sheetDensityMain(
 	sourceDir, outDir string,
 	minSheet, maxSheet int,
 ) {
+	log.Println("Running SheetDensity main.")
+
 	infos, err := ioutil.ReadDir(sourceDir)
 	if err != nil { log.Fatalf(err.Error()) }
 	files := make([]string, len(infos))
@@ -391,16 +393,19 @@ func sheetDensityMain(
 	// gotetra code starts here
 
 	boxes := make([]gotetra.Box, 1)
+	log.Println("Initializating boxes.")
 	boxes[0].InitFullFromFile(files[0], cells)	
+	log.Println("Creating Manager")
 	man := gotetra.NewManager(files, cells, points)
 	man.Skip(skip)
 
 	for i := minSheet; i <= maxSheet; i++ {
+		log.Println("Analyzing file", infos[i].Name())
 		man.Load(files[i])
 		man.Density(boxes)
 	}
 
-	// gotetra coee ends here
+	// gotetra code ends here
 
     out := path.Join(outDir,
         fmt.Sprintf("G%d_NP%d_S%d.dat", cells, points, skip))

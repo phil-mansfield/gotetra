@@ -34,7 +34,7 @@ type Manager struct {
 type Tetra struct { geom.Tetra }
 
 const (
-	MaxBufferLen = 1<<10
+	MaxBufferLen = 1<<30
 	UnitBufferLen = 1<<12
 )
 
@@ -45,7 +45,7 @@ func (box *Box) InitFullFromFile(file string, cells int) {
 }
 
 func (box *Box) InitFull(boxWidth float64, cells int) {
-	for i := range box.Vals { box.Vals[i] = 0.0 }
+	box.Vals = make([]float64, cells * cells * cells)
 	box.cb.Origin = [3]int{0, 0, 0}
 	box.cb.Width = [3]int{cells, cells, cells}
 	box.cells = cells
@@ -66,6 +66,8 @@ func (box *Box) Init(
 		)
 		box.cb.Width[j] -= box.cb.Origin[j]
 	}
+
+	box.Vals = make([]float64, box.cb.Width[0] * box.cb.Width[1] * box.cb.Width[2])
 
 	box.cells = cells
 	box.cellWidth = cellWidth
@@ -206,6 +208,7 @@ func (man *Manager) Density(rhos []Box) {
 
 func (man *Manager) chanInterpolate(id, low, high int, out chan<- int) {
 	buf := man.rhoBufs[id]
+	for i := range buf { buf[i] = 0.0 }
 	intr := man.intrs[id]
 	intr.Interpolate(buf, man.cb, 1.0, man.xs, low, high)
 	out <- id
