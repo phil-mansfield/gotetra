@@ -40,7 +40,7 @@ First you must install Go. This can be done by putting the following in your `.b
 within a subdirectory of `$GOPATH/src/`. Since packages rely on knowing their exact location
 with respect to `$GOPATH` you should either install this package by calling
 
-    $ go get go get github.com/phil-mansfield/gotetra
+    $ go get github.com/phil-mansfield/gotetra
 
 or by manually installing via git in `$GOPATH/src/github.com/phil-mansfield/gotetra`.
 
