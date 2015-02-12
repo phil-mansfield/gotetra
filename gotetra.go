@@ -11,8 +11,6 @@ import (
 	"github.com/phil-mansfield/gotetra/rand"
 )
 
-type Direction int
-
 // Box represents 
 type Box struct {
 	Vals []float64
@@ -42,8 +40,6 @@ type BoundedManager struct {
 	file string
 	loaded bool
 }
-
-type Tetra struct { geom.Tetra }
 
 type Manager interface {
 	LoadPositions(file string)
