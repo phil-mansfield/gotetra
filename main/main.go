@@ -18,9 +18,7 @@ import (
 )
 
 const (
-	vecBufLen = 1<<10
 	catalogBufLen = 1<<12
-	maxRhoWidth = 1<<9
 )
 
 var (
@@ -29,20 +27,18 @@ var (
 
 func main() {
 	var (
-		logPath, pprofPath string
-		x, y, z, minSheet, maxSheet int
-		createSheet, sheetDensity bool
+		logPath, pprofPath, boundsFile string
+		minSheet, maxSheet int
+		createSheet, fullDensity, boundedDensity bool
 		points, cells, skip int
 	)
 
 	flag.StringVar(&logPath, "Log", "",
 		"Location to write log statements to. Default is stderr.")
-	flag.StringVar(& pprofPath, "PProf", "",
+	flag.StringVar(&pprofPath, "PProf", "",
 		"Location to write profile to. Default is no profiling.")
-
-	flag.IntVar(&x, "X", -1, "z location of operation.")
-	flag.IntVar(&y, "Y", -1, "y location of operation.")
-	flag.IntVar(&z, "Z", -1, "z location of operation.")
+	flag.StringVar(&boundsFile, "BoundsFile", "",
+		"Location to read in grid bounds from.")
 
 	flag.IntVar(&cells, "Cells", -1, "Width of grid in cells.")
 	flag.IntVar(&skip, "Skip", 1, "Width of a tetrahedron in particles.")
@@ -53,8 +49,11 @@ func main() {
 	flag.IntVar(&maxSheet, "MaxSheet", 511,
 		"Highest index of a sheet file that will be read.")
 
-	flag.BoolVar(&sheetDensity, "SheetDensity", false,
-		"Compute density using sheet%d%d%d.dat files.")
+
+	flag.BoolVar(&fullDensity, "FullDensity", false,
+		"Compute full-box density.")
+	flag.BoolVar(&boundedDensity, "BoundedDensity", false,
+		"Computer density for  sequence of sub-boxes.")
 	flag.BoolVar(&createSheet, "CreateSheet", false,
 		"Generate gotetra sheets from gadget catalogs.")
 
@@ -77,7 +76,7 @@ func main() {
 	}
 
 	// This is terribly designed.
-	modeName := checkMode(createSheet, sheetDensity)
+	modeName := checkMode(createSheet, fullDensity, boundedDensity)
 
 	switch {
 	case createSheet:
@@ -95,7 +94,7 @@ func main() {
 		targetDir := args[len(args) - 1]
 
 		createSheetMain(cells, sources, targetDir)
-	case sheetDensity:
+	case fullDensity:
 		checkCells(cells, modeName)
 		args := flag.Args()
 		if len(args) != 2 {
@@ -105,8 +104,20 @@ func main() {
 
 		source := args[0]
 		target := args[1]
-		sheetDensityMain(cells, points, skip, source, target,
+		fullDensityMain(cells, points, skip, source, target,
 			minSheet, maxSheet)
+	case boundedDensity:
+		checkCells(cells, modeName)
+		args := flag.Args()
+		if len(args) != 2 {
+			log.Fatalf("Mode %s requires a source and target directory.",
+				modeName)
+		}
+
+		source := args[0]
+		target := args[1]
+		boundedDensityMain(cells, points, skip, source, target,
+			boundsFile, minSheet, maxSheet)
 	}
 }
 
@@ -118,17 +129,7 @@ func checkCells(cells int, modeName string) {
 	}
 }
 
-func checkCoords(x, y, z int, modeName string) {
-	if x == -1 {
-		log.Fatalf("The mode %s requires an x location.\n", modeName)
-	} else if y == -1 {
-		log.Fatalf("The mode %s requires a y location.\n", modeName)
-	} else if z == -1 {
-		log.Fatalf("The mode %s requires a z location.\n", modeName)
-	}
-}
-
-func checkMode(createSheet, sheetDensity bool) string {
+func checkMode(createSheet, fullDensity, boundedDensity bool) string {
 	// This function is not a good idea.
 	n := 0
 	modeStr := ""
@@ -138,9 +139,14 @@ func checkMode(createSheet, sheetDensity bool) string {
 		modeStr = "CreateSheet"
 	}
 
-	if sheetDensity {
+	if fullDensity {
 		n++
-		modeStr = "SheetDensity"
+		modeStr = "FullDensity"
+	}
+
+	if boundedDensity {
+		n++
+		modeStr = "BoundedDensity"
 	}
 
 	if n != 1 {
@@ -378,12 +384,12 @@ func validCellNum(cells int) bool {
 	return cells == 1
 }
 
-func sheetDensityMain(
+func fullDensityMain(
 	cells, points, skip int,
 	sourceDir, outDir string,
 	minSheet, maxSheet int,
 ) {
-	log.Println("Running SheetDensity main.")
+	log.Println("Running FullDensity main.")
 
 	infos, err := ioutil.ReadDir(sourceDir)
 	if err != nil { log.Fatalf(err.Error()) }
@@ -393,15 +399,13 @@ func sheetDensityMain(
 	// gotetra code starts here
 
 	boxes := make([]gotetra.Box, 1)
-	log.Println("Initializating boxes.")
 	boxes[0].InitFullFromFile(files[0], cells)	
-	log.Println("Creating Manager")
 	man := gotetra.NewFullManager(files, cells, points)
-	man.Skip(skip)
+	man.Subsample(skip)
 
 	for i := minSheet; i <= maxSheet; i++ {
 		log.Println("Analyzing file", infos[i].Name())
-		man.Load(files[i])
+		man.LoadPositions(files[i])
 		man.Density(boxes)
 	}
 
@@ -413,6 +417,96 @@ func sheetDensityMain(
     writeDensity(out, boxes[0].Vals) 
 }
 
+func boundedDensityMain(
+	cells, points, skip int,
+	sourceDir, outDir, boundsFile string,
+	minSheet, maxSheet int,
+) {
+	log.Println("Running BoundedDensity main.")
+
+	infos, err := ioutil.ReadDir(sourceDir)
+	if err != nil { log.Fatalf(err.Error()) }
+	files := make([]string, len(infos))
+	for i := range infos { files[i] = path.Join(sourceDir, infos[i].Name()) }
+
+	bs, err := ioutil.ReadFile(boundsFile)
+	if err != nil { log.Fatalf(err.Error()) }
+	origins, widths := readCols(string(bs))
+
+	// Biggest:
+	// radius := 2.170
+	// center := [3]float64{4.602, 100.704, 80.701}
+	// 100th Biggest:
+	// radius := 0.791
+	// center := [3]float64{29.609, 64.128, 42.843}
+
+	// gotetra code starts here
+	boxes := make([]gotetra.Box, len(origins))
+	for i := range boxes {
+		boxes[i].Init(125, cells, origins[i], widths[i])
+	}
+
+	man := gotetra.NewBoundedManager(files, boxes, points)
+	man.Subsample(skip)
+
+	for i := minSheet; i <= maxSheet; i++ {
+		man.LoadPositions(files[i])
+		man.Density(boxes)
+	}
+
+	// gotetra code ends here
+
+	for i := range boxes {
+		boxWidth := boxes[i].CellWidth() * float64(cells)
+		out := path.Join(outDir,
+			fmt.Sprintf("L%g_G%d_NP%d_S%d_XW%d_YW%d_ZW%d.dat",
+				boxWidth, cells, points, skip,
+				boxes[i].Width(0), boxes[i].Width(1), boxes[i].Width(2)))
+		writeDensity(out, boxes[i].Vals) 
+	}
+}
+
+func readCols(s string) (origins, widths [][3]float64) {	
+	lines := strings.Split(s, "\n")
+
+	if len(lines[len(lines) - 1]) == 0 { lines = lines[:len(lines) - 1] }
+
+	origins = make([][3]float64, len(lines))
+	widths = make([][3]float64, len(lines))
+
+	for i, line := range lines {
+		tokens := strings.Split(line, " ")
+		words := []string{}
+
+		for _, tok := range tokens {
+			if len(tok) > 0 { words = append(words, tok)}
+		}
+
+		if len(words) != 6 {
+			log.Fatalf("Found %d tokens on line %d of BoundsFile. " + 
+				"Require 6 tokens.", len(words), i)
+		}
+
+		ox, err := strconv.ParseFloat(words[0], 64)
+		if err != nil { log.Fatalf(err.Error()) }		
+		oy, err := strconv.ParseFloat(words[1], 64)
+		if err != nil { log.Fatalf(err.Error()) }
+		oz, err := strconv.ParseFloat(words[2], 64)
+		if err != nil { log.Fatalf(err.Error()) }
+
+		wx, err := strconv.ParseFloat(words[3], 64)
+		if err != nil { log.Fatalf(err.Error()) }
+		wy, err := strconv.ParseFloat(words[4], 64)
+		if err != nil { log.Fatalf(err.Error()) }
+		wz, err := strconv.ParseFloat(words[5], 64)
+		if err != nil { log.Fatalf(err.Error()) }
+
+		origins[i] = [3]float64{float64(ox), float64(oy), float64(oz)}
+		widths[i] = [3]float64{float64(wx), float64(wy), float64(wz)}
+	}
+
+	return origins, widths
+}
 
 func writeDensity(fname string, d []float64) {
 	f, err := os.Create(fname)

@@ -28,6 +28,8 @@ type Interpolator interface {
 	)
 }
 
+var ptCount = 0
+
 type ngp struct { }
 
 // The ordering of these fields makes no goddamned sense.
@@ -98,12 +100,13 @@ func (intr *ngp) BoundedInterpolate(
 	for idx := low; idx < high; idx++ {
 		pt := xs[idx]
 		
-		i := bound(int(pt[0]) + diffI, cells)
+		i := bound(int(pt[0]) - diffI, cells)
 		if i < rhoCb.Width[0] {
-			j := bound(int(pt[1]) + diffJ, cells)
+			j := bound(int(pt[1]) - diffJ, cells)
 			if j < rhoCb.Width[1] {
-				k := bound(int(pt[2]) + diffK, cells)
+				k := bound(int(pt[2]) - diffK, cells)
 				if k < rhoCb.Width[2] {
+					ptCount++
 					rhos[i + j * length + k * area] += ptRho
 				}
 			}
@@ -172,6 +175,8 @@ func (intr *mcarlo) BoundedInterpolate(
 	xs []geom.Vec, xCb *geom.CellBounds,
 	low, high int,
 ) {
+	count := 0
+
 	segWidth := intr.segWidth
 	gridWidth := segWidth + 1
 	idxWidth := intr.segWidth / intr.skip
@@ -180,6 +185,10 @@ func (intr *mcarlo) BoundedInterpolate(
 		float64(intr.skip * intr.skip * intr.skip)
 
 	tetCb := &geom.CellBounds{}
+
+	relCb := &geom.CellBounds{}
+	relCb.Width = rhoCb.Width
+	relCb.Origin[0], relCb.Origin[1], relCb.Origin[2] = cbSubtr(rhoCb, xCb)
 
 	for idx := int64(low); idx < int64(high); idx++ {
 		x, y, z := coords(idx, idxWidth)
@@ -193,11 +202,14 @@ func (intr *mcarlo) BoundedInterpolate(
 				&xs[intr.idxBuf[1]],
 				&xs[intr.idxBuf[2]],
 				&xs[intr.idxBuf[3]],
-				1e6, // I really hope this okay. NEED TO FIX.
+				float64(cells),
 			)
 			
 			intr.tet.CellBoundsAt(1.0, tetCb)
-			if !tetCb.Intersect(rhoCb, cells) { continue }
+			if !tetCb.Intersect(relCb, cells) {
+				continue
+			}
+			count++
 
 			bufIdx := intr.gen.UniformInt(0, len(intr.unitBufs))
 			intr.tet.DistributeTetra(

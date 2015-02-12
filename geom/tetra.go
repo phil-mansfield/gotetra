@@ -377,69 +377,35 @@ func (t *Tetra) CellBounds(cellWidth float64) *CellBounds {
 }
 
 func (t *Tetra) CellBoundsAt(cellWidth float64, cb *CellBounds) {
-	pivot := &t.Corners[0]
-
-	maxDiffs := &t.sb.d[0]
-	minDiffs := &t.sb.d[1]
-	buf := &t.sb.d[2]
-
-	// Ideally, the tetrahedron corners should already be in a
-	// configuration which doesn't require the modulo. Fix that
-	// next time.
-	t.Corners[1].SubAt(pivot, t.width, buf)
-	for j := 0; j < 3; j++ {
-		x := buf[j]
-		maxDiffs[j], minDiffs[j] = x, x
+	mins := &t.sb.d[0]
+	maxes := &t.sb.d[1]
+	for i := 0; i < 3; i++ {
+		mins[i] = t.Corners[0][i]
+		maxes[i] = t.Corners[0][i]
 	}
 
-	for i := 2; i < 4; i++ {
-		t.Corners[i].SubAt(pivot, t.width, buf)
-		for j := 0; j < 3; j++ {
-			x := buf[j]
-			if x > maxDiffs[j] {
-				maxDiffs[j] = x
-			} else if x < minDiffs[j] {
-				minDiffs[j] = x
+	for j := 1; j < 4; j++ {
+		for i := 0; i < 3; i++ {
+			if t.Corners[j][i] < mins[i] {
+				mins[i] = t.Corners[j][i]
+			} else if t.Corners[j][i] > maxes[i] {
+				maxes[i] = t.Corners[j][i]
 			}
 		}
 	}
 
-	maxDiffs.SubSelf(minDiffs, t.width)
-	minDiffs.AddSelf(pivot).ModSelf(t.width)
-	floatWidth := maxDiffs
-	floatOrigin := minDiffs
+	for i := 0; i < 3; i++ {
+		maxes[i] -= mins[i]
+	}
+	width := maxes
+	origin := mins
 
-	for j := 0; j < 3; j++ {
-		cb.Origin[j] = int(math.Floor(float64(floatOrigin[j]) / cellWidth))
-		cb.Width[j] = 1 + int(math.Floor(
-			float64(floatWidth[j] + floatOrigin[j]) / cellWidth),
+
+	for i := 0; i < 3; i++ {
+		cb.Origin[i] = int(math.Floor(float64(origin[i]) / cellWidth))
+		cb.Width[i] = 1 + int(math.Floor(
+			float64(width[i] + origin[i]) / cellWidth),
 		)
-		
-		cb.Width[j] -= cb.Origin[j]
+		cb.Width[i] -= cb.Origin[i]
 	}
-}
-
-func (t *Tetra) MinMaxLeg() (min, max float64) {
-	legBuf := &t.vb.buf1
-	min, max = math.MaxFloat64, 0.0
-
-	for i := 0; i < 4; i++ {
-		for j := i + 1; j < 4; j++ {
-			t.Corners[i].SubAt(&t.Corners[j], t.width, legBuf)
-
-			norm := 0.0
-			for k := 0; k < 3; k++ {
-				norm += float64(legBuf[k] * legBuf[k])
-			}
-			norm = math.Sqrt(norm)
-
-			if norm < min {
-				min = norm
-			}
-			if norm > max {
-				max = norm
-			}
-		}
-	}
-	return min, max
 }

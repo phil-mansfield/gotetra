@@ -1,3 +1,5 @@
+/* WARNING: there are problems with having Boxes with different cell widths due
+to the use of ScaleVecs(). Think about this carefully. */
 package gotetra
 
 import (
@@ -95,6 +97,10 @@ func (box *Box) Init(
 	box.cellWidth = cellWidth
 	box.full = false
 }
+
+func (box *Box) Width(dim int) int { return box.cb.Width[dim] }
+
+func (box *Box) CellWidth() float64 { return box.cellWidth }
 
 func NewFullManager(files []string, maxCells, pts int) *FullManager {
 	man := new(FullManager)
@@ -230,15 +236,16 @@ func (man *FullManager) Density(rhos []Box) {
 
 		frac := float64(grid.cells) / float64(man.hd.CountWidth)
 		man.ptRho = frac * frac * frac
+		man.cb.ScaleVecs(man.xs, grid.cells, man.hd.TotalWidth)
 		
 		for id := 0; id < man.workers - 1; id++ {
 			low, high := chunkLen * id, chunkLen * (id + 1)
-			go man.chanInterpolate(id, low, high, grid.cells, out)
+			go man.chanInterpolate(id, low, high, out)
 		}
 		
 		id := man.workers - 1
 		low, high := chunkLen * id, int(segLen)
-		man.chanInterpolate(id, low, high, grid.cells, out)
+		man.chanInterpolate(id, low, high, out)
 		
 		for i := 0; i < man.workers; i++ {
 			id := <-out
@@ -248,10 +255,7 @@ func (man *FullManager) Density(rhos []Box) {
 	}
 }
 
-func (man *FullManager) chanInterpolate(id, low, high, cells int, out chan<- int) {
-	skipVol := man.skip * man.skip * man.skip
-	man.cb.ScaleVecs(man.xs[low * skipVol: high * skipVol], cells, man.hd.TotalWidth)
-
+func (man *FullManager) chanInterpolate(id, low, high int, out chan<- int) {
 	buf := man.rhoBufs[id]
 	for i := range buf { buf[i] = 0.0 }
 	intr := man.intrs[id]
@@ -263,6 +267,7 @@ func (man *BoundedManager) Density(rhos []Box) {
 	out := make(chan int, man.workers)
 	segLen := man.hd.SegmentWidth * man.hd.SegmentWidth * man.hd.SegmentWidth
 	chunkLen :=  int(segLen) / man.workers / (man.skip * man.skip * man.skip)
+	ms := &runtime.MemStats{}
 
 	for _, grid := range rhos {
 		if grid.full {
@@ -270,12 +275,20 @@ func (man *BoundedManager) Density(rhos []Box) {
 		}
 
 		man.cb = man.hd.CellBounds(grid.cells)
-		if !man.loaded && man.cb.Intersect(&grid.cb, grid.cells) {
+		if !man.loaded {
 			if man.file == "" {
 				log.Fatalf("No file has been loaded prior to ")
+			} else if !man.cb.Intersect(&grid.cb, grid.cells) {
+				continue
 			}
+			log.Println("Analyzing", man.file)
 			io.ReadSheetPositionsAt(man.file, man.xs)
+			runtime.GC()
+			man.cb.ScaleVecs(man.xs, grid.cells, man.hd.TotalWidth)
 			man.loaded = true
+
+			runtime.ReadMemStats(ms)
+			log.Printf("Alloc: %d MB, Sys %d MB", ms.Alloc >> 20, ms.Sys >> 20)
 		}
 
 		frac := float64(grid.cells) / float64(man.hd.CountWidth)
@@ -302,10 +315,6 @@ func (man *BoundedManager) Density(rhos []Box) {
 func (man *BoundedManager) chanBoundedInterpolate(
 	id, low, high, cells int, boxCb *geom.CellBounds, out chan<- int,
 ) {
-
-	skipVol := man.skip * man.skip * man.skip
-	man.cb.ScaleVecs(man.xs[low * skipVol: high * skipVol], cells, man.hd.TotalWidth)
-
 	buf := man.rhoBufs[id]
 	for i := range buf { buf[i] = 0.0 }
 	intr := man.intrs[id]
