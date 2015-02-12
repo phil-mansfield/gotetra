@@ -54,6 +54,40 @@ by running
 
     $ `./main --help`
 
+You will almost certainly want to run some permutation of the command line arguments found in
+`main/gotetra.sh`.
+
+Command Line Arguments to `main`
+--------------------------------
+
+calls to `main` will look like this:
+
+    $ ./main *Mode Flag* *Other Flags* path/to/input/directory path/to/output/directory
+
+Since I made several extremely poor design decisions back when I first made `main.go` a few
+months ago, `main.go` can run in multiple modes. The most useful of which is `BoundedDensity`
+which allows you to obtain density fields for small zoomed in boxes. This is what `gotetra.sh`
+is set to do by default. You will probably want to change some of the other flags, though.
+
+- `Cells` controls how many cells would be needed to span the entire width of the box. If you are
+zooming in on a halo, this will generally mean that the full grid would be orders of magnitude
+larger than what could be held in physical memory. (Increasing this number increases the memory footprint
+of the program. Every running thread has its own buffers, so you can trade some performance for some
+memory by reducing the number of threads.)
+
+- `Points` the number of interpolation points per tetrahedron. (Increasing this number has the obvious
+effects, but also increases the memory footprint of the program, since interpolation points are
+heavily cached for performance reasons. If this becomes a problem you can reduce `UnitBufferLen` on line
+62 of `gotetra.go`. If you reduce this number too far, your density fields will start to obtain stripes,
+so exercise caution.)
+
+- `Skip` the number of particles to skip when subsampling.
+
+- `Bounds file` the file which contains the bounding boxes of regions that will be sampled. (This is a
+text file which should consist of rows which each contain six space-separated numbers. The first three
+will be the coordinates of the lower corner of a bounding box and the next three will correspond to the
+width of the box in each direction.)
+
 Version
 -------
 
