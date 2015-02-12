@@ -16,7 +16,14 @@ type Interpolator interface {
 	// the bounds of the bounding grid and points not within the interpolation
 	// grid will be ignored.
 	Interpolate(
-		rhos []float64, cb *geom.CellBounds, mass float64, xs []geom.Vec,
+		rhos []float64, cb *geom.CellBounds, ptRho float64, xs []geom.Vec,
+		low, high int,
+	)
+	// This function signature is bad and I feel bad about it.
+	BoundedInterpolate(
+		rhos []float64, rhoCb *geom.CellBounds, cells int,
+		ptRho float64,
+		xs []geom.Vec, xCb *geom.CellBounds,
 		low, high int,
 	)
 }
@@ -77,6 +84,49 @@ func (intr *ngp) Interpolate(
 	}
 }
 
+func (intr *ngp) BoundedInterpolate(
+	rhos []float64, rhoCb *geom.CellBounds,
+	cells int, ptRho float64,
+	xs []geom.Vec, xCb *geom.CellBounds,
+	low, high int,
+) {
+	length := rhoCb.Width[0]
+	area := rhoCb.Width[0] * rhoCb.Width[1]
+
+	diffI, diffJ, diffK := cbSubtr(rhoCb, xCb)
+
+	for idx := low; idx < high; idx++ {
+		pt := xs[idx]
+		
+		i := bound(int(pt[0]) + diffI, cells)
+		if i < rhoCb.Width[0] {
+			j := bound(int(pt[1]) + diffJ, cells)
+			if j < rhoCb.Width[1] {
+				k := bound(int(pt[2]) + diffK, cells)
+				if k < rhoCb.Width[2] {
+					rhos[i + j * length + k * area] += ptRho
+				}
+			}
+		}
+	}
+}
+
+func cbSubtr(cb1, cb2 *geom.CellBounds) (i, j, k int) {
+	i = cb1.Origin[0] - cb2.Origin[0]
+	j = cb1.Origin[1] - cb2.Origin[1]
+	k = cb1.Origin[2] - cb2.Origin[2]
+	return i, j, k
+}
+
+func bound(x, cells int) int {
+	if x < 0 {
+		return x + cells
+	} else if x >= cells {
+		return x - cells
+	}
+	return x
+}
+
 func (intr *mcarlo) Interpolate(
 	rhos []float64, cb *geom.CellBounds, ptRho float64, xs []geom.Vec,
 	low, high int,
@@ -111,6 +161,53 @@ func (intr *mcarlo) Interpolate(
 
 			intr.subIntr.Interpolate(
 				rhos, cb, ptRho, intr.vecBuf, 0, intr.points,
+			)
+		}
+	}
+}
+
+func (intr *mcarlo) BoundedInterpolate(
+	rhos []float64, rhoCb *geom.CellBounds,
+	cells int, ptRho float64,
+	xs []geom.Vec, xCb *geom.CellBounds,
+	low, high int,
+) {
+	segWidth := intr.segWidth
+	gridWidth := segWidth + 1
+	idxWidth := intr.segWidth / intr.skip
+
+	ptRho = ptRho / float64(intr.points) / 6.0 *
+		float64(intr.skip * intr.skip * intr.skip)
+
+	tetCb := &geom.CellBounds{}
+
+	for idx := int64(low); idx < int64(high); idx++ {
+		x, y, z := coords(idx, idxWidth)
+		gridIdx := index(x, y, z, gridWidth)
+
+		for dir := 0; dir < 6; dir++ {
+			intr.idxBuf.Init(gridIdx, gridWidth, intr.skip, dir)
+					
+			intr.tet.Init(
+				&xs[intr.idxBuf[0]],
+				&xs[intr.idxBuf[1]],
+				&xs[intr.idxBuf[2]],
+				&xs[intr.idxBuf[3]],
+				1e6, // I really hope this okay. NEED TO FIX.
+			)
+			
+			intr.tet.CellBoundsAt(1.0, tetCb)
+			if !tetCb.Intersect(rhoCb, cells) { continue }
+
+			bufIdx := intr.gen.UniformInt(0, len(intr.unitBufs))
+			intr.tet.DistributeTetra(
+				intr.unitBufs[bufIdx],
+				intr.vecBuf,
+			)
+
+			intr.subIntr.BoundedInterpolate(
+				rhos, rhoCb, cells, ptRho,
+				intr.vecBuf, xCb, 0, intr.points,
 			)
 		}
 	}

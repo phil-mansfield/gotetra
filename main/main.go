@@ -396,7 +396,7 @@ func sheetDensityMain(
 	log.Println("Initializating boxes.")
 	boxes[0].InitFullFromFile(files[0], cells)	
 	log.Println("Creating Manager")
-	man := gotetra.NewManager(files, cells, points)
+	man := gotetra.NewFullManager(files, cells, points)
 	man.Skip(skip)
 
 	for i := minSheet; i <= maxSheet; i++ {
