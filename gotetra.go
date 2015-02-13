@@ -59,7 +59,7 @@ var (
 
 const (
 	MaxBufferLen = 1<<30
-	UnitBufferLen = 1<<12
+	UnitBufferLen = 1<<10
 )
 
 func (box *Box) InitFullFromFile(file string, cells int) {
@@ -224,8 +224,9 @@ func isPowTwo(x int) bool {
 
 func (man *FullManager) Density(rhos []Box) {
 	out := make(chan int, man.workers)
-	segLen := man.hd.SegmentWidth * man.hd.SegmentWidth * man.hd.SegmentWidth
-	chunkLen :=  int(segLen) / man.workers / (man.skip * man.skip * man.skip)
+	segFrac := int(man.hd.SegmentWidth) / man.skip
+	segLen := segFrac * segFrac * segFrac
+	chunkLen := segLen / man.workers
 
 	for _, grid := range rhos {
 		if !grid.full {
@@ -244,7 +245,7 @@ func (man *FullManager) Density(rhos []Box) {
 		}
 		
 		id := man.workers - 1
-		low, high := chunkLen * id, int(segLen)
+		low, high := chunkLen * id, segLen
 		man.chanInterpolate(id, low, high, out)
 		
 		for i := 0; i < man.workers; i++ {
@@ -265,8 +266,9 @@ func (man *FullManager) chanInterpolate(id, low, high int, out chan<- int) {
 
 func (man *BoundedManager) Density(rhos []Box) {
 	out := make(chan int, man.workers)
-	segLen := man.hd.SegmentWidth * man.hd.SegmentWidth * man.hd.SegmentWidth
-	chunkLen :=  int(segLen) / man.workers / (man.skip * man.skip * man.skip)
+	segFrac := int(man.hd.SegmentWidth) / man.skip
+	segLen := segFrac * segFrac * segFrac
+	chunkLen :=  int(segLen) / man.workers 
 	ms := &runtime.MemStats{}
 
 	for _, grid := range rhos {
@@ -300,7 +302,7 @@ func (man *BoundedManager) Density(rhos []Box) {
 		}
 		
 		id := man.workers - 1
-		low, high := chunkLen * id, int(segLen)
+		low, high := chunkLen * id, segLen
 		man.chanBoundedInterpolate(id, low, high, grid.cells, &grid.cb, out)
 		
 		bufLen := grid.cb.Width[0] * grid.cb.Width[1] * grid.cb.Width[2]

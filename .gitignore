@@ -32,7 +32,6 @@ _testmain.go
 *.prof
 *.pprof
 *.mprof
-*.sh
 *.err
 *.out
 *.dat

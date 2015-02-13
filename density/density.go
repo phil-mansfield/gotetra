@@ -28,8 +28,6 @@ type Interpolator interface {
 	)
 }
 
-var ptCount = 0
-
 type ngp struct { }
 
 // The ordering of these fields makes no goddamned sense.
@@ -106,7 +104,8 @@ func (intr *ngp) BoundedInterpolate(
 			if j < rhoCb.Width[1] {
 				k := bound(int(pt[2]) - diffK, cells)
 				if k < rhoCb.Width[2] {
-					ptCount++
+					// It would be interesting to see what would happen
+					// if we cached the results of computing this index.
 					rhos[i + j * length + k * area] += ptRho
 				}
 			}
@@ -175,8 +174,6 @@ func (intr *mcarlo) BoundedInterpolate(
 	xs []geom.Vec, xCb *geom.CellBounds,
 	low, high int,
 ) {
-	count := 0
-
 	segWidth := intr.segWidth
 	gridWidth := segWidth + 1
 	idxWidth := intr.segWidth / intr.skip
@@ -192,11 +189,11 @@ func (intr *mcarlo) BoundedInterpolate(
 
 	for idx := int64(low); idx < int64(high); idx++ {
 		x, y, z := coords(idx, idxWidth)
-		gridIdx := index(x, y, z, gridWidth)
+		gridIdx := index(x * intr.skip, y * intr.skip, z * intr.skip, gridWidth)
 
 		for dir := 0; dir < 6; dir++ {
 			intr.idxBuf.Init(gridIdx, gridWidth, intr.skip, dir)
-					
+			
 			intr.tet.Init(
 				&xs[intr.idxBuf[0]],
 				&xs[intr.idxBuf[1]],
@@ -209,7 +206,6 @@ func (intr *mcarlo) BoundedInterpolate(
 			if !tetCb.Intersect(relCb, cells) {
 				continue
 			}
-			count++
 
 			bufIdx := intr.gen.UniformInt(0, len(intr.unitBufs))
 			intr.tet.DistributeTetra(
