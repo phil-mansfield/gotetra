@@ -152,7 +152,6 @@ func (intr *mcarlo) Interpolate(
 				&xs[intr.idxBuf[1]],
 				&xs[intr.idxBuf[2]],
 				&xs[intr.idxBuf[3]],
-				1e6,
 			)
 					
 			bufIdx := intr.gen.UniformInt(0, len(intr.unitBufs))
@@ -199,13 +198,10 @@ func (intr *mcarlo) BoundedInterpolate(
 				&xs[intr.idxBuf[1]],
 				&xs[intr.idxBuf[2]],
 				&xs[intr.idxBuf[3]],
-				float64(cells),
 			)
 			
 			intr.tet.CellBoundsAt(1.0, tetCb)
-			if !tetCb.Intersect(relCb, cells) {
-				continue
-			}
+			if !tetCb.Intersect(relCb, cells) { continue }
 
 			bufIdx := intr.gen.UniformInt(0, len(intr.unitBufs))
 			intr.tet.DistributeTetra(

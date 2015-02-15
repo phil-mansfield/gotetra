@@ -3,8 +3,10 @@ package geom
 import (
 	"fmt"
 	"math"
+	"log"
 
 	"github.com/phil-mansfield/gotetra/rand"
+	"github.com/gonum/matrix/mat64"
 )
 
 // Tetra is a tetrahedron with points inside a box with periodic boundary
@@ -18,11 +20,11 @@ type Tetra struct {
 	Corners [4]Vec
 	volume  float64
 	bary    Vec
-	width   float64
 	vb      volumeBuffer
 	sb      sampleBuffer
+	jInv    *mat64.Dense
 
-	volumeValid, baryValid bool
+	volumeValid, baryValid, jInvValid bool
 }
 
 type TetraIdxs [4]int64
@@ -39,8 +41,9 @@ const (
 	eps = 5e-5
 
 	// TetraDirCount is the number of orientations that a tetrahedron can have
-	// within a cube. Should be iterated over when Calling TetraIdxs.Init().
+	// within a cube. Should be iterated over when calling TetraIdxs.Init().
 	TetraDirCount = 6
+	TetraCenteredCount = 8
 )
 
 var (
@@ -53,37 +56,40 @@ var (
 		{{0, 1, 0}, {0, 1, 1}},
 		{{0, 0, 1}, {0, 1, 1}},
 	}
+
+	centers = [TetraCenteredCount][3][3]int64{
+		{{0, 0, +1}, {0, +1, 0}, {+1, 0, 0}},
+		{{0, 0, +1}, {0, +1, 0}, {-1, 0, 0}},
+		{{0, 0, +1}, {0, -1, 0}, {+1, 0, 0}},
+		{{0, 0, +1}, {0, -1, 0}, {-1, 0, 0}},
+		{{0, 0, -1}, {0, +1, 0}, {+1, 0, 0}},
+		{{0, 0, -1}, {0, +1, 0}, {-1, 0, 0}},
+		{{0, 0, -1}, {0, -1, 0}, {+1, 0, 0}},
+		{{0, 0, -1}, {0, -1, 0}, {-1, 0, 0}},
+	}
 )
 
 // NewTetra creates a new tetrahedron with corners at the specified positions
 // within a periodic box of the given width.
-func NewTetra(c1, c2, c3, c4 *Vec, width float64) (t *Tetra, ok bool) {
-	t = &Tetra{}
-	return t, t.Init(c1, c2, c3, c4, width)
+func NewTetra(c0, c1, c2, c3 *Vec) *Tetra {
+	t := &Tetra{}
+	return t.Init(c0, c1, c2, c3)
 }
 
-// Init initializes a tetrahedron to correspond to the given corners. It returns
-// true if all the given pointers are valid and the tetrahedron was properly
-// initialized and false otherwise. This behavior is chosen so that this
-// function interacts nicely with ParticleManagers.
-func (t *Tetra) Init(c1, c2, c3, c4 *Vec, width float64) (ok bool) {
+// Init initializes a tetrahedron to correspond to the given corners.
+func (t *Tetra) Init(c0, c1, c2, c3 *Vec) *Tetra {
 	t.volumeValid = false
 	t.baryValid = false
+	t.jInvValid = false
 
-	if c1 == nil || c2 == nil || c3 == nil || c4 == nil {
-		return false
-	}
-
-	c1.ModAt(width, &t.Corners[0])
-	c2.ModAt(width, &t.Corners[1])
-	c3.ModAt(width, &t.Corners[2])
-	c4.ModAt(width, &t.Corners[3])
-
-	t.width = width
+	t.Corners[0] = *c0
+	t.Corners[1] = *c1
+	t.Corners[2] = *c2
+	t.Corners[3] = *c3
 	
 	// Remaining fields are buffers and need not be initialized.
 
-	return true
+	return t
 }
 
 // NewTetraIdxs creates a collection of indices corresponding to a tetrhedron
@@ -100,36 +106,34 @@ func compressCoords(x, y, z, dx, dy, dz, countWidth int64) int64 {
 	newX := x + dx
 	newY := y + dy
 	newZ := z + dz
-
-	if newX >= countWidth {
-		newX -= countWidth
-	} else if newX < 0 {
-		newX += countWidth
-	}
-
-	if newY >= countWidth {
-		newY -= countWidth
-	} else if newY < 0 {
-		newY += countWidth
-	}
-
-	if newZ >= countWidth {
-		newZ -= countWidth
-	} else if newZ < 0 {
-		newZ += countWidth
-	}
-
+	
 	return newX + newY*countWidth + newZ*countWidth*countWidth
+}
+
+func compressCoordsCheck(x, y, z, dx, dy, dz, countWidth int64) (idx int64, ok bool) {
+	newX := x + dx
+	newY := y + dy
+	newZ := z + dz
+
+	if newX >= countWidth || newX < 0 {
+		return -1, false
+	} else if newX >= countWidth || newX < 0 {
+		return -1, false
+	} else if newX >= countWidth || newX < 0 { 
+		return -1, false
+	}	
+
+	return newX + newY*countWidth + newZ*countWidth*countWidth, true
 }
 
 // Init initializes a TetraIdxs collection using the same rules as NewTetraIdxs.
 func (idxs *TetraIdxs) Init(idx, countWidth, skip int64, dir int) *TetraIdxs {
 	if dir < 0 || dir >= 6 {
-		panic(fmt.Sprintf("Unknown direction %d", dir))
+		log.Fatalf("Unknown direction %d for TetraIdxs.Init()", dir)
 	}
 
 	countArea := countWidth * countWidth
-
+	
 	x := idx % countWidth
 	y := (idx % countArea) / countWidth
 	z := idx / countArea
@@ -148,6 +152,49 @@ func (idxs *TetraIdxs) Init(idx, countWidth, skip int64, dir int) *TetraIdxs {
 	idxs[3] = idx
 
 	return idxs
+}
+
+func (idxs *TetraIdxs) InitCentered(idx, countWidth, skip int64, dir int) (ti *TetraIdxs, ok bool) {
+	if dir < 0 || dir >= 8 { 
+		log.Fatalf("Unknown direciton %d for TetraIdxs.InitCentered()", dir)
+	}
+
+	countArea := countWidth * countWidth
+
+	x := idx % countWidth
+	y := (idx % countArea) / countWidth
+	z := idx / countArea
+
+	idxs[0], ok =  compressCoordsCheck(
+		x, y, z,
+		skip * centers[dir][0][0],
+		skip * centers[dir][0][1],
+		skip * centers[dir][0][2],
+		countWidth,
+	)
+	if !ok { return idxs, false }
+
+	idxs[1], ok =  compressCoordsCheck(
+		x, y, z,
+		skip * centers[dir][1][0],
+		skip * centers[dir][1][1],
+		skip * centers[dir][1][2],
+		countWidth,
+	)
+	if !ok { return idxs, false }
+
+	idxs[2], ok =  compressCoordsCheck(
+		x, y, z,
+		skip * centers[dir][2][0],
+		skip * centers[dir][2][1],
+		skip * centers[dir][2][2],
+		countWidth,
+	)
+	if !ok { return idxs, false }
+
+	idxs[3] = idx
+
+	return idxs, true
 }
 
 // Volume computes the volume of a tetrahedron.
@@ -209,13 +256,17 @@ func epsEq(x, y, eps float64) bool {
 		(x != 0 && y != 0 && math.Abs((x-y)/x) <= eps)
 }
 
-func (t *Tetra) signedVolume(c1, c2, c3, c4 *Vec) float64 {
-	c2.SubAt(c1, t.width, &t.vb.buf1)
-	c3.SubAt(c1, t.width, &t.vb.buf2)
-	c4.SubAt(c1, t.width, &t.vb.buf3)
+func (t *Tetra) signedVolume(c0, c1, c2, c3 *Vec) float64 {
+	leg1, leg2, leg3 := &t.vb.buf1, &t.vb.buf2, &t.vb.buf3
 
-	t.vb.buf2.CrossSelf(&t.vb.buf3)
-	return t.vb.buf1.Dot(&t.vb.buf2) / 6.0
+	for i := 0; i < 3; i++ {
+		leg1[i] = c1[i] - c0[i]
+		leg2[i] = c2[i] - c0[i]
+		leg3[i] = c3[i] - c0[i]
+	}
+
+	leg2.CrossSelf(leg3)
+	return leg1.Dot(leg2) / 6.0
 }
 
 func minMax(x, oldMin, oldMax float32) (min, max float32) {
@@ -251,13 +302,12 @@ func (tet *Tetra) RandomSample(gen *rand.Generator, randBuf []float64, vecBuf []
 // results are placed in vecBuf.
 func (tet *Tetra) Distribute(xs, ys, zs []float64, vecBuf []Vec) {
 	bary := tet.Barycenter()
-	w := float32(tet.width)
 	// Some gross code to prevent allocations. cs are the displacement vectors
-	// to the corners and the ds are the barycentric components of the random
-	// points.
+	// to the corners
 	for i := 0; i < 4; i++ {
-		tet.Corners[i].SubAt(bary, tet.width, &tet.sb.c[i])
-		tet.sb.d[i].ScaleSelf(0.0)
+		for j := 0; j < 3; j++ {
+			tet.sb.c[i][j] = tet.Corners[i][j] - bary[j]
+		}
 	}
 
 	// Note: this inner loop is very optimized. Don't try to "fix" it.
@@ -287,11 +337,6 @@ func (tet *Tetra) Distribute(xs, ys, zs []float64, vecBuf []Vec) {
 			d3 := tet.sb.c[3][j] * v
 			
 			val := bary[j] + d0 + d1 + d2 + d3
-			if val >= w {
-				val -= w
-			} else if val < 0 {
-				val += w
-			}
 
 			vecBuf[i][j] = val
 		}
@@ -326,13 +371,12 @@ func (tet *Tetra) DistributeTetra(pts []Vec, out []Vec) {
 	// be cleaned up.
 	bary := tet.Barycenter()
 
-	// Some gross code to prevent allocations. cs are the displacement vectors
-	// to the corners and the ds are the barycentric components of the random
-	// points.
 	for i := 0; i < 4; i++ {
-		tet.Corners[i].SubAt(bary, tet.width, &tet.sb.c[i])
-		tet.sb.d[i].ScaleSelf(0.0)
+		for j := 0; j < 3; j++ {
+			tet.sb.c[i][j] = tet.Corners[i][j] - bary[j]
+		}
 	}
+
 	for i := range pts {
 		pt := &pts[i]
 		s, t, u := pt[0], pt[1], pt[2]
@@ -356,18 +400,12 @@ func (t *Tetra) Barycenter() *Vec {
 		return &t.bary
 	}
 
-	buf1, buf2 := &t.vb.buf1, &t.vb.buf2
-	center(&t.Corners[0], &t.Corners[1], buf1, t.width)
-	center(&t.Corners[2], &t.Corners[3], buf2, t.width)
-	center(buf1, buf2, &t.bary, t.width)
-	t.bary.ModSelf(t.width)
+	for i := 0; i < 3; i++ {
+		t.bary[i] = (t.Corners[0][i] + t.Corners[1][i] + t.Corners[2][i]) / 4.0
+	}
+
 	t.baryValid = true
-
 	return &t.bary
-}
-
-func center(r1, r2, out *Vec, width float64) {
-	r1.SubAt(r2, width, out).AddSelf(r2).AddSelf(r2).ScaleSelf(0.5)
 }
 
 func (t *Tetra) CellBounds(cellWidth float64) *CellBounds {
