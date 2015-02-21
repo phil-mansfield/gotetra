@@ -1,0 +1,29 @@
+# This file will render three boxes to "my_halo.dat", "my_halo_zoomed_out.dat",
+# and "slice_Z80.dat", respectively, whenever it is run.
+
+[Ball "my_halo"]
+
+X = 73.325
+Y = 100.919
+Z = 13.600
+
+Radius = 2.122
+
+[Ball "my_halo_zoomed_out"]
+
+X = 73.325
+Y = 100.919
+Z = 13.600
+
+Radius = 2.122
+RadiusMultiplier = 5
+
+[Box "slice_Z80"]
+
+X = 0
+Y = 0
+Z = 80
+
+XWidth = 125.0
+YWidth = 125.0
+ZWidth = 1.5
