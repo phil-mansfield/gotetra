@@ -18,10 +18,8 @@ func rhoCriticalMks(H0, omegaM, omegaL, z float64) float64 {
 	H100 := H0 / 100
 	// m = m * H100
 	H0MksH := H0Mks / H100
-	println(H0MksH, H0Mks)
 
 	H := HubbleFrac(omegaM, omegaL, z) * H0MksH
-	println(3.0 * H * H / (8.0 * math.Pi * GMks))
 	return 3.0 * H * H / (8.0 * math.Pi * GMks)
 }
 
