@@ -2,30 +2,38 @@
 
 Output files will each consist of a binary header followed by a `float32` array (now that we aren't constrained to use a numpy-readable format we can save ourselves some disk space and `scp` time). I'm going to err on the side of including too much in the header instead of too little for now. The header will have the following format:
 
-    type OutputHeader struct {
-        // These fields will usually not be needed for most users:
-        EndiannessFlag, HeaderSize int64
+    type GridHeader struct {
+        Type TypeInfo
         Cosmo CosmoInfo
         Render RenderInfo
+        Loc LocationInfo
+    }
+
+    type TypeInfo struct {
+        Endianness int64
+        HeaderSize int64
         GridType int64
-        IfVec int64
-        
-        // These fields will almost always be needed by most users:
-        Origin, Span Vector
-        PixelOrigin, PixelSpan IntVector
-        PixelWidth float64
+        IsVectorGrid int64
     }
 
     type CosmoInfo struct {
         Redshift, ScaleFactor float64
         OmegaM, OmegaL, Hubble float64
         RhoMean, RhoCritical float64
+        BoxWidth float64
     }
-    
+
     type RenderInfo struct {
-        ParticleCount int
-        SubsampleLength int
-        MinProjectionDepth int
+        Particles int64
+        TotalPixels int64
+        SubsampleLength int64
+        MinProjectionDepth int64
+    }
+
+    type LocationInfo struct {
+        Origin, Span Vector
+        PixelOrigin, PixelSpan IntVector
+        PixelWidth float64
     }
 
     type Vector [3]float64
@@ -33,7 +41,7 @@ Output files will each consist of a binary header followed by a `float32` array 
     
 ####Field descriptions
     
-* `EndiannessFlag` - A flag indicating the endianness of the data in this file. -1 indicates "little endian" byte ordering and 0 indicates "big endian" byte ordering. (I choose these two values because they're the only two int values which are the same for both endiannesses). This way files can written and read on two different architectures without ambiguity.
+* `Endianness` - A flag indicating the endianness of the data in this file. -1 indicates "little endian" byte ordering and 0 indicates "big endian" byte ordering. (I choose these two values because they're the only two int values which are the same for both endiannesses). This way files can written and read on two different architectures without ambiguity.
 * `HeaderSize` - The size of the header in bytes. Can be checked to ensure consistency.
 * `Cosmo` - Basic information about the cosmology of the simulation that generated this grid. Contains some redundant information for ease of use.
 * `Render` - Basic information about the rendering configuration variables.
@@ -50,11 +58,7 @@ As this header is fairly large, I will provide implementations for reading it in
 
 #### Python:
 
-    # module namespace: gotetra
-    class Header(object)
-    def read_header(filename : string) -> Header
-    def read_grid(filename : string) -> numpy.ndarray
-    DENSITY : int, GRADIENT : int, DIVERGENCE : int, CURL : int = ...
+See `gotetra.py` in the current directory. Note that for ease of use, some long but commonly used fields have been reproduced with shorter names at the top namespace of the class.
 
 #### C:
 
