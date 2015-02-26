@@ -75,6 +75,8 @@ func (ball *BallConfig) Box(totalWidth float64) *BoxConfig {
 	} else {
 		box.Z = ball.Z - ball.Radius + totalWidth
 	}
+
+	box.Name = ball.Name
 	
 	return box
 }
