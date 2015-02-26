@@ -1,0 +1,7 @@
+[Ball "Meow"]
+
+X = 3
+Y = 123.1
+ZZ = 151.2
+
+Radius = 2

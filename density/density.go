@@ -230,7 +230,7 @@ func coords(idx, cells int64) (x, y, z int64) {
 
 // AddBuffer adds the contents of a density buffer constrained by the given
 // CellBounds to a periodic grid with the given number of cells.
-func AddBuffer(grid, buf []float64, cb *geom.CellBounds, cells int) {
+func AddBuffer(grid []float32, buf []float64, cb *geom.CellBounds, cells int) {
 	for z := 0; z < cb.Width[2]; z++ {
 		zBufIdx := z * cb.Width[0] * cb.Width[1]
 		zGridIdx := ((z + cb.Origin[2]) % cells) * cells * cells
@@ -247,7 +247,7 @@ func AddBuffer(grid, buf []float64, cb *geom.CellBounds, cells int) {
 				bufIdx := xBufIdx + yBufIdx + zBufIdx
 				gridIdx := xGridIdx + yGridIdx + zGridIdx
 				
-				grid[gridIdx] += float64(buf[bufIdx])
+				grid[gridIdx] += float32(buf[bufIdx])
 			}
 		}
 	}

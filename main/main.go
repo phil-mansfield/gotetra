@@ -396,8 +396,6 @@ func fullDensityMain(
 	files := make([]string, len(infos))
 	for i := range infos { files[i] = path.Join(sourceDir, infos[i].Name()) }
 
-	// gotetra code starts here
-
 	boxes := make([]gotetra.Box, 1)
 	boxes[0].InitFullFromFile(files[0], cells)	
 	man := gotetra.NewFullManager(files, cells, points)
@@ -409,12 +407,23 @@ func fullDensityMain(
 		man.Density(boxes)
 	}
 
-	// gotetra code ends here
+	hd := io.SheetHeader{}
+	io.ReadSheetHeaderAt(files[0], &hd)
+	box := boxes[0]
 
-    out := path.Join(outDir,
-        fmt.Sprintf("G%d_NP%d_S%d.dat", cells, points, skip))
-    log.Printf("Writing %s", out)
-    writeDensity(out, boxes[0].Vals) 
+	out := path.Join(outDir, "box.gtet")
+	f, err := os.Create(out)
+	defer f.Close()
+	if err != nil { log.Fatalf("Could not create %s.", out) }
+	
+	loc := io.NewLocationInfo(box.CellOrigin(), box.CellSpan(), box.CellWidth())
+	cos := io.NewCosmoInfo(
+		hd.Cosmo.H100 * 100, hd.Cosmo.OmegaM,
+		hd.Cosmo.OmegaL, hd.Cosmo.Z, hd.TotalWidth,
+	)
+	render := io.NewRenderInfo(points, cells, skip)
+	
+	io.WriteDensity(box.Vals, cos, render, loc, f)
 }
 
 func boundedDensityMain(
@@ -428,22 +437,13 @@ func boundedDensityMain(
 	if err != nil { log.Fatalf(err.Error()) }
 	files := make([]string, len(infos))
 	for i := range infos { files[i] = path.Join(sourceDir, infos[i].Name()) }
+	hd := io.SheetHeader{}
+	io.ReadSheetHeaderAt(files[0], &hd)
 
-	bs, err := ioutil.ReadFile(boundsFile)
-	if err != nil { log.Fatalf(err.Error()) }
-	origins, widths := readCols(string(bs))
-
-	// Biggest:
-	// radius := 2.170
-	// center := [3]float64{4.602, 100.704, 80.701}
-	// 100th Biggest:
-	// radius := 0.791
-	// center := [3]float64{29.609, 64.128, 42.843}
-
-	// gotetra code starts here
-	boxes := make([]gotetra.Box, len(origins))
+	configBoxes, err := io.ReadBoundsConfig(boundsFile, hd.TotalWidth)
+	boxes := make([]gotetra.Box, len(configBoxes))
 	for i := range boxes {
-		boxes[i].Init(125, cells, origins[i], widths[i])
+		boxes[i].InitFromConfig(hd.TotalWidth, cells, &configBoxes[i])
 	}
 
 	man := gotetra.NewBoundedManager(files, boxes, points)
@@ -454,64 +454,24 @@ func boundedDensityMain(
 		man.Density(boxes)
 	}
 
-	// gotetra code ends here
+	for i, cBox := range configBoxes {
+		box := boxes[i]
 
-	for i := range boxes {
-		boxWidth := boxes[i].CellWidth() * float64(cells)
-		out := path.Join(outDir,
-			fmt.Sprintf("L%g_G%d_NP%d_S%d_XW%d_YW%d_ZW%d.dat",
-				boxWidth, cells, points, skip,
-				boxes[i].Width(0), boxes[i].Width(1), boxes[i].Width(2)))
-		writeDensity(out, boxes[i].Vals) 
+		out := path.Join(outDir, fmt.Sprintf("%s.gtet", cBox.Name))
+		f, err := os.Create(out)
+		defer f.Close()
+		if err != nil { log.Fatalf("Could not create %s.", out) }
+		
+		loc := io.NewLocationInfo(
+			box.CellOrigin(), box.CellSpan(), box.CellWidth(),
+		)
+		cos := io.NewCosmoInfo(
+			hd.Cosmo.H100 * 100, hd.Cosmo.OmegaM,
+			hd.Cosmo.OmegaL, hd.Cosmo.Z, hd.TotalWidth,
+		)
+
+		render := io.NewRenderInfo(points, cells, skip)
+
+		io.WriteDensity(box.Vals, cos, render, loc, f)
 	}
-}
-
-func readCols(s string) (origins, widths [][3]float64) {	
-	lines := strings.Split(s, "\n")
-
-	if len(lines[len(lines) - 1]) == 0 { lines = lines[:len(lines) - 1] }
-
-	origins = make([][3]float64, len(lines))
-	widths = make([][3]float64, len(lines))
-
-	for i, line := range lines {
-		tokens := strings.Split(line, " ")
-		words := []string{}
-
-		for _, tok := range tokens {
-			if len(tok) > 0 { words = append(words, tok)}
-		}
-
-		if len(words) != 6 {
-			log.Fatalf("Found %d tokens on line %d of BoundsFile. " + 
-				"Require 6 tokens.", len(words), i)
-		}
-
-		ox, err := strconv.ParseFloat(words[0], 64)
-		if err != nil { log.Fatalf(err.Error()) }		
-		oy, err := strconv.ParseFloat(words[1], 64)
-		if err != nil { log.Fatalf(err.Error()) }
-		oz, err := strconv.ParseFloat(words[2], 64)
-		if err != nil { log.Fatalf(err.Error()) }
-
-		wx, err := strconv.ParseFloat(words[3], 64)
-		if err != nil { log.Fatalf(err.Error()) }
-		wy, err := strconv.ParseFloat(words[4], 64)
-		if err != nil { log.Fatalf(err.Error()) }
-		wz, err := strconv.ParseFloat(words[5], 64)
-		if err != nil { log.Fatalf(err.Error()) }
-
-		origins[i] = [3]float64{float64(ox), float64(oy), float64(oz)}
-		widths[i] = [3]float64{float64(wx), float64(wy), float64(wz)}
-	}
-
-	return origins, widths
-}
-
-func writeDensity(fname string, d []float64) {
-	f, err := os.Create(fname)
-	if err != nil { log.Fatal(err.Error()) }
-	defer f.Close()
-
-	binary.Write(f, binary.LittleEndian, d)
 }

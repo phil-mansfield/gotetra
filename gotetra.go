@@ -15,7 +15,7 @@ import (
 
 // Box represents 
 type Box struct {
-	Vals []float64
+	Vals []float32
 	cb geom.CellBounds
 	cells int
 	cellWidth float64
@@ -69,12 +69,20 @@ func (box *Box) InitFullFromFile(file string, cells int) {
 }
 
 func (box *Box) InitFull(boxWidth float64, cells int) {
-	box.Vals = make([]float64, cells * cells * cells)
+	box.Vals = make([]float32, cells * cells * cells)
 	box.cb.Origin = [3]int{0, 0, 0}
 	box.cb.Width = [3]int{cells, cells, cells}
 	box.cells = cells
 	box.cellWidth = boxWidth / float64(cells)
 	box.full = true
+}
+
+func (box *Box) InitFromConfig(
+	boxWidth float64, cells int, cb *io.BoxConfig,
+) {
+	origin := [3]float64{cb.X, cb.Y, cb.Z}
+	width := [3]float64{cb.XWidth, cb.YWidth, cb.ZWidth}
+	box.Init(boxWidth, cells, origin, width)
 }
 
 func (box *Box) Init(
@@ -91,14 +99,22 @@ func (box *Box) Init(
 		box.cb.Width[j] -= box.cb.Origin[j]
 	}
 
-	box.Vals = make([]float64, box.cb.Width[0] * box.cb.Width[1] * box.cb.Width[2])
+	box.Vals = make(
+		[]float32, box.cb.Width[0] * box.cb.Width[1] * box.cb.Width[2],
+	)
 
 	box.cells = cells
 	box.cellWidth = cellWidth
 	box.full = false
 }
 
-func (box *Box) Width(dim int) int { return box.cb.Width[dim] }
+func (box *Box) CellSpan() [3]int {
+	return box.cb.Width
+}
+
+func (box *Box) CellOrigin() [3]int {
+	return box.cb.Origin
+}
 
 func (box *Box) CellWidth() float64 { return box.cellWidth }
 
@@ -309,7 +325,7 @@ func (man *BoundedManager) Density(rhos []Box) {
 		for i := 0; i < man.workers; i++ {
 			id := <-out
 			buf := man.rhoBufs[id]
-			for j := 0; j < bufLen; j++ { grid.Vals[j] += buf[j] }
+			for j := 0; j < bufLen; j++ { grid.Vals[j] += float32(buf[j]) }
 		}
 	}
 }
