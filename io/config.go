@@ -54,26 +54,26 @@ func (ball *BallConfig) CheckInit(name string, totalWidth float64) error {
 
 func (ball *BallConfig) Box(totalWidth float64) *BoxConfig {
 	box := &BoxConfig{}
-	box.XWidth = ball.Radius * 2
-	box.YWidth = ball.Radius * 2
-	box.ZWidth = ball.Radius * 2
+	rad := ball.Radius * ball.RadiusMultiplier
 
-	if ball.X > ball.Radius {
-		box.X = ball.X - ball.Radius
+	box.XWidth, box.YWidth, box.ZWidth = 2 * rad, 2 * rad, 2 * rad
+
+	if ball.X > rad {
+		box.X = ball.X - rad
 	} else {
-		box.X = ball.X - ball.Radius + totalWidth
+		box.X = ball.X - rad + totalWidth
 	}
 
-	if ball.Y > ball.Radius {
-		box.Y = ball.Y - ball.Radius
+	if ball.Y > rad {
+		box.Y = ball.Y - rad
 	} else {
-		box.Y = ball.Y - ball.Radius + totalWidth
+		box.Y = ball.Y - rad + totalWidth
 	}
 
-	if ball.Z > ball.Radius {
-		box.Z = ball.Z - ball.Radius
+	if ball.Z > rad {
+		box.Z = ball.Z - rad
 	} else {
-		box.Z = ball.Z - ball.Radius + totalWidth
+		box.Z = ball.Z - rad + totalWidth
 	}
 
 	box.Name = ball.Name

@@ -441,6 +441,8 @@ func boundedDensityMain(
 	io.ReadSheetHeaderAt(files[0], &hd)
 
 	configBoxes, err := io.ReadBoundsConfig(boundsFile, hd.TotalWidth)
+	if err != nil { log.Fatal(err.Error()) }
+
 	boxes := make([]gotetra.Box, len(configBoxes))
 	for i := range boxes {
 		boxes[i].InitFromConfig(hd.TotalWidth, cells, &configBoxes[i])
@@ -458,6 +460,7 @@ func boundedDensityMain(
 		box := boxes[i]
 
 		out := path.Join(outDir, fmt.Sprintf("%s.gtet", cBox.Name))
+		log.Printf("Writing to %s", out)
 		f, err := os.Create(out)
 		defer f.Close()
 		if err != nil { log.Fatalf("Could not create %s.", out) }
