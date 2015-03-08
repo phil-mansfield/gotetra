@@ -27,7 +27,7 @@ var (
 
 func main() {
 	var (
-		logPath, pprofPath, boundsFile string
+		logPath, pprofPath, boundsFile, appendName string
 		minSheet, maxSheet int
 		createSheet, fullDensity, boundedDensity bool
 		points, cells, skip int
@@ -39,6 +39,8 @@ func main() {
 		"Location to write profile to. Default is no profiling.")
 	flag.StringVar(&boundsFile, "BoundsFile", "",
 		"Location to read in grid bounds from.")
+	flag.StringVar(&appendName , "AppendName", "",
+		"String that will be appended to the end of output file names.")
 
 	flag.IntVar(&cells, "Cells", -1, "Width of grid in cells.")
 	flag.IntVar(&skip, "Skip", 1, "Width of a tetrahedron in particles.")
@@ -105,7 +107,7 @@ func main() {
 		source := args[0]
 		target := args[1]
 		fullDensityMain(cells, points, skip, source, target,
-			minSheet, maxSheet)
+			appendName, minSheet, maxSheet)
 	case boundedDensity:
 		checkCells(cells, modeName)
 		args := flag.Args()
@@ -117,7 +119,7 @@ func main() {
 		source := args[0]
 		target := args[1]
 		boundedDensityMain(cells, points, skip, source, target,
-			boundsFile, minSheet, maxSheet)
+			appendName, boundsFile, minSheet, maxSheet)
 	}
 }
 
@@ -386,7 +388,7 @@ func validCellNum(cells int) bool {
 
 func fullDensityMain(
 	cells, points, skip int,
-	sourceDir, outDir string,
+	sourceDir, outDir, appendName string,
 	minSheet, maxSheet int,
 ) {
 	log.Println("Running FullDensity main.")
@@ -411,7 +413,7 @@ func fullDensityMain(
 	io.ReadSheetHeaderAt(files[0], &hd)
 	box := boxes[0]
 
-	out := path.Join(outDir, "box.gtet")
+	out := path.Join(outDir, fmt.Sprintf("box%s.gtet", appendName))
 	f, err := os.Create(out)
 	defer f.Close()
 	if err != nil { log.Fatalf("Could not create %s.", out) }
@@ -428,7 +430,7 @@ func fullDensityMain(
 
 func boundedDensityMain(
 	cells, points, skip int,
-	sourceDir, outDir, boundsFile string,
+	sourceDir, outDir, appendName, boundsFile string,
 	minSheet, maxSheet int,
 ) {
 	log.Println("Running BoundedDensity main.")
@@ -446,6 +448,7 @@ func boundedDensityMain(
 	boxes := make([]gotetra.Box, len(configBoxes))
 	for i := range boxes {
 		boxes[i].InitFromConfig(hd.TotalWidth, cells, &configBoxes[i])
+		log.Println("Rendering to box:", boxes[i].CellSpan(), "pixels.")
 	}
 
 	man := gotetra.NewBoundedManager(files, boxes, points)
@@ -459,7 +462,7 @@ func boundedDensityMain(
 	for i, cBox := range configBoxes {
 		box := boxes[i]
 
-		out := path.Join(outDir, fmt.Sprintf("%s.gtet", cBox.Name))
+		out := path.Join(outDir, fmt.Sprintf("%s%s.gtet", cBox.Name, appendName))
 		log.Printf("Writing to %s", out)
 		f, err := os.Create(out)
 		defer f.Close()

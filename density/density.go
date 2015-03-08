@@ -142,7 +142,7 @@ func (intr *mcarlo) Interpolate(
 
 	for idx := int64(low); idx < int64(high); idx++ {
 		x, y, z := coords(idx, idxWidth)
-		gridIdx := index(x, y, z, gridWidth)
+		gridIdx := index(x * intr.skip, y * intr.skip, z * intr.skip, gridWidth)
 
 		for dir := 0; dir < 6; dir++ {
 			intr.idxBuf.Init(gridIdx, gridWidth, intr.skip, dir)
