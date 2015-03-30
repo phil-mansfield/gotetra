@@ -2,9 +2,201 @@ package io
 
 import (
 	"fmt"
+	"strings"
 
 	"code.google.com/p/gcfg"
 )
+
+
+const (
+	ExampleConvertSnapshotFile = `[ConvertSnapshot]
+
+#######################
+# Required Parameters #
+#######################
+
+Input = path/to/input/dir
+Output = path/to/output/dir
+
+InputFormat = LGadget-2
+
+Cells = 8 # It's unlikely that you will want to change this.
+
+#######################
+# Optional Parameters #
+#######################
+
+# ProfileFile = pprof.out
+# LogFile = log.out
+
+# IteratedInput = path/to/iterated/input_with_single_%d_format
+# IteratedOutput = path/to/iterated/input_with_single_%d_format
+
+# IterationStart = 0 
+# IterationEnd = 100
+# Inclusive. If IterationEnd isn't set, folders will be iterated through until
+# an invalid one is found.`
+	ExampleDensityFile = `[Density]
+
+######################
+# RequiredParameters #
+######################
+
+Input  = path/to/input/dir
+Output = path/to/output/dir
+
+# Default way of specifying pixel size and particles per tetrahedron:
+TotalPixels = 500
+Particles   = 25
+
+# Alternative way of specifying pixel size and particles per tetrahedron:
+# ImagePixels     = 100
+# ProjectionDepth = 3
+
+#####################
+# OptionalParamters #
+#####################
+
+# ProfileFile = prof.out
+# LogFile = log.out
+
+# SubsampleLength = 2
+
+# Will result in files named pre_*foo*_app.gtet:
+# PrependName = pre_
+# AppendName  = _app`
+	ExampleBoundsFile = `[Box "my_z_slice"]
+# A thin slice containing a big halo for the L0125 box.
+
+#######################
+# Required Parameters #
+#######################
+
+# Location of lowermost corner:
+X = 107.9
+Y = 79
+Z = 78.5
+
+XWidth = 42.14
+YWidth = 42.14
+ZWidth = 4.21
+
+#######################
+# Optional Parameters #
+#######################
+
+# Given axis must be one of [ X | Y | Z ].
+# ProjectionAxis = Z
+
+[Ball "my_halo"]
+# A bounding box around a sphere whose radius is three times larger than
+# the halo's R_vir.
+
+X = 4.602
+Y = 100.7
+Z = 80.7
+
+Radius = 2.17
+RadiusMultiplier = 3 # optional`
+)
+
+type SharedConfig struct {
+	// Required
+	Input, Output string
+	// Optional
+	LogFile, ProfileFile string
+}
+
+func (con *SharedConfig) ValidInput() bool {
+	return con.Input != ""
+}
+func (con *SharedConfig) ValidOutput() bool {
+	return con.Output != ""
+}
+func (con *SharedConfig) ValidLogFile() bool {
+	return con.LogFile != ""
+}
+func (con *SharedConfig) ValidProfileFile() bool {
+	return con.ProfileFile != ""
+}
+
+type ConvertSnapshotConfig struct {
+	SharedConfig
+	// Required
+	Cells int
+	InputFormat string
+
+	// Optional
+	IteratedInput, IteratedOutput string
+	IterationStart, IterationEnd int
+}
+
+func DefaultConvertSnapshotWrapper() *ConvertSnapshotWrapper {
+	con := ConvertSnapshotConfig{}
+	con.IterationStart = 0
+	con.IterationEnd = -1
+	return &ConvertSnapshotWrapper{con}
+}
+
+func (con *ConvertSnapshotConfig) ValidCells() bool {
+	return con.Cells > 0
+}
+func (con *ConvertSnapshotConfig) ValidInputFormat() bool {
+	return con.InputFormat != ""
+}
+func (con *ConvertSnapshotConfig) ValidIteratedInput() bool {
+	return con.IteratedInput != ""
+}
+func (con *ConvertSnapshotConfig) ValidIteratedOutput() bool {
+	return con.IteratedOutput != ""
+}
+func (con *ConvertSnapshotConfig) ValidIterationStart() bool {
+	return con.IterationStart >= 0
+}
+func (con *ConvertSnapshotConfig) ValidIterationEnd() bool {
+	return con.IterationEnd >= 0
+}
+
+type DensityConfig struct {
+	SharedConfig
+	// Required
+	TotalPixels, Particles int
+
+	// Optional
+	ImagePixels, ProjectionDepth int
+	SubsampleLength int
+	AppendName, PrependName string
+}
+
+func DefaultDensityWrapper() *DensityWrapper {
+	dc := DensityConfig{ }
+	dc.SubsampleLength = 1
+	return &DensityWrapper{dc}
+}
+
+func (con *DensityConfig) ValidTotalPixels() bool {
+	return con.TotalPixels > 0
+}
+func (con *DensityConfig) ValidParticles() bool {
+	return con.Particles > 0
+}
+func (con *DensityConfig) ValidSubsampleLength() bool {
+	return con.SubsampleLength > 0
+}
+func (con *DensityConfig) ValidImagePixels() bool {
+	return con.ImagePixels > 0
+}
+func (con *DensityConfig) ValidProjectionDepth() bool {
+	return con.ProjectionDepth > 0
+}
+
+type ConvertSnapshotWrapper struct {
+	ConvertSnapshot ConvertSnapshotConfig
+}
+
+type DensityWrapper struct {
+	Density DensityConfig
+}
 
 type BallConfig struct {
 	// Required
@@ -87,6 +279,9 @@ type BoxConfig struct {
 	XWidth, YWidth, ZWidth float64
 
 	// Optional
+	ProjectionAxis string
+
+	// Optional, "undocumented"
 	Name string
 }
 
@@ -122,10 +317,25 @@ func (box *BoxConfig) CheckInit(name string, totalWidth float64) error {
 		)
 	}
 
+	tmp := box.ProjectionAxis
+	box.ProjectionAxis = strings.ToUpper(box.ProjectionAxis)
+	if box.ProjectionAxis != "" ||
+		box.ProjectionAxis != "X" ||
+		box.ProjectionAxis != "Y" ||
+		box.ProjectionAxis != "Z" {
+
+		return fmt.Errorf(
+			"ProjectionAxis of Box '%s' must be one of [X | Y | Z]. '%s' is " + 
+				"not recognized.", box.Name, tmp,
+		)
+	}
+
 	box.Name = name
 
 	return nil
 }
+
+func (box *BoxConfig) IsProjection() bool { return box.ProjectionAxis != "" }
 
 type BoundsConfig struct {
 	Ball map[string]*BallConfig
