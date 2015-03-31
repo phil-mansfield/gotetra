@@ -345,9 +345,9 @@ func (tet *Tetra) Distribute(xs, ys, zs []float64, vecBuf []Vec) {
 
 // DistributeUnit distributes a set of points in a unit cube across a unit
 // tetrahedron and stores the results to vecBuf.
-func DistributeUnit(xs, ys, zs []float64, vecBuf []Vec) {
+func DistributeUnit(vecBuf []Vec) {
 	for i := range vecBuf {
-		s, t, u := float32(xs[i]), float32(ys[i]), float32(zs[i])
+		s, t, u := vecBuf[i][0], vecBuf[i][1], vecBuf[i][2]
 	
 		if s+t > 1 {
 			s, t = 1-s, 1-t

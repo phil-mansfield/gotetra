@@ -13,6 +13,8 @@ import (
 	"github.com/phil-mansfield/gotetra/geom"
 )
 
+// TODO: swtich from logging error statements to returning error codes.
+
 const (
 	// Endianness used by default when writing catalogs. Catalogs of any
 	// endianness can be read.
@@ -250,79 +252,72 @@ func endianness(flag int32) binary.ByteOrder {
 
 func readSheetHeaderAt(
 	file string, hdBuf *SheetHeader,
-) (*os.File, binary.ByteOrder) {
+) (*os.File, binary.ByteOrder, error) {
 	f, err := os.OpenFile(file, os.O_RDONLY, os.ModePerm)
-	if err != nil {
-		log.Fatal(err.Error())
-	}
+	if err != nil { return nil, binary.LittleEndian, err }
 
 	// order doesn't matter for this read, since flags are symmetric.
 	order := endianness(readInt32(f, binary.LittleEndian))
 
 	headerSize := readInt32(f, order)
 	if headerSize != int32(unsafe.Sizeof(SheetHeader{})) {
-		log.Fatalf("Expected catalog.SheetHeader size of %d, found %d.",
-			unsafe.Sizeof(SheetHeader{}), headerSize)
+		return nil, binary.LittleEndian, 
+		fmt.Errorf("Expected catalog.SheetHeader size of %d, found %d.",
+			unsafe.Sizeof(SheetHeader{}), headerSize,
+		)
 	}
 
 	_, err = f.Seek(4 + 4, 0)
-	if err != nil {
-		log.Fatalf(err.Error())
-	}
+	if err != nil { return nil, binary.LittleEndian, err }
 
 	binary.Read(f, order, hdBuf)
-
-	return f, order
+	return f, order, nil
 }
 
 // ReadHeaderAt reads the header in the given file into the target Header.
-func ReadSheetHeaderAt(file string, hdBuf *SheetHeader) {
-	f, _ := readSheetHeaderAt(file, hdBuf)
-	if err := f.Close(); err != nil {
-		log.Fatalf(err.Error())
-	}
+func ReadSheetHeaderAt(file string, hdBuf *SheetHeader) error {
+	f, _, err := readSheetHeaderAt(file, hdBuf)
+	if err != nil { return err }
+	if err = f.Close(); err != nil { return err }
+	return nil
 }
 
 // ReadPositionsAt reads the velocities in the given file into a buffer.
-func ReadSheetPositionsAt(file string, xsBuf []geom.Vec) {
+func ReadSheetPositionsAt(file string, xsBuf []geom.Vec) error {
 	h := &SheetHeader{}
-	f, order := readSheetHeaderAt(file, h)
+	f, order, err := readSheetHeaderAt(file, h)
+	if err != nil { return nil }
+
 	if h.GridCount != int64(len(xsBuf)) {
-		log.Fatalf("Position buffer has length %d, but file %s has %d vectors.",
-			len(xsBuf), file, h.GridCount)
+		return fmt.Errorf("Position buffer has length %d, but file %s has %d " + 
+			"vectors.", len(xsBuf), file, h.GridCount)
 	}
 
 	// Go to block 4 in the file.
 	// The file pointer should already be here, but let's just be safe, okay?
 	f.Seek(int64(4 + 4 + int(unsafe.Sizeof(SheetHeader{}))), 0)
-	if err := binary.Read(f, order, xsBuf); err != nil {
-		log.Fatalf(err.Error())
-	}
+	if err := binary.Read(f, order, xsBuf); err != nil { return err }
 
-	if err := f.Close(); err != nil {
-		log.Fatalf(err.Error())
-	}
+	if err := f.Close(); err != nil { return err }
+	return nil
 }
 
 // ReadVelocitiesAt reads the velocities in the given file into a buffer.
-func ReadSheetVelocitiesAt(file string, vsBuf []geom.Vec) {
+func ReadSheetVelocitiesAt(file string, vsBuf []geom.Vec) error {
 	h := &SheetHeader{}
-	f, order := readSheetHeaderAt(file, h)
+	f, order, err := readSheetHeaderAt(file, h)
+	if err != nil { return err }
 	if h.GridCount != int64(len(vsBuf)) {
-		log.Fatalf("Velocity buffer has length %d, but file %s has %d vectors.",
-			len(vsBuf), file, h.GridCount)
+		return fmt.Errorf("Velocity buffer has length %d, but file %s has %d " + 
+			"vectors.", len(vsBuf), file, h.GridCount)
 	}
 
 	// Go to block 5 in the file.
 	f.Seek(int64(4 + 4 + int(unsafe.Sizeof(SheetHeader{})) +
 		3 * 4 * len(vsBuf)), 0)
-	if err := binary.Read(f, order, vsBuf); err != nil {
-		log.Fatalf(err.Error())
-	}
-
-	if err := f.Close(); err != nil {
-		log.Fatalf(err.Error())
-	}
+	if err := binary.Read(f, order, vsBuf); err != nil { return err }
+	if err := f.Close(); err != nil { return err }
+	return nil
 }
 
 // Write writes a grid of position and velocity vectors to a file, defined

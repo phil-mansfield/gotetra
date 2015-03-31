@@ -1,11 +1,9 @@
-/* WARNING: there are problems with having Boxes with different cell widths due
-to the use of ScaleVecs(). Think about this carefully. */
 package gotetra
 
 import (
 	"log"
-	"math"
 	"runtime"
+	"path"
 
 	"github.com/phil-mansfield/gotetra/density"
 	"github.com/phil-mansfield/gotetra/geom"
@@ -13,224 +11,159 @@ import (
 	"github.com/phil-mansfield/gotetra/rand"
 )
 
-// Box represents 
-type Box struct {
-	Vals []float32
-	cb geom.CellBounds
-	cells int
-	cellWidth float64
-	full bool
-}
-
-type baseManager struct {
+type Manager struct {
+	// The currently loaded seet segment.
+	xs, scaledXs []geom.Vec
+	xCb geom.CellBounds
 	hd io.SheetHeader
-	xs, vs []geom.Vec
-	cb *geom.CellBounds
-	rhoBufs [][]float64
+
+	renderers []renderer
+	skip int
 	unitBufs [][]geom.Vec
-	intrs []density.Interpolator
-	pts, skip, workers int
-	ptRho float64
+
+	// io related things
+	log bool
+	files []string
+	ms runtime.MemStats
+
+	// workspaces
+	workers int
+	workspaces []workspace
 }
 
-type FullManager struct {
-	baseManager
+type renderer struct {
+	box Box
+	cb geom.CellBounds
+	over Overlap
+	validSegs map[string]bool
 }
 
-type BoundedManager struct {
-	baseManager
-	file string
-	loaded bool
+type workspace struct {
+	buf []float64
+	intr density.Interpolator
+	lowX, highX int
 }
 
-type Manager interface {
-	LoadPositions(file string)
-	LoadVelocities(file string)
-	Subsample(skip int)
-	Density(boxes []Box)
-	CurlDiv(curls [3][]Box, divs []Box)
-}
+func NewManager(files []string, boxes []Box, logFlag bool) (*Manager, error) {
+	man := new(Manager)
+	man.log = logFlag
 
-// Type-checking
-var (
-	_ Manager = new(FullManager)
-	_ Manager = new(BoundedManager)
-)
-
-const (
-	MaxBufferLen = 1<<30
-	UnitBufferLen = 1<<10
-)
-
-func (box *Box) InitFullFromFile(file string, cells int) {
-	hd := io.SheetHeader{}
-	io.ReadSheetHeaderAt(file, &hd)
-	box.InitFull(hd.TotalWidth, cells)
-}
-
-func (box *Box) InitFull(boxWidth float64, cells int) {
-	box.Vals = make([]float32, cells * cells * cells)
-	box.cb.Origin = [3]int{0, 0, 0}
-	box.cb.Width = [3]int{cells, cells, cells}
-	box.cells = cells
-	box.cellWidth = boxWidth / float64(cells)
-	box.full = true
-}
-
-func (box *Box) InitFromConfig(
-	boxWidth float64, cells int, cb *io.BoxConfig,
-) {
-	origin := [3]float64{cb.X, cb.Y, cb.Z}
-	width := [3]float64{cb.XWidth, cb.YWidth, cb.ZWidth}
-	box.Init(boxWidth, cells, origin, width)
-}
-
-func (box *Box) Init(
-	boxWidth float64, cells int,
-	origin, width [3]float64,
-) {
-	cellWidth := boxWidth / float64(cells)
-
-	for j := 0; j < 3; j++ {
-		box.cb.Origin[j] = int(math.Floor(float64(origin[j]) / cellWidth))
-		box.cb.Width[j] = 1 + int(math.Floor(
-			float64(width[j] + origin[j]) / cellWidth),
-		)
-		box.cb.Width[j] -= box.cb.Origin[j]
-	}
-
-	box.Vals = make(
-		[]float32, box.cb.Width[0] * box.cb.Width[1] * box.cb.Width[2],
-	)
-
-	box.cells = cells
-	box.cellWidth = cellWidth
-	box.full = false
-}
-
-func (box *Box) CellSpan() [3]int {
-	return box.cb.Width
-}
-
-func (box *Box) CellOrigin() [3]int {
-	return box.cb.Origin
-}
-
-func (box *Box) CellWidth() float64 { return box.cellWidth }
-
-func NewFullManager(files []string, maxCells, pts int) *FullManager {
-	man := new(FullManager)
-
-    max := 0
-    for i, file := range files {
-		io.ReadSheetHeaderAt(file, &man.hd)
-		cb := man.hd.CellBounds(maxCells)
-
-        vol := cb.Width[0] * cb.Width[1] * cb.Width[2]
-        if vol > MaxBufferLen {
-            log.Fatalf(
-				"Header %d would have more than %d cells in it.",i,MaxBufferLen,
-			)
+	gen := rand.NewTimeSeed(rand.Tausworthe)
+	for _, buf := range man.unitBufs {
+		for j := range buf {
+			for k := 0; k < 3; k++ {
+				buf[j][k] = float32(gen.Uniform(0, 1))
+			}
 		}
-
-        if vol > max {
-            max = vol
-        }
-    }
-
-	man.init(files[0], max, pts)
-
-	return man
-}
-
-func NewBoundedManager(files []string, boxes []Box, pts int) *BoundedManager {
-	man := new(BoundedManager)
-
-    max := 0
-    for _, box := range boxes {
-		vol := box.cb.Width[0] * box.cb.Width[1] * box.cb.Width[2]
-		if vol > max { max = vol }
-    }
-
-	man.init(files[0], max, pts)
-	man.loaded = false
-	man.file = ""
-
-	return man
-}
-
-func (man *baseManager) init(file string, max, pts int) {
-	io.ReadSheetHeaderAt(file, &man.hd)
-
-	gridLen := man.hd.GridWidth * man.hd.GridWidth * man.hd.GridWidth
-	man.xs = make([]geom.Vec, gridLen)
-	man.vs = make([]geom.Vec, gridLen)
+		geom.DistributeUnit(buf)
+	}
+	
+	man.skip = 1
 
 	man.workers = runtime.NumCPU()
-	man.rhoBufs = make([][]float64, man.workers)
-	for i := range man.rhoBufs {
-		man.rhoBufs[i] = make([]float64, max)
-	}
-
-	xs := make([]float64, pts)
-	ys := make([]float64, pts)
-	zs := make([]float64, pts)
-	man.unitBufs = make([][]geom.Vec, UnitBufferLen)
-	gen := rand.NewTimeSeed(rand.Golang)
-
-	for i := range man.unitBufs {
-		man.unitBufs[i] = make([]geom.Vec, pts)
-		gen.UniformAt(0.0, 1.0, xs)
-		gen.UniformAt(0.0, 1.0, ys)
-		gen.UniformAt(0.0, 1.0, zs)
-		geom.DistributeUnit(xs, ys, zs, man.unitBufs[i])
-	}
-
-	man.skip = 1
-	man.pts = pts
-
-	man.intrs = make([]density.Interpolator, man.workers)
-	for i := range man.intrs {
-		man.intrs[i] = density.MonteCarlo(
-			man.hd.SegmentWidth, pts, int64(man.skip), man.unitBufs,
-		)
-	}
-
 	runtime.GOMAXPROCS(man.workers)
-}
+	man.workspaces = make([]workspace, man.workers)
 
-func (man *FullManager) LoadPositions(file string) {
-	io.ReadSheetHeaderAt(file, &man.hd)
-	io.ReadSheetPositionsAt(file, man.xs)
-	runtime.GC()
-}
-
-func (man *BoundedManager) LoadPositions(file string) {
-	io.ReadSheetHeaderAt(file, &man.hd)
-
-	// We might not actually have to read this.
-	man.loaded = false
-	man.file = file
-}
-
-func (man *baseManager) LoadVelocities(file string) {
-	log.Fatalf("LoadVelocities is broken and breaks everything. Stahp.")
-	io.ReadSheetHeaderAt(file, &man.hd)
-	io.ReadSheetVelocitiesAt(file, man.vs)
-	runtime.GC()
-}
-
-func (man *baseManager) Subsample(skip int) {
-	if !isPowTwo(skip) {
-		log.Fatalf("Skip ingrement is %d, must be power of two.", skip)
+	man.renderers = make([]renderer, len(boxes))
+	for i := range man.renderers {
+		man.renderers[i].box = boxes[i]
+		man.renderers[i].cb = geom.CellBounds{
+			boxes[i].CellOrigin(), boxes[i].CellSpan(),
+		}
+		man.renderers[i].validSegs = make(map[string]bool)
 	}
-	man.skip = skip
 
-	for i := range man.intrs {
-		man.intrs[i] = density.MonteCarlo(
-			man.hd.SegmentWidth, man.pts, int64(man.skip), man.unitBufs,
+	man.files = make([]string, 0)
+	maxBufSize := 0
+	for _, file := range files {
+		err := io.ReadSheetHeaderAt(file, &man.hd)
+		if err != nil { return nil, err }
+
+		intersect := false
+		for i := range boxes {
+			cells := boxes[i].Cells()
+			hCb := man.hd.CellBounds(cells)
+
+			if hCb.Intersect(&man.renderers[i].cb, cells) {
+				bufSize := boxes[i].Overlap(&man.hd).BufferSize()
+				if bufSize > maxBufSize { maxBufSize = bufSize }
+				
+				man.renderers[i].validSegs[file] = true
+				intersect = true
+			}
+		}
+
+		if intersect {
+			man.files = append(man.files, file)
+		}
+	}
+	
+	if man.log {
+		log.Printf(
+			"Workspace buffer size: %d. Number of workers: %d",
+			maxBufSize, man.workers,
 		)
 	}
+
+	for i := range man.workspaces {
+		man.workspaces[i].buf = make([]float64, maxBufSize)
+	}
+
+	if man.log {
+		runtime.ReadMemStats(&man.ms)
+		log.Printf(
+			"Alloc: %5d MB, Sys: %5d MB",
+			man.ms.Alloc >> 20, man.ms.Sys >> 20,
+		)
+	}
+
+	return man, nil
+}
+
+func (r *renderer) requiresFile(file string) bool {
+	return r.validSegs[file]
+}
+
+func (r *renderer) scaleXs(man *Manager) {
+	copy(man.scaledXs, man.xs)
+	r.over.ScaleVecs(man.scaledXs)
+}
+
+func (r *renderer) ptVal(man *Manager) float64 {
+	frac := float64(r.box.Cells()) / float64(man.hd.CountWidth)
+	return frac * frac * frac
+}
+
+func (r *renderer) initWorkspaces(man *Manager) {
+	segFrac := int(man.hd.SegmentWidth) / man.skip
+	segLen := segFrac * segFrac * segFrac
+	chunkLen := segLen / man.workers
+
+	// TODO: fix this int64 silliness
+	for id := range man.workspaces {
+		man.workspaces[id].intr = density.MonteCarlo(
+			man.hd.SegmentWidth, r.box.Points(), r.box.Cells(),
+			int64(man.skip), man.unitBufs, r.over,
+		)
+
+		man.workspaces[id].buf =
+			man.workspaces[id].buf[0: r.over.BufferSize()]
+		man.workspaces[id].lowX = chunkLen * id
+		man.workspaces[id].highX = chunkLen * (id + 1)
+		if id == man.workers - 1 {
+			man.workspaces[id].highX = segLen
+		}
+	}
+}
+
+func (man *Manager) Log(flag bool) { man.log = flag }
+
+func (man *Manager) Subsample(subsampleLength int) {
+	if !isPowTwo(man.skip) {
+		log.Fatalf("Skip ingrement is %d, must be power of two.", man.skip)
+	}
+
+	man.skip = subsampleLength
 }
 
 func isPowTwo(x int) bool {
@@ -238,108 +171,73 @@ func isPowTwo(x int) bool {
 	return x == 1
 }
 
-func (man *FullManager) Density(rhos []Box) {
+func (man *Manager) RenderDensity() error {
+	for _, file := range man.files {
+		err := man.RenderDensityFromFile(file)
+		if err != nil { return err }
+	}
+	return nil
+}
+
+func (man *Manager) RenderDensityFromFile(file string) error {
+	if man.log {
+		log.Printf("Rendering file %s", path.Base(file))
+	}
+
 	out := make(chan int, man.workers)
-	segFrac := int(man.hd.SegmentWidth) / man.skip
-	segLen := segFrac * segFrac * segFrac
-	chunkLen := segLen / man.workers
 
-	for _, grid := range rhos {
-		if !grid.full {
-			log.Fatalf("Supplied a non-full Box to a FullManager.")
-		}
+	for _, r := range man.renderers {
+		if !r.requiresFile(file) { continue }
 
-		man.cb = man.hd.CellBounds(grid.cells)
+		man.xCb = *man.hd.CellBounds(r.box.Cells())
 
-		frac := float64(grid.cells) / float64(man.hd.CountWidth)
-		man.ptRho = frac * frac * frac
-		man.cb.ScaleVecs(man.xs, grid.cells, man.hd.TotalWidth)
-		
+		r.over = r.box.Overlap(&man.hd)
+		r.cb = geom.CellBounds{ r.box.CellOrigin(), r.box.CellSpan() }
+		r.scaleXs(man)
+		r.initWorkspaces(man)
+
 		for id := 0; id < man.workers - 1; id++ {
-			low, high := chunkLen * id, chunkLen * (id + 1)
-			go man.chanInterpolate(id, low, high, out)
+			go man.chanInterpolate(id, r, out)
 		}
-		
 		id := man.workers - 1
-		low, high := chunkLen * id, segLen
-		man.chanInterpolate(id, low, high, out)
-		
+		man.chanInterpolate(id, r, out)
+
 		for i := 0; i < man.workers; i++ {
 			id := <-out
-			buf := man.rhoBufs[id]
-			density.AddBuffer(grid.Vals, buf, man.cb, grid.cells)
+			man.renderers[id].over.Add(
+				man.workspaces[id].buf, man.renderers[id].box.Vals(), &man.xCb,
+			)
 		}
 	}
-}
 
-func (man *FullManager) chanInterpolate(id, low, high int, out chan<- int) {
-	buf := man.rhoBufs[id]
-	for i := range buf { buf[i] = 0.0 }
-	intr := man.intrs[id]
-	intr.Interpolate(buf, man.cb, man.ptRho, man.xs, low, high)
-	out <- id
-}
-
-func (man *BoundedManager) Density(rhos []Box) {
-	out := make(chan int, man.workers)
-	segFrac := int(man.hd.SegmentWidth) / man.skip
-	segLen := segFrac * segFrac * segFrac
-	chunkLen :=  int(segLen) / man.workers 
-	ms := &runtime.MemStats{}
-
-	for _, grid := range rhos {
-		if grid.full {
-			log.Fatalf("Supplied a full Box to a BoundedManager.")
-		}
-
-		man.cb = man.hd.CellBounds(grid.cells)
-		if !man.loaded {
-			if man.file == "" {
-				log.Fatalf("No file has been loaded prior to ")
-			} else if !man.cb.Intersect(&grid.cb, grid.cells) {
-				continue
-			}
-			log.Println("Analyzing", man.file)
-			io.ReadSheetPositionsAt(man.file, man.xs)
-			runtime.GC()
-			man.cb.ScaleVecs(man.xs, grid.cells, man.hd.TotalWidth)
-			man.loaded = true
-
-			runtime.ReadMemStats(ms)
-			log.Printf("Alloc: %d MB, Sys %d MB", ms.Alloc >> 20, ms.Sys >> 20)
-		}
-
-		frac := float64(grid.cells) / float64(man.hd.CountWidth)
-		man.ptRho = frac * frac * frac
-		
-		for id := 0; id < man.workers - 1; id++ {
-			low, high := chunkLen * id, chunkLen * (id + 1)
-			go man.chanBoundedInterpolate(id, low, high, grid.cells, &grid.cb, out)
-		}
-		
-		id := man.workers - 1
-		low, high := chunkLen * id, segLen
-		man.chanBoundedInterpolate(id, low, high, grid.cells, &grid.cb, out)
-		
-		bufLen := grid.cb.Width[0] * grid.cb.Width[1] * grid.cb.Width[2]
-		for i := 0; i < man.workers; i++ {
-			id := <-out
-			buf := man.rhoBufs[id]
-			for j := 0; j < bufLen; j++ { grid.Vals[j] += float32(buf[j]) }
-		}
+	if man.log {
+		runtime.ReadMemStats(&man.ms)
+		log.Printf(
+			"Alloc: %5d MB, Sys: %5d MB",
+			man.ms.Alloc >> 20, man.ms.Sys >> 20,
+		)
 	}
+
+	return nil
 }
 
-func (man *BoundedManager) chanBoundedInterpolate(
-	id, low, high, cells int, boxCb *geom.CellBounds, out chan<- int,
-) {
-	buf := man.rhoBufs[id]
-	for i := range buf { buf[i] = 0.0 }
-	intr := man.intrs[id]
-	intr.BoundedInterpolate(buf, boxCb, cells, man.ptRho, man.xs, man.cb, low, high)
+func (man *Manager) loadFile(file string) error {
+	err := io.ReadSheetHeaderAt(file, &man.hd)
+	if err != nil { return err }
+	err = io.ReadSheetPositionsAt(file, man.xs)
+	if err != nil { return err }
+	runtime.GC()
+
+	return nil
+}
+
+func (man *Manager) chanInterpolate(id int, r renderer, out chan<- int) {
+	w := man.workspaces[id]
+	for i := range w.buf { w.buf[i] = 0.0 }
+	w.intr.Interpolate(
+		w.buf, &r.cb,
+		man.scaledXs, &man.xCb,
+		r.ptVal(man), w.lowX, w.highX,
+	)
 	out <- id
-}
-
-func (man *baseManager) CurlDiv(curls [3][]Box, divs []Box) {
-	log.Fatalf("CurlDiv not yet implemented")
 }

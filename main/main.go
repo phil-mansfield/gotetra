@@ -6,11 +6,14 @@ import (
 	"encoding/binary"
 	"strings"
 	"strconv"
+	"math"
 	"log"
 	"runtime"
 	"runtime/pprof"
 	"os"
 	"io/ioutil"
+
+	"code.google.com/p/gcfg"
 
 	"github.com/phil-mansfield/gotetra"
 	"github.com/phil-mansfield/gotetra/geom"
@@ -21,141 +24,164 @@ const (
 	catalogBufLen = 1<<12
 )
 
+type FileGroup struct {
+	log, prof *os.File
+}
+
+func (fg *FileGroup) Close() {
+	if fg.log != nil {
+		err := fg.log.Close()
+		if err != nil { log.Fatal(err.Error()) }
+	}
+
+	if fg.prof != nil {
+		pprof.StopCPUProfile()
+		err := fg.prof.Close()
+		if err != nil { log.Fatal(err.Error()) }
+	}
+}
+
+type SnapshotReader func(*io.ConvertSnapshotConfig)
 var (
 	gadgetEndianness = binary.LittleEndian
+	SnapshotReaders  = map[string]SnapshotReader {
+		"LGadget-2": lGadget2Main,
+	}
 )
 
 func main() {
 	var (
-		logPath, pprofPath, boundsFile, appendName string
-		minSheet, maxSheet int
-		createSheet, fullDensity, boundedDensity bool
-		points, cells, skip int
+		density, convertSnapshot string
+		exampleConfig string
 	)
+	vars := map[string]*string {
+		"Density": &density,
+		"ConvertSnapshot": &convertSnapshot,
+		"ExampleConfig": &exampleConfig,
+	}
 
-	flag.StringVar(&logPath, "Log", "",
-		"Location to write log statements to. Default is stderr.")
-	flag.StringVar(&pprofPath, "PProf", "",
-		"Location to write profile to. Default is no profiling.")
-	flag.StringVar(&boundsFile, "BoundsFile", "",
-		"Location to read in grid bounds from.")
-	flag.StringVar(&appendName , "AppendName", "",
-		"String that will be appended to the end of output file names.")
-
-	flag.IntVar(&cells, "Cells", -1, "Width of grid in cells.")
-	flag.IntVar(&skip, "Skip", 1, "Width of a tetrahedron in particles.")
-	flag.IntVar(&points, "Points", 100, "Number of points to use for method.")
-
-	flag.IntVar(&minSheet, "MinSheet", 0,
-		"Lowest index of a sheet file that will be read.")
-	flag.IntVar(&maxSheet, "MaxSheet", 511,
-		"Highest index of a sheet file that will be read.")
-
-
-	flag.BoolVar(&fullDensity, "FullDensity", false,
-		"Compute full-box density.")
-	flag.BoolVar(&boundedDensity, "BoundedDensity", false,
-		"Computer density for  sequence of sub-boxes.")
-	flag.BoolVar(&createSheet, "CreateSheet", false,
-		"Generate gotetra sheets from gadget catalogs.")
+	flag.StringVar(
+		&density, "Density", "",
+		"Configuration file for [Density] mode.",
+	)
+	flag.StringVar(
+		&convertSnapshot, "ConvertSnapshot", "",
+		"Configuration file for [ConvertSnapshot] mode.",
+	)
+	flag.StringVar(
+		&exampleConfig,
+		"ExampleConfig", "", "Prints an example configuration file of the " + 
+			"specified type to stdout. Accepted arguments are 'Density', " +
+			"'ConvertSnapshot', and 'Bounds'.",
+	)
 
 	flag.Parse()
 
-	if logPath != "" {
-		if lf, err := os.Create(logPath); err != nil {
-			log.Fatalln(err.Error())
-		} else {
-			log.SetOutput(lf)
-			defer lf.Close()
+	modeName, err := getModeName(vars)
+	if err != nil { log.Fatal(err.Error()) }
+
+	switch modeName {
+	case "Density":
+		wrap := io.DefaultDensityWrapper()
+		err := gcfg.ReadFileInto(wrap, density)
+		if err != nil { log.Fatal(err.Error()) }
+		con := &wrap.Density
+
+		if !con.ValidInput() {
+			log.Fatal("Invalid/non-existent 'Input' value.")
+		} else if !con.ValidOutput() {
+			log.Fatal("Invalid/non-existent 'Output' value.")
+		} else if !con.ValidSubsampleLength() {
+			log.Fatal("Invalid 'SubsampleLength' value.")
 		}
-	}
 
-	if pprofPath != "" {
-		f, err := os.Create(pprofPath)
-		if err != nil { log.Fatal(err) }
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
-	}
+		if con.ValidImagePixels() != con.ValidProjectionDepth() {
+			log.Fatal(
+				"You must set both 'ImagePixels' and 'ProjectionDepth' " +
+					"or neither.",
+			)
+		} else if !con.ValidImagePixels() {
+			if !con.ValidTotalPixels() {
+				log.Fatal("Invalid/non-existent 'Pixels' value.")
+			} else if !con.ValidParticles() {
+				log.Fatal("Invalid/non-existent 'Particles' value.")
+			}
+		}
 
-	// This is terribly designed.
-	modeName := checkMode(createSheet, fullDensity, boundedDensity)
+		bounds := flag.Args()
+		if len(bounds) < 1 {
+			log.Fatal("Must supply at least one bounds file.")
+		}
+		densityMain(con, bounds)
 
-	switch {
-	case createSheet:
-		checkCells(cells, modeName)
+	case "ConvertSnapshot":
+		wrap := io.DefaultConvertSnapshotWrapper()
+		err := gcfg.ReadFileInto(wrap, convertSnapshot)
+		if err != nil { log.Fatal(err.Error()) }
+		con := &wrap.ConvertSnapshot
 
-		args := flag.Args()
-		if len(args) <= 1 {
-			log.Fatalf(
-				"Mode %s requires source files and a target directory.",
-				modeName,
+		// (I could do this more generally, but why bother?)
+		if !con.ValidInput() && !con.ValidIteratedInput() {
+			log.Fatal("Invalid/non-existent 'Input' value.")
+		} else if !con.ValidOutput() && !con.ValidIteratedOutput() {
+			log.Fatal("Invalid/non-existent 'Output' value.")
+		} else if !con.ValidCells() {
+			log.Fatal("Invalid/non-existent 'Cells' value.")
+		} else if con.ValidIteratedInput() != con.ValidIteratedOutput() {
+			log.Fatal("Only one of IteratedInput and IteratedOutput is set.")
+		}
+
+		reader, ok := SnapshotReaders[con.InputFormat]
+		if !ok {
+			validFormats := []string{}
+			for name := range SnapshotReaders {
+				validFormats = append(validFormats, name)
+			}
+
+			log.Fatalf("Invalid/non-existent 'InputFormat'. The only accepted" +
+				" formats are: %s.", strings.Join(validFormats, ", "))
+		}
+
+		reader(con)
+	case "ExampleConfig":
+		switch exampleConfig {
+		case "ConvertSnapshot":
+			fmt.Println(io.ExampleConvertSnapshotFile)
+		case "Density":
+			fmt.Println(io.ExampleDensityFile)
+		case "Bounds":
+			fmt.Println(io.ExampleBoundsFile)
+		default:
+			log.Fatal(
+				"Unrecognized 'ExampleConfig' argument. Only recognized " +
+					"arguments are 'Density', 'Bounds', and 'ConvertSnapshot'.",
 			)
 		}
-
-		sources := args[0: len(args) - 1]
-		targetDir := args[len(args) - 1]
-
-		createSheetMain(cells, sources, targetDir)
-	case fullDensity:
-		checkCells(cells, modeName)
-		args := flag.Args()
-		if len(args) != 2 {
-			log.Fatalf("Mode %s requires a source and target directory.",
-				modeName)
-		}
-
-		source := args[0]
-		target := args[1]
-		fullDensityMain(cells, points, skip, source, target,
-			appendName, minSheet, maxSheet)
-	case boundedDensity:
-		checkCells(cells, modeName)
-		args := flag.Args()
-		if len(args) != 2 {
-			log.Fatalf("Mode %s requires a source and target directory.",
-				modeName)
-		}
-
-		source := args[0]
-		target := args[1]
-		boundedDensityMain(cells, points, skip, source, target,
-			appendName, boundsFile, minSheet, maxSheet)
+	default:
+		panic("Impossible")
 	}
 }
 
-func checkCells(cells int, modeName string) {
-	if cells == -1 {
-		log.Fatalf(
-			"The mode %s requires a positive number of cells.\n", modeName,
+func getModeName(vars map[string]*string) (string, error) {
+	setNames := []string{}
+
+	for name, varPtr := range vars {
+		if *varPtr != "" { setNames = append(setNames, name) }
+	}
+
+	if len(setNames) == 0 {
+		return "", fmt.Errorf("No flags have been set.")
+	}
+	
+	if len(setNames) > 1 {
+		return "", fmt.Errorf(
+			"The following flags were set: %s, but gotetra_cmd " + 
+				"only accepts one flag at a time.", 
+			strings.Join(setNames, ", "),
 		)
 	}
-}
 
-func checkMode(createSheet, fullDensity, boundedDensity bool) string {
-	// This function is not a good idea.
-	n := 0
-	modeStr := ""
-
-	if createSheet {
-		n++
-		modeStr = "CreateSheet"
-	}
-
-	if fullDensity {
-		n++
-		modeStr = "FullDensity"
-	}
-
-	if boundedDensity {
-		n++
-		modeStr = "BoundedDensity"
-	}
-
-	if n != 1 {
-		log.Fatalf("Given %d mode flags, but exactly 1 is required.\n", n)
-	}
-
-	return modeStr
+	return setNames[0], nil
 }
 
 // pasreDir reads one of Benedikt's sim directory names and returns the relevent
@@ -187,30 +213,39 @@ func dirErr(dir string) (int, int, string, error) {
 	return 0, 0, "", fmt.Errorf("Invalid source directory '%s'.", dir)
 }
 
-func createSheetMain(cells int, matches []string, outPath string) {
-	hd, xs, vs := createGrids(matches)
-
-	// Parse, parse, parse, parse...
-	snapDir := path.Base(path.Dir(matches[0]))
-	paramDir := path.Base(path.Dir(path.Dir(path.Dir(matches[0]))))
-
-	l, n, str, err := parseDir(paramDir)
-	if err != nil {
-		log.Fatalf(err.Error())
-	}
-	hd.CountWidth = int64(n)
-
-	outParamDir := fmt.Sprintf("Box_L%04d_N%04d_G%04d_%s", l, n, cells, str)
-	outParamPath := path.Join(outPath, outParamDir)
-	outDir := path.Join(outParamPath, snapDir)
-	if err = os.MkdirAll(outDir, 0777); err != nil {
-		log.Fatalf(err.Error())
+func lGadget2Main(con *io.ConvertSnapshotConfig) {
+	if !con.ValidIteratedInput() {
+		con.IterationStart = 0
+		con.IterationEnd = 0
 	}
 
-	writeGrids(outDir, hd, cells, xs, vs)
+	for i := con.IterationStart; i <= con.IterationEnd; i++ {
+		input, output := con.Input, con.Output
+		if con.ValidIteratedInput() {
+			input = fmt.Sprintf(con.IteratedInput, i)
+			output = fmt.Sprintf(con.IteratedOutput, i)
+		}
+
+		infos, err := ioutil.ReadDir(input)
+		if err != nil { log.Fatal(err.Error()) }
+		files := make([]string, len(infos))
+		
+		for i, info := range infos {
+			files[i] = path.Join(con.Output, info.Name())
+		}
+		
+		hd, xs, vs := createGrids(files)
+
+		if err = os.MkdirAll(output, 0777); err != nil {
+			log.Fatalf(err.Error())
+		}
+		writeGrids(output, hd, con.Cells, xs, vs)
+	}
 }
 
-func createGrids(catalogs []string) (hd *io.CatalogHeader, xs, vs []geom.Vec) {
+func createGrids(
+	catalogs []string,
+) (hd *io.CatalogHeader, xs, vs []geom.Vec) {
 	hs := make([]io.CatalogHeader, len(catalogs))
 	for i := range hs {
 		hs[i] = *io.ReadGadgetHeader(catalogs[i], gadgetEndianness)
@@ -253,7 +288,25 @@ func createGrids(catalogs []string) (hd *io.CatalogHeader, xs, vs []geom.Vec) {
 		log.Printf("Read %d/%d catalogs", len(catalogs), len(catalogs))
 	}
 
+	hs[0].CountWidth = intCubeRoot(hs[0].Count)
+
 	return &hs[0], xs, vs
+}
+
+func round(x float64) float64 {
+	floor := math.Floor(x)
+	diff := x - floor
+	if diff > 0.5 {
+		return floor + 1
+	} else {
+		return floor
+	}
+}
+
+func intCubeRoot(x int64) int64 {
+	cr := int64(math.Pow(float64(x), 1.0 / 3.0))
+	if cr * cr * cr != x { panic("You gave a non-cube to intCubeRoot") }
+	return cr
 }
 
 func writeGrids(outDir string, hd *io.CatalogHeader,
@@ -282,7 +335,9 @@ func writeGrids(outDir string, hd *io.CatalogHeader,
 		for y := int64(0); y < shd.Cells; y++ {
 			for x := int64(0); x < shd.Cells; x++ {
 				copyToSegment(shd, xs, vs, xsSeg, vsSeg)
-				file := path.Join(outDir, fmt.Sprintf("sheet%d%d%d.dat", x, y,z))
+				file := path.Join(outDir, fmt.Sprintf(
+					"sheet%d%d%d.dat", x, y, z,
+				))
 				io.WriteSheet(file, shd, xsSeg, vsSeg)
 				runtime.GC()
 
@@ -386,83 +441,56 @@ func validCellNum(cells int) bool {
 	return cells == 1
 }
 
-func fullDensityMain(
-	cells, points, skip int,
-	sourceDir, outDir, appendName string,
-	minSheet, maxSheet int,
-) {
-	log.Println("Running FullDensity main.")
+func densityMain(con *io.DensityConfig, bounds []string) {
+	// TODO: 
+	// * Make this use all optional paramters.
+	// * And fix that L/2 bug.
+	// * And make it so that there aren't issues when you render multiple boxes
+	// at once.
+	// *sigh*
 
-	infos, err := ioutil.ReadDir(sourceDir)
-	if err != nil { log.Fatalf(err.Error()) }
-	files := make([]string, len(infos))
-	for i := range infos { files[i] = path.Join(sourceDir, infos[i].Name()) }
+	// Set up IO.
 
-	boxes := make([]gotetra.Box, 1)
-	boxes[0].InitFullFromFile(files[0], cells)	
-	man := gotetra.NewFullManager(files, cells, points)
-	man.Subsample(skip)
+	fileNames, hd, fg := densitySetupIO(con)
+	defer fg.Close()
+		
+	// Generate bounds files.
 
-	for i := minSheet; i <= maxSheet; i++ {
-		log.Println("Analyzing file", infos[i].Name())
-		man.LoadPositions(files[i])
-		man.Density(boxes)
+	configBoxes := make([]io.BoxConfig, 0)
+
+	for _, boundsFile := range bounds {
+		boxes, err := io.ReadBoundsConfig(boundsFile, hd.TotalWidth)
+		if err != nil { log.Fatal(err.Error()) }
+		configBoxes = append(configBoxes, boxes...)
 	}
-
-	hd := io.SheetHeader{}
-	io.ReadSheetHeaderAt(files[0], &hd)
-	box := boxes[0]
-
-	out := path.Join(outDir, fmt.Sprintf("box%s.gtet", appendName))
-	f, err := os.Create(out)
-	defer f.Close()
-	if err != nil { log.Fatalf("Could not create %s.", out) }
-	
-	loc := io.NewLocationInfo(box.CellOrigin(), box.CellSpan(), box.CellWidth())
-	cos := io.NewCosmoInfo(
-		hd.Cosmo.H100 * 100, hd.Cosmo.OmegaM,
-		hd.Cosmo.OmegaL, hd.Cosmo.Z, hd.TotalWidth,
-	)
-	render := io.NewRenderInfo(points, cells, skip)
-	
-	io.WriteDensity(box.Vals, cos, render, loc, f)
-}
-
-func boundedDensityMain(
-	cells, points, skip int,
-	sourceDir, outDir, appendName, boundsFile string,
-	minSheet, maxSheet int,
-) {
-	log.Println("Running BoundedDensity main.")
-
-	infos, err := ioutil.ReadDir(sourceDir)
-	if err != nil { log.Fatalf(err.Error()) }
-	files := make([]string, len(infos))
-	for i := range infos { files[i] = path.Join(sourceDir, infos[i].Name()) }
-	hd := io.SheetHeader{}
-	io.ReadSheetHeaderAt(files[0], &hd)
-
-	configBoxes, err := io.ReadBoundsConfig(boundsFile, hd.TotalWidth)
-	if err != nil { log.Fatal(err.Error()) }
 
 	boxes := make([]gotetra.Box, len(configBoxes))
 	for i := range boxes {
-		boxes[i].InitFromConfig(hd.TotalWidth, cells, &configBoxes[i])
+		pix := totalPixels(con, &configBoxes[i], hd.TotalWidth)
+		boxes[i].InitFromConfig(hd.TotalWidth, pix, &configBoxes[i])
 		log.Println("Rendering to box:", boxes[i].CellSpan(), "pixels.")
 	}
 
-	man := gotetra.NewBoundedManager(files, boxes, points)
-	man.Subsample(skip)
+	// Interpolate.
 
-	for i := minSheet; i <= maxSheet; i++ {
-		man.LoadPositions(files[i])
+	man := gotetra.NewBoundedManager(
+		fileNames, boxes, particles(con, &configBoxes[0], hd.TotalWidth),
+	)
+	man.Subsample(con.SubsampleLength)
+
+	for i := range fileNames {
+		man.LoadPositions(fileNames[i])
 		man.Density(boxes)
 	}
+
+	// Write output.
 
 	for i, cBox := range configBoxes {
 		box := boxes[i]
 
-		out := path.Join(outDir, fmt.Sprintf("%s%s.gtet", cBox.Name, appendName))
+		out := path.Join(con.Output, fmt.Sprintf("%s%s%s.gtet",
+			con.PrependName, cBox.Name, con.AppendName))
+
 		log.Printf("Writing to %s", out)
 		f, err := os.Create(out)
 		defer f.Close()
@@ -476,8 +504,91 @@ func boundedDensityMain(
 			hd.Cosmo.OmegaL, hd.Cosmo.Z, hd.TotalWidth,
 		)
 
-		render := io.NewRenderInfo(points, cells, skip)
+		render := io.NewRenderInfo(
+			con.Particles, con.TotalPixels, con.SubsampleLength,
+		)
 
 		io.WriteDensity(box.Vals, cos, render, loc, f)
 	}
+}
+
+func densitySetupIO(con *io.DensityConfig) (
+	fileNames []string,
+	hd *io.SheetHeader,
+	fg *FileGroup,
+) {
+	var err error
+
+	if con.ValidLogFile() {
+		fg.log, err = os.Create(con.LogFile)
+		if err != nil { log.Fatal(err.Error()) }
+		log.SetOutput(fg.log)
+	}
+
+	log.Println("Running BoundedDensity main.")
+
+	if con.ValidProfileFile() {
+		fg.prof, err = os.Create(con.ProfileFile)
+		if err != nil { log.Fatal(err.Error()) }
+		err = pprof.StartCPUProfile(fg.prof)
+		if err != nil { log.Fatal(err.Error()) }
+	}
+
+	infos, err := ioutil.ReadDir(con.Input)
+	if err != nil { log.Fatal(err.Error()) }
+
+	files := make([]string, len(infos))
+	for i := range infos { files[i] = path.Join(con.Input, infos[i].Name()) }
+	io.ReadSheetHeaderAt(files[0], hd)
+
+	return fileNames, hd, fg
+}
+
+func totalPixels(con *io.DensityConfig, box *io.BoxConfig, boxWidth float64) int {
+	if con.ValidImagePixels() {
+		w := maxWidth(box)
+		if w > boxWidth {
+			log.Fatalf(
+				"Requested dimensions of '%s' are larger than the simulation box.",
+				box.Name,
+			) 
+		}
+
+		return int(boxWidth * float64(con.ImagePixels))
+	}
+	return con.TotalPixels
+}
+
+
+func maxWidth(box *io.BoxConfig) float64 {
+	var max float64
+	if box.XWidth > box.YWidth {
+		max = box.XWidth
+	} else {
+		max = box.YWidth
+	}
+
+	if max > box.ZWidth {
+		return max
+	} else {
+		return box.ZWidth
+	}
+}
+
+func particles(con *io.DensityConfig, box *io.BoxConfig, boxWidth float64) int {
+
+	if con.ValidProjectionDepth() {
+		// We're garuanteed that con.ValidImagePixels() is also true.
+		pixels := totalPixels(con, box, boxWidth)
+
+		refPixels := 2000.0
+		refParticles := 1000.0
+		refDepth := 8.0
+		refSubsample := 1.0
+		return int(refParticles * math.Pow(float64(pixels) / refPixels, 3) * 
+			math.Pow(float64(con.SubsampleLength) / refSubsample, 3) *
+			(refDepth / float64(con.ProjectionDepth)))
+	}
+
+	return con.Particles
 }

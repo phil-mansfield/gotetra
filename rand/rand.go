@@ -67,7 +67,7 @@ func (gen *Generator) Uniform(low, high float64) float64 {
 func (gen *Generator) UniformAt(low, high float64, target []float64) {
 	gen.backend.NextSequence(target)
 	if low == 0.0 && high == 1.0 { return }
-	for i := 0; i < len(target); i ++ {
+	for i := range target {
 		target[i] = target[i] * (high - low) + low
 	}
 }
