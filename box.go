@@ -343,6 +343,7 @@ func (w *segmentOverlap2D) Interpolate(
 		iDiff, jDiff, kDiff = xDiff, zDiff, yDiff
 	}
 
+	ptVal /= float64(bufCb.Width[kDim])
 	length := xCb.Width[iDim]
 
 	for idx := low; idx < high; idx++ {
@@ -412,6 +413,7 @@ func (w *domainOverlap2D) Interpolate(
 	if w.proj == 0 { iDim, jDim, kDim = 1, 2, 0 }
 	if w.proj == 1 { iDim, jDim, kDim = 0, 2, 1 }
 
+	ptVal /= float64(bufCb.Width[kDim])
 	length := bufCb.Width[iDim]
 
 	for idx := low; idx < high; idx++ {

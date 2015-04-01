@@ -2,7 +2,6 @@ package io
 
 import (
 	"encoding/binary"
-	"log"
 	"io"
 	"math"
 
@@ -146,15 +145,6 @@ func WriteGrid(
 	hd.Cosmo = cosmo
 	hd.Render = render
 	hd.Loc = loc
-
-	if hd.Loc.PixelSpan[0]*hd.Loc.PixelSpan[1]*hd.Loc.PixelSpan[2] != 
-		int64(len(xs)) {
-
-		log.Fatalf(
-			"PixelSpan %v is not the same saize as slice of length %d.",
-			hd.Loc.PixelSpan, len(xs),
-		)
-	}
 
 	binary.Write(wr, end, &hd)
 	binary.Write(wr, end, xs)

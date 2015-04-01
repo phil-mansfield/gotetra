@@ -61,9 +61,8 @@ Particles = 25
 
 # Alternative way of specifying pixel size: the number of pixels required to
 # render the longest axis of each box. All rendered boxes will, in general,
-# not have the same.
-# ImagePixels     = 100
-
+# not have the same number of pixels.
+# ImagePixels = 100
 
 # Alternative way of specifying the particle count. gotetra will (attempt to)
 # automatically calculate how many particles are needed so that all projections
@@ -338,15 +337,15 @@ func (box *BoxConfig) CheckInit(name string, totalWidth float64) error {
 	}
 
 	tmp := box.ProjectionAxis
-	box.ProjectionAxis = strings.ToUpper(box.ProjectionAxis)
-	if box.ProjectionAxis != "" ||
-		box.ProjectionAxis != "X" ||
-		box.ProjectionAxis != "Y" ||
+	box.ProjectionAxis = strings.Trim(strings.ToUpper(box.ProjectionAxis), " ")
+	if box.ProjectionAxis != "" &&
+		box.ProjectionAxis != "X" &&
+		box.ProjectionAxis != "Y" &&
 		box.ProjectionAxis != "Z" {
 
 		return fmt.Errorf(
 			"ProjectionAxis of Box '%s' must be one of [X | Y | Z]. '%s' is " + 
-				"not recognized.", box.Name, tmp,
+				"not recognized.", name, tmp,
 		)
 	}
 

@@ -84,6 +84,7 @@ func main() {
 	case "Density":
 		wrap := io.DefaultDensityWrapper()
 		err := gcfg.ReadFileInto(wrap, density)
+
 		if err != nil { log.Fatal(err.Error()) }
 		con := &wrap.Density
 
@@ -446,7 +447,7 @@ func validCellNum(cells int) bool {
 func densityMain(con *io.DensityConfig, bounds []string) {
 	fileNames, hd, fg := densitySetupIO(con)
 	defer fg.Close()
-		
+
 	// Generate bounds files.
 
 	configBoxes := make([]io.BoxConfig, 0)
@@ -461,8 +462,11 @@ func densityMain(con *io.DensityConfig, bounds []string) {
 	for i := range boxes {
 		cells := totalPixels(con, &configBoxes[i], hd.TotalWidth)
 		pts := particles(con, &configBoxes[i], hd.TotalWidth)
-		boxes[i] = gotetra.NewBox(hd.TotalWidth, cells, pts, &configBoxes[i])
-		log.Println("Rendering to box:", boxes[i].CellSpan(), "pixels.")
+		boxes[i] = gotetra.NewBox(hd.TotalWidth, pts, cells, &configBoxes[i])
+		log.Println(
+			"Rendering to box:", boxes[i].CellSpan(),
+			"pixels,", pts, "particles per tetrahedron",
+		)
 	}
 
 	// Interpolate.
@@ -471,7 +475,11 @@ func densityMain(con *io.DensityConfig, bounds []string) {
 	if err != nil { log.Fatal(err.Error()) }
 
 	man.Subsample(con.SubsampleLength)
+
+	log.Println("SKIPPING RENDERING")
+	/*
 	man.RenderDensity()
+	*/
 
 	// Write output.
 
@@ -499,7 +507,10 @@ func densityMain(con *io.DensityConfig, bounds []string) {
 			cBox.ProjectionAxis,
 		)
 
-		// TODO: don't keep creting new float32 buffers, man.
+		// TODO: don't keep creating new float32 buffers, man.
+		vals := box.Vals()
+		for i := range vals { vals[i] = float64(i) }
+
 		io.WriteDensity(toFloat32(box.Vals()), cos, render, loc, f)
 	}
 }
@@ -516,6 +527,8 @@ func densitySetupIO(con *io.DensityConfig) (
 	fg *FileGroup,
 ) {
 	var err error
+	fg = new(FileGroup)
+	hd = new(io.SheetHeader)
 
 	if con.ValidLogFile() {
 		fg.log, err = os.Create(con.LogFile)
@@ -545,6 +558,7 @@ func densitySetupIO(con *io.DensityConfig) (
 func totalPixels(con *io.DensityConfig, box *io.BoxConfig, boxWidth float64) int {
 	if con.ValidImagePixels() {
 		w := maxWidth(box)
+		log.Println(w)
 		if w > boxWidth {
 			log.Fatalf(
 				"Requested dimensions of '%s' are larger than the simulation box.",
@@ -552,7 +566,7 @@ func totalPixels(con *io.DensityConfig, box *io.BoxConfig, boxWidth float64) int
 			) 
 		}
 
-		return int(boxWidth * float64(con.ImagePixels))
+		return int(boxWidth / w * float64(con.ImagePixels))
 	}
 	return con.TotalPixels
 }
@@ -594,13 +608,15 @@ func particles(con *io.DensityConfig, box *io.BoxConfig, boxWidth float64) int {
 		// We're garuanteed that con.ValidImagePixels() is also true.
 		pixels := totalPixels(con, box, boxWidth)
 
-		refPixels := 5000.0
-		refParticles := 20000.0
+		refPixels := 500.0
+		refParticles := 5.0
 		refDepth := 1.0
 		refSubsample := 1.0
-		return int(refParticles * math.Pow(float64(pixels) / refPixels, 3) * 
+		return int(math.Ceil(
+			refParticles * math.Pow(float64(pixels) / refPixels, 3) * 
 			math.Pow(float64(con.SubsampleLength) / refSubsample, 3) *
-			(refDepth / float64(con.ProjectionDepth)))
+			(refDepth / float64(con.ProjectionDepth)),
+		))
 	}
 
 	return con.Particles

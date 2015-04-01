@@ -270,7 +270,9 @@ func readSheetHeaderAt(
 	_, err = f.Seek(4 + 4, 0)
 	if err != nil { return nil, binary.LittleEndian, err }
 
-	binary.Read(f, order, hdBuf)
+	err = binary.Read(f, order, hdBuf)
+	if err != nil { return nil, binary.LittleEndian, err }
+
 	return f, order, nil
 }
 
