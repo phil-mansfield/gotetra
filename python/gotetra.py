@@ -62,8 +62,15 @@ def read_grid(filename):
             return
         xs.byteswap()
 
-    n = hd.dim[0] * hd.dim[1] * hd.dim[2]
 
+    n = 1
+    for i in range(3):
+        if i != hd.axis: n *= hd.dim[i]
+
+    if hd.axis == 0: j, k = 1, 2
+    if hd.axis == 1: j, k = 0, 2
+    if hd.axis == 2: j, k = 0, 1
+    
     if hd.type.is_vector_grid:
         xs, ys, zs = array.array("f"), array.array("f"), array.array("f")
         with open(filename, "rb") as fp:
@@ -71,12 +78,20 @@ def read_grid(filename):
             xs.fromfile(fp, n)
             ys.fromfile(fp, n)
             zs.fromfile(fp, n)
+
         maybe_swap(xs)
-        xs = np.reshape(xs, (hd.dim[2], hd.dim[1], hd.dim[0]))
         maybe_swap(ys)
-        ys = np.reshape(ys, (hd.dim[2], hd.dim[1], hd.dim[0]))
         maybe_swap(zs)
-        zs = np.reshape(zs, (hd.dim[2], hd.dim[1], hd.dim[0]))
+        
+        if hd.axis == -1:
+            xs = np.reshape(xs, (hd.dim[2], hd.dim[1], hd.dim[0]))
+            ys = np.reshape(ys, (hd.dim[2], hd.dim[1], hd.dim[0]))
+            zs = np.reshape(zs, (hd.dim[2], hd.dim[1], hd.dim[0]))
+        else:
+            xs = np.reshape(xs, (hd.dim[k], hd.dim[j]))
+            ys = np.reshape(ys, (hd.dim[k], hd.dim[j]))
+            zs = np.reshape(zs, (hd.dim[k], hd.dim[j]))
+
         return np.array([xs, ys, zs])
     else:
         xs = array.array("f")
@@ -84,7 +99,10 @@ def read_grid(filename):
             fp.read(HEADER_SIZE)
             xs.fromfile(fp, n)
         maybe_swap(xs)
-        xs = np.reshape(xs, (hd.dim[2], hd.dim[1], hd.dim[0]))
+        if hd.axis == -1:
+            xs = np.reshape(xs, (hd.dim[2], hd.dim[1], hd.dim[0]))
+        else:
+            xs = np.reshape(xs, (hd.dim[k], hd.dim[j]))
         return xs
 
 class Header(object):
@@ -95,13 +113,18 @@ class Header(object):
         render : RenderInfo
         loc    : LocationInfo
 
-    These contain many fields, but the two most useful are reproduced as
+    These contain many fields, but the three most useful are reproduced as
     top-level fields:
-        dim : numpy.array - The dimensions of the grid in pixels. Equivalent to
-                            Header.loc.pixel_span.
-        pw  : float       - The width of a single pixel. Equivalent to
-                            Header.loc.pixel_width.
-        
+        dim  : numpy.array - The dimensions of the grid in pixels. Equivalent to
+                             Header.loc.pixel_span.
+        pw   : float       - The width of a single pixel. Equivalent to
+                             Header.loc.pixel_width.
+        axis : int         - The axis over which the image is projected over. If
+                             no projection was performed and the array is 3D,
+                             this will be set to -1.
+    
+    (These are the only fields which are truly neccessary to form images. The
+    others can be learned as needed.)
     """
     def __init__(self, s):
         assert len(s) == HEADER_SIZE
@@ -125,6 +148,7 @@ class Header(object):
 
         self.dim = self.loc.pixel_span
         self.pw = self.loc.pixel_width
+        self.axis = self.render.projection_axis
 
         if self.type.header_size != HEADER_SIZE:
             print(("Using grid files with header size %d, but gotetra.py" +
@@ -242,19 +266,22 @@ class RenderInfo(object):
                                      subsampling.
         min_projection_depth : int - Suggested minimum layers to use when
                                      forming a projected image.
+        projection_axis      : int - If the image is projected along an axis, the
+                                     index of that axis. Otherwise this will be set
+                                     to -1.
     """
 
     def __init__(self, s, end):
         assert len(s) == RENDER_INFO_SIZE
 
-        fmt = "qqqq"
+        fmt = "qqqqq"
         data = endian_unpack(fmt, s, end)
 
         self.particles = data[0]
         self.total_pixels = data[1]
         self.subsample_length = data[2]
         self.min_projection_depth = data[3]
-        
+        self.projection_axis = data[4]
 
     def __str__(self):
         return "\n".join([
@@ -262,7 +289,21 @@ class RenderInfo(object):
             "    total_pixels         = %d" % self.total_pixels,
             "    subsample_length     = %d" % self.subsample_length,
             "    min_projection_depth = %d" % self.min_projection_depth,
+            "    projection_axis      = %s" % self._projection_axis_str(),
         ])
+
+    def _projection_axis_str(self):
+        if self.projection_axis == -1:
+            return "None"
+        elif self.projection_axis == 0:
+            return "X"
+        elif self.projection_axis == 1:
+            return "Y"
+        elif self.projection_axis == 2:
+            return "Z"
+        else:
+            assert(0)
+
 
 class LocationInfo(object):
     """ LocationInfo contains information on the dimensions and location of the
