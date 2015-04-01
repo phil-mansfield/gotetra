@@ -95,17 +95,19 @@ func main() {
 			log.Fatal("Invalid 'SubsampleLength' value.")
 		}
 
-		if con.ValidImagePixels() != con.ValidProjectionDepth() {
+		if !con.ValidImagePixels() && !con.ValidTotalPixels() {
 			log.Fatal(
-				"You must set both 'ImagePixels' and 'ProjectionDepth' " +
-					"or neither.",
+				"You must set either a valid 'ImagePixels' " + 
+					"or a valid 'TotalPixels'.",
 			)
-		} else if !con.ValidImagePixels() {
-			if !con.ValidTotalPixels() {
-				log.Fatal("Invalid/non-existent 'Pixels' value.")
-			} else if !con.ValidParticles() {
-				log.Fatal("Invalid/non-existent 'Particles' value.")
-			}
+		} else if !con.ValidParticles() &&
+			!con.ValidProjectionDepth() &&
+			!con.AutoParticles {
+			log.Fatal(
+				"You must set either a valid 'Particles' or a valid " + 
+					"'ProjectionDepth' or must set 'AutoParticles' to " +
+					"true.",
+			)
 		}
 
 		bounds := flag.Args()
