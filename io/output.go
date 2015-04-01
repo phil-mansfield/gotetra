@@ -40,6 +40,7 @@ type RenderInfo struct {
 	TotalPixels int64
     SubsampleLength int64
     MinProjectionDepth int64
+	ProjectionAxis int64
 }
 
 type LocationInfo struct {
@@ -69,10 +70,17 @@ func NewCosmoInfo(H0, omegaM, omegaL, z, boxWidth float64) CosmoInfo {
 	return ci
 }
 	
-func NewRenderInfo(particles, totalCells, skip int) RenderInfo {
-	proj := projectionDepth(particles, totalCells, skip)
+func NewRenderInfo(particles, totalCells, skip int, axisStr string) RenderInfo {
+	projDepth := projectionDepth(particles, totalCells, skip)
+
+	axis := -1
+	if axisStr == "X" { axis = 0 }
+	if axisStr == "Y" { axis = 1 }
+	if axisStr == "Z" { axis = 2 }
+
 	ri := RenderInfo{
-		int64(particles), int64(totalCells), int64(skip), int64(proj),
+		int64(particles), int64(totalCells), int64(skip),
+		int64(projDepth), int64(axis),
 	}
 	return ri
 }

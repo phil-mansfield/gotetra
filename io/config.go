@@ -45,17 +45,36 @@ Cells = 8 # It's unlikely that you will want to change this.
 Input  = path/to/input/dir
 Output = path/to/output/dir
 
-# Default way of specifying pixel size and particles per tetrahedron:
+# Default way of specifying pixel size: the number of pixels which would
+# be required to render the entire box. All rendered boxes will have the same
+# pixel size.
 TotalPixels = 500
-Particles   = 25
 
-# Alternative way of specifying pixel size and particles per tetrahedron:
-# ImagePixels     = 100
-# ProjectionDepth = 3
+# Default way of specifying particle count: the number of particles per
+# tetrahedron.
+Particles = 25
 
 #####################
 # OptionalParamters #
 #####################
+
+
+# Alternative way of specifying pixel size: the number of pixels required to
+# render the longest axis of each box. All rendered boxes will, in general,
+# not have the same.
+# ImagePixels     = 100
+
+
+# Alternative way of specifying the particle count. gotetra will (attempt to)
+# automatically calculate how many particles are needed so that all projections
+# rendered from the resulting grid will have enough particles-per-tetrahedron
+# to avoid artifacts.
+# AutoParticles = true
+
+# Alternative way of specifying the particle count. Identical to specifying
+# AutoParticles, except that projections with a depth below ProjectionDepth
+# may contain artifacts. 
+# ProjectionDepth = 3
 
 # ProfileFile = prof.out
 # LogFile = log.out
@@ -163,6 +182,7 @@ type DensityConfig struct {
 	TotalPixels, Particles int
 
 	// Optional
+	AutoParticles bool
 	ImagePixels, ProjectionDepth int
 	SubsampleLength int
 	AppendName, PrependName string

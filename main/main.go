@@ -442,15 +442,6 @@ func validCellNum(cells int) bool {
 }
 
 func densityMain(con *io.DensityConfig, bounds []string) {
-	// TODO: 
-	// * Make this use all optional paramters.
-	// * And fix that L/2 bug.
-	// * And make it so that there aren't issues when you render multiple boxes
-	// at once.
-	// *sigh*
-
-	// Set up IO.
-
 	fileNames, hd, fg := densitySetupIO(con)
 	defer fg.Close()
 		
@@ -466,22 +457,19 @@ func densityMain(con *io.DensityConfig, bounds []string) {
 
 	boxes := make([]gotetra.Box, len(configBoxes))
 	for i := range boxes {
-		pix := totalPixels(con, &configBoxes[i], hd.TotalWidth)
-		boxes[i].InitFromConfig(hd.TotalWidth, pix, &configBoxes[i])
+		cells := totalPixels(con, &configBoxes[i], hd.TotalWidth)
+		pts := particles(con, &configBoxes[i], hd.TotalWidth)
+		boxes[i] = gotetra.NewBox(hd.TotalWidth, cells, pts, &configBoxes[i])
 		log.Println("Rendering to box:", boxes[i].CellSpan(), "pixels.")
 	}
 
 	// Interpolate.
 
-	man := gotetra.NewBoundedManager(
-		fileNames, boxes, particles(con, &configBoxes[0], hd.TotalWidth),
-	)
-	man.Subsample(con.SubsampleLength)
+	man, err := gotetra.NewManager(fileNames, boxes, true)
+	if err != nil { log.Fatal(err.Error()) }
 
-	for i := range fileNames {
-		man.LoadPositions(fileNames[i])
-		man.Density(boxes)
-	}
+	man.Subsample(con.SubsampleLength)
+	man.RenderDensity()
 
 	// Write output.
 
@@ -506,10 +494,18 @@ func densityMain(con *io.DensityConfig, bounds []string) {
 
 		render := io.NewRenderInfo(
 			con.Particles, con.TotalPixels, con.SubsampleLength,
+			cBox.ProjectionAxis,
 		)
 
-		io.WriteDensity(box.Vals, cos, render, loc, f)
+		// TODO: don't keep creting new float32 buffers, man.
+		io.WriteDensity(toFloat32(box.Vals()), cos, render, loc, f)
 	}
+}
+
+func toFloat32(xs []float64) []float32 {
+	ys := make([]float32, len(xs))
+	for i := range xs { ys[i] = float32(xs[i]) }
+	return ys
 }
 
 func densitySetupIO(con *io.DensityConfig) (
@@ -577,13 +573,28 @@ func maxWidth(box *io.BoxConfig) float64 {
 
 func particles(con *io.DensityConfig, box *io.BoxConfig, boxWidth float64) int {
 
+	if con.AutoParticles {
+		cells := totalPixels(con, box, boxWidth)
+		cellWidth := boxWidth / float64(cells)
+
+		if box.ProjectionAxis == "X" {
+			con.ProjectionDepth = int(math.Ceil(box.XWidth / cellWidth))
+		} else if box.ProjectionAxis == "Y" {
+			con.ProjectionDepth = int(math.Ceil(box.YWidth / cellWidth))
+		} else if box.ProjectionAxis == "Z" {
+			con.ProjectionDepth = int(math.Ceil(box.ZWidth / cellWidth))
+		} else {
+			con.ProjectionDepth = 1
+		}
+	}
+
 	if con.ValidProjectionDepth() {
 		// We're garuanteed that con.ValidImagePixels() is also true.
 		pixels := totalPixels(con, box, boxWidth)
 
-		refPixels := 2000.0
-		refParticles := 1000.0
-		refDepth := 8.0
+		refPixels := 5000.0
+		refParticles := 20000.0
+		refDepth := 1.0
 		refSubsample := 1.0
 		return int(refParticles * math.Pow(float64(pixels) / refPixels, 3) * 
 			math.Pow(float64(con.SubsampleLength) / refSubsample, 3) *
