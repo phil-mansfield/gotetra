@@ -1,7 +1,0 @@
-[RenderDensity]
-
-Input = /project/surph/mansfield/data/gotetra/sheets/L0125_NP1024_G8_CBol/snapdir_000
-Output = /project/surph/mansfield/data/gotetra/fields/L0125_NP1024_G8_CBol/snapdir_000/density
-
-MinProjectionDepth = 10
-PixelLimit = 300

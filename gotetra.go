@@ -1,14 +1,19 @@
 package gotetra
 
 import (
+	"fmt"
 	"log"
-	"runtime"
 	"path"
+	"runtime"
 
 	"github.com/phil-mansfield/gotetra/density"
 	"github.com/phil-mansfield/gotetra/geom"
 	"github.com/phil-mansfield/gotetra/io"
 	"github.com/phil-mansfield/gotetra/rand"
+)
+
+const (
+	UnitBufCount = 1 << 12
 )
 
 type Manager struct {
@@ -49,7 +54,16 @@ func NewManager(files []string, boxes []Box, logFlag bool) (*Manager, error) {
 	man.log = logFlag
 
 	gen := rand.NewTimeSeed(rand.Tausworthe)
-	for _, buf := range man.unitBufs {
+	man.unitBufs = make([][]geom.Vec, UnitBufCount)
+
+	maxPoints := 0
+	for _, b := range boxes {
+		if b.Points() > maxPoints { maxPoints = b.Points() }
+	}
+
+	for bi := range man.unitBufs {
+		man.unitBufs[bi] = make([]geom.Vec, maxPoints)
+		buf := man.unitBufs[bi]
 		for j := range buf {
 			for k := 0; k < 3; k++ {
 				buf[j][k] = float32(gen.Uniform(0, 1))
@@ -75,6 +89,7 @@ func NewManager(files []string, boxes []Box, logFlag bool) (*Manager, error) {
 
 	man.files = make([]string, 0)
 	maxBufSize := 0
+
 	for _, file := range files {
 		err := io.ReadSheetHeaderAt(file, &man.hd)
 		if err != nil { return nil, err }
@@ -97,7 +112,12 @@ func NewManager(files []string, boxes []Box, logFlag bool) (*Manager, error) {
 			man.files = append(man.files, file)
 		}
 	}
-	
+
+	err := io.ReadSheetHeaderAt(files[0], &man.hd)
+	if err != nil { return nil, err }
+	man.xs = make([]geom.Vec, man.hd.GridCount)
+	man.scaledXs = make([]geom.Vec, man.hd.GridCount)
+
 	if man.log {
 		log.Printf(
 			"Workspace buffer size: %d. Number of workers: %d",
@@ -138,6 +158,10 @@ func (r *renderer) initWorkspaces(man *Manager) {
 	segFrac := int(man.hd.SegmentWidth) / man.skip
 	segLen := segFrac * segFrac * segFrac
 	chunkLen := segLen / man.workers
+
+	for i := range man.unitBufs {
+		man.unitBufs[i] = man.unitBufs[i][0: r.box.Points()]
+	}
 
 	// TODO: fix this int64 silliness
 	for id := range man.workspaces {
@@ -184,11 +208,15 @@ func (man *Manager) RenderDensityFromFile(file string) error {
 		log.Printf("Rendering file %s", path.Base(file))
 	}
 
+	err := man.loadFile(file)
+	if err != nil { return err }
+
 	out := make(chan int, man.workers)
 
-	for _, r := range man.renderers {
-		if !r.requiresFile(file) { continue }
+	for ri := range man.renderers {
+		r := &man.renderers[ri]
 
+		if !r.requiresFile(file) { continue }
 		man.xCb = *man.hd.CellBounds(r.box.Cells())
 
 		r.over = r.box.Overlap(&man.hd)
@@ -204,12 +232,10 @@ func (man *Manager) RenderDensityFromFile(file string) error {
 
 		for i := 0; i < man.workers; i++ {
 			id := <-out
-			man.renderers[id].over.Add(
-				man.workspaces[id].buf, man.renderers[id].box.Vals(), &man.xCb,
-			)
+			r.over.Add(man.workspaces[id].buf, r.box.Vals())
 		}
 	}
-
+	
 	if man.log {
 		runtime.ReadMemStats(&man.ms)
 		log.Printf(
@@ -217,8 +243,27 @@ func (man *Manager) RenderDensityFromFile(file string) error {
 			man.ms.Alloc >> 20, man.ms.Sys >> 20,
 		)
 	}
-
 	return nil
+}
+
+func printBox(xs []float64, cb *geom.CellBounds) {
+	idx := 0
+	for z := 0; z < cb.Width[2]; z++ {
+		for y := 0; y < cb.Width[1]; y++ {
+			for x := 0; x < cb.Width[0]; x++ {
+				fmt.Print(xs[idx])
+				idx++
+			}
+			fmt.Println()
+		}
+		fmt.Println()
+	}
+}
+
+func sum(xs []float64) float64 {
+	s := 0.0
+	for _, x := range xs { s += x }
+	return s
 }
 
 func (man *Manager) loadFile(file string) error {
@@ -231,12 +276,12 @@ func (man *Manager) loadFile(file string) error {
 	return nil
 }
 
-func (man *Manager) chanInterpolate(id int, r renderer, out chan<- int) {
-	w := man.workspaces[id]
+func (man *Manager) chanInterpolate(id int, r *renderer, out chan<- int) {
+	w := &man.workspaces[id]
+
 	for i := range w.buf { w.buf[i] = 0.0 }
 	w.intr.Interpolate(
-		w.buf, &r.cb,
-		man.scaledXs, &man.xCb,
+		w.buf, man.scaledXs,
 		r.ptVal(man), w.lowX, w.highX,
 	)
 	out <- id

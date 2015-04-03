@@ -470,16 +470,11 @@ func densityMain(con *io.DensityConfig, bounds []string) {
 	}
 
 	// Interpolate.
-
 	man, err := gotetra.NewManager(fileNames, boxes, true)
 	if err != nil { log.Fatal(err.Error()) }
 
 	man.Subsample(con.SubsampleLength)
-
-	log.Println("SKIPPING RENDERING")
-	/*
 	man.RenderDensity()
-	*/
 
 	// Write output.
 
@@ -508,9 +503,6 @@ func densityMain(con *io.DensityConfig, bounds []string) {
 		)
 
 		// TODO: don't keep creating new float32 buffers, man.
-		vals := box.Vals()
-		for i := range vals { vals[i] = float64(i) }
-
 		io.WriteDensity(toFloat32(box.Vals()), cos, render, loc, f)
 	}
 }
@@ -522,7 +514,7 @@ func toFloat32(xs []float64) []float32 {
 }
 
 func densitySetupIO(con *io.DensityConfig) (
-	fileNames []string,
+	files []string,
 	hd *io.SheetHeader,
 	fg *FileGroup,
 ) {
@@ -548,17 +540,16 @@ func densitySetupIO(con *io.DensityConfig) (
 	infos, err := ioutil.ReadDir(con.Input)
 	if err != nil { log.Fatal(err.Error()) }
 
-	files := make([]string, len(infos))
+	files = make([]string, len(infos))
 	for i := range infos { files[i] = path.Join(con.Input, infos[i].Name()) }
 	io.ReadSheetHeaderAt(files[0], hd)
 
-	return fileNames, hd, fg
+	return files, hd, fg
 }
 
 func totalPixels(con *io.DensityConfig, box *io.BoxConfig, boxWidth float64) int {
 	if con.ValidImagePixels() {
 		w := maxWidth(box)
-		log.Println(w)
 		if w > boxWidth {
 			log.Fatalf(
 				"Requested dimensions of '%s' are larger than the simulation box.",

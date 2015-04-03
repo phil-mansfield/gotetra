@@ -38,15 +38,16 @@ type Overlap interface {
 	// Interpolate performs a nearest grid point interpolation on the given
 	// position vectors onto the grid self.
 	Interpolate(
-		rhos []float64, rhoCb *geom.CellBounds,
-		xs []geom.Vec, xCb *geom.CellBounds,
+		rhos []float64, xs []geom.Vec,
 		ptVal float64, low, high int,
 	)
+	DomainCellBounds() *geom.CellBounds
+	BufferCellBounds() *geom.CellBounds
 
 	// Add adds the contents of buf to grid where buf is the overlap grid and
 	// grid is the domain grid. The domain grid is contained within the given
 	// cell bounds.
-	Add(buf, grid []float64, cb *geom.CellBounds)
+	Add(buf, grid []float64)
 }
 
 /////////////////////////
@@ -60,8 +61,8 @@ type baseBox struct {
 	cellWidth float64
 }
 
-func (b *baseBox) CellSpan() [3]int { return b.cb.Width }
 func (b *baseBox) CellOrigin() [3]int { return b.cb.Origin }
+func (b *baseBox) CellSpan() [3]int { return b.cb.Width }
 func (b *baseBox) CellWidth() float64 { return b.cellWidth }
 func (b *baseBox) Cells() int {return b.cells }
 func (b *baseBox) Points() int { return b.pts }
@@ -83,8 +84,10 @@ func (b *box2D) Overlap(hd *io.SheetHeader) Overlap {
 	seg.proj = b.proj
 	dom.proj = b.proj
 
-	seg.cb = *hd.CellBounds(b.cells)
-	dom.cb = b.cb
+	dom.domCb = b.cb
+	seg.domCb = b.cb
+	dom.bufCb = b.cb
+	seg.bufCb = *hd.CellBounds(b.cells)
 
 	if seg.BufferSize() <= dom.BufferSize() {
 		return seg
@@ -100,22 +103,25 @@ type box3D struct {
 }
 
 func (b *box3D) Overlap(hd *io.SheetHeader) Overlap {
-	seg := &segmentOverlap2D{ }
-	dom := &domainOverlap2D{ }
+	seg := &segmentOverlap3D{ }
+	dom := &domainOverlap3D{ }
 
 	seg.boxWidth = b.cellWidth * float64(b.cells)
 	dom.boxWidth = b.cellWidth * float64(b.cells)
 	seg.cells = b.cells
 	dom.cells = b.cells
 
-	seg.cb = *hd.CellBounds(b.cells)
-	dom.cb = b.cb
+	dom.domCb = b.cb
+	seg.domCb = b.cb
+	dom.bufCb = b.cb
+	seg.bufCb = *hd.CellBounds(b.cells)
 
 	if seg.BufferSize() <= dom.BufferSize() {
 		return seg
 	} else {
 		return dom
 	}
+
 }
 
 func (b *box3D) ProjectionAxis() (int, bool) { return -1, false }
@@ -202,13 +208,15 @@ func newBox3D(boxWidth float64, pts, cells int, config *io.BoxConfig) Box {
 /////////////////////////////
 
 type baseOverlap struct {
-	cb geom.CellBounds
+	bufCb, domCb geom.CellBounds
 	cells int
 	boxWidth float64
 }
 
+func (b *baseOverlap) BufferCellBounds() *geom.CellBounds { return &b.bufCb }
+func (b *baseOverlap) DomainCellBounds() *geom.CellBounds { return &b.domCb }
 func (w *baseOverlap) ScaleVecs(vs []geom.Vec) {
-	w.cb.ScaleVecs(vs, w.cells, w.boxWidth)
+	w.bufCb.ScaleVecs(vs, w.cells, w.boxWidth)
 }
 
 type baseOverlap2D struct {
@@ -222,50 +230,18 @@ func (w *baseOverlap2D) BufferSize() int {
 	prod := 1
 	for i := 0; i < 3; i++ {
 		if i == w.proj { continue }
-		prod *= w.cb.Width[i]
+		prod *= w.bufCb.Width[i]
 	}
 
 	return prod
 }
 
-func (w *baseOverlap2D) Add(buf, grid []float64, cb *geom.CellBounds) {
-	// Since the majority of the program's serial time is spent here, there are
-	// some completely stupid-looking optimizations here.
+func (w *domainOverlap2D) Add(buf, grid []float64) {
+	for i, val := range buf { grid[i] += val }
+}
 
-	// TODO: Change variables names for *Work* to *Over*, to reflect the name
-	// change fo the type. I just don't want to do this right now...
-
-	iDim, jDim := 0, 1
-	if w.proj == 0 { iDim, jDim = 1, 2 }	
-	if w.proj == 1 { iDim, jDim = 0, 2 }
-
-	diOrigin := w.cb.Origin[iDim] - cb.Origin[iDim]
-	djOrigin := w.cb.Origin[jDim] - cb.Origin[jDim]
-	if diOrigin >= w.cells { diOrigin -= w.cells }
-	if djOrigin >= w.cells { djOrigin -= w.cells }
-	iWorkLow, iWorkHigh := diOrigin, diOrigin + w.cb.Width[iDim] - 1
-	jWorkLow, jWorkHigh := djOrigin, djOrigin + w.cb.Width[jDim] - 1
-
-	// TODO: Speed this up by moving the conditionals out of the loops. It
-	// shouldn't be that big of a deal since there will be exactly one branch
-	// misprediction per loop.
-	jWork := 0
-	for j := jWorkLow; j <= jWorkHigh; j++ {
-		jDomain := j
-		if jDomain >= w.cells { jDomain -= w.cells }
-		jWorkFlat   := jWork   * w.cb.Width[iDim]
-		jDomainFlat := jDomain * cb.Width[iDim]
-
-		iWork := 0
-		for i := iWorkLow; i <= iWorkHigh; i++ {
-			iDomain := i
-			if iDomain >= w.cells { iDomain -= w.cells }
-			grid[iDomain + jDomainFlat] = buf[iWork + jWorkFlat]
-
-			iWork++
-		}
-		jWork++
-	}
+func (w *domainOverlap3D) Add(buf, grid []float64) {
+	for i, val := range buf { grid[i] += val }
 }
 
 type baseOverlap3D struct {
@@ -273,53 +249,80 @@ type baseOverlap3D struct {
 }
 
 func (w *baseOverlap3D) BufferSize() int {
-	return w.cb.Width[0] * w.cb.Width[1] * w.cb.Width[2]
+	return w.bufCb.Width[0] * w.bufCb.Width[1] * w.bufCb.Width[2]
 }
 
-func (w *baseOverlap3D) Add(buf, grid []float64, cb *geom.CellBounds) {
-	// Since the majority of the program's serial time is spent here, there are
-	// some completely stupid-looking optimizations here.
+func (w *segmentOverlap2D) Add(buf, grid []float64) {
+	iDim, jDim := 0, 1
+	if w.proj == 0 { iDim, jDim = 1, 2 }	
+	if w.proj == 1 { iDim, jDim = 0, 2 }
 
-	dxOrigin := w.cb.Origin[0] - cb.Origin[0]
-	dyOrigin := w.cb.Origin[1] - cb.Origin[1]
-	dzOrigin := w.cb.Origin[2] - cb.Origin[2]
-	if dxOrigin >= w.cells { dxOrigin -= w.cells }
-	if dyOrigin >= w.cells { dyOrigin -= w.cells }
-	if dzOrigin >= w.cells { dzOrigin -= w.cells }
-	xWorkLow, xWorkHigh := dxOrigin, dxOrigin + w.cb.Width[0] - 1
-	yWorkLow, yWorkHigh := dyOrigin, dyOrigin + w.cb.Width[1] - 1
-	zWorkLow, zWorkHigh := dzOrigin, dzOrigin + w.cb.Width[2] - 1
-
-	// TODO: Speed this up by moving the conditionals out of the loops. It
-	// shouldn't be that big of a deal since there will be exactly one branch
-	// misprediction.
-	zWork := 0
-	for z := zWorkLow; z <= zWorkHigh; z++ {
-		zDomain := z
-		if zDomain >= w.cells { zDomain -= w.cells }
-		zWorkFlat   := zWork   * w.cb.Width[1] * w.cb.Width[0]
-		zDomainFlat := zDomain * cb.Width[1]   * cb.Width[0]
-
-		yWork := 0
-		for y := yWorkLow; y <= yWorkHigh; y++ {
-			yDomain := y
-			if yDomain >= w.cells { yDomain -= w.cells }
-			yWorkFlat   := yWork   * w.cb.Width[0]
-			yDomainFlat := yDomain * cb.Width[0]
-
-			xWork := 0
-			for x := xWorkLow; x <= xWorkHigh; x++ {
-				xDomain := x
-				if xDomain >= w.cells { xDomain -= w.cells }
-
-				grid[xDomain + yDomainFlat + zDomainFlat] = 
-					buf[xWork + yWorkFlat + zWorkFlat]
-				
-				xWork++
-			}
-			yWork++
+	for jBuf := 0; jBuf < w.bufCb.Width[jDim]; jBuf++ {
+		jDom := jBuf + (w.bufCb.Origin[jDim] - w.domCb.Origin[jDim])
+		if jDom < 0 {
+			jDom += w.cells
+		} else if jDom >= w.cells {
+			jDom -= w.cells
 		}
-		zWork++
+
+		if jDom >= w.domCb.Width[jDim] { continue }
+		flatDomJ := jDom * w.domCb.Width[iDim]
+		flatBufJ := jBuf * w.bufCb.Width[iDim]
+
+		for iBuf := 0; iBuf < w.bufCb.Width[iDim]; iBuf++ {
+			iDom := iBuf + (w.bufCb.Origin[iDim] - w.domCb.Origin[iDim])
+			if iDom < 0 {
+				iDom += w.cells
+			} else if iDom >= w.cells {
+				iDom -= w.cells
+			}
+			if iDom >= w.domCb.Width[iDim] { continue }
+
+			domIdx := iDom + flatDomJ
+			bufIdx := iBuf + flatBufJ
+			grid[domIdx] += buf[bufIdx]
+		}
+	}
+}
+
+func (w *segmentOverlap3D) Add(buf, grid []float64) {
+	for zBuf := 0; zBuf < w.bufCb.Width[2]; zBuf++ {
+		zDom := zBuf + (w.bufCb.Origin[2] - w.domCb.Origin[2])
+		if zDom < 0 {
+			zDom += w.cells
+		} else if zDom >= w.cells {
+			zDom -= w.cells
+		}
+		if zDom >= w.domCb.Width[2] { continue }
+		flatDomZ := zDom * w.domCb.Width[1] * w.domCb.Width[0]
+		flatBufZ := zBuf * w.bufCb.Width[1] * w.bufCb.Width[0]
+
+		for yBuf := 0; yBuf < w.bufCb.Width[1]; yBuf++ {
+			yDom := yBuf + (w.bufCb.Origin[1] - w.domCb.Origin[1])
+			if yDom < 0 {
+				yDom += w.cells
+			} else if yDom >= w.cells {
+				yDom -= w.cells
+			}
+
+			if yDom >= w.domCb.Width[1] { continue }
+			flatDomY := yDom * w.domCb.Width[0]
+			flatBufY := yBuf * w.bufCb.Width[0]
+
+			for xBuf := 0; xBuf < w.bufCb.Width[0]; xBuf++ {
+				xDom := xBuf + (w.bufCb.Origin[0] - w.domCb.Origin[0])
+				if xDom < 0 {
+					xDom += w.cells
+				} else if xDom >= w.cells {
+					xDom -= w.cells
+				}
+				if xDom >= w.domCb.Width[0] { continue }
+
+				domIdx := xDom + flatDomY + flatDomZ
+				bufIdx := xBuf + flatBufY + flatBufZ
+				grid[domIdx] += buf[bufIdx]
+			}
+		}
 	}
 }
 
@@ -328,39 +331,26 @@ type segmentOverlap2D struct {
 }
 
 func (w *segmentOverlap2D) Interpolate(
-	buf []float64, bufCb *geom.CellBounds,
-	xs []geom.Vec, xCb *geom.CellBounds,
+	buf []float64, xs []geom.Vec,
 	ptVal float64, low, high int,
 ) {
-	xDiff, yDiff, zDiff := cbSubtr(bufCb, xCb)
 	iDim, jDim, kDim := 0, 1, 2
-	iDiff, jDiff, kDiff := xDiff, yDiff, zDiff
-	if w.proj == 0 {
-		iDim, jDim, kDim = 1, 2, 0
-		iDiff, jDiff, kDiff = yDiff, zDiff, xDiff
-	} else if w.proj == 1 {
-		iDim, jDim, kDim = 0, 2, 1
-		iDiff, jDiff, kDiff = xDiff, zDiff, yDiff
-	}
+	if w.proj == 0 { iDim, jDim, kDim = 1, 2, 0 }	
+	if w.proj == 1 { iDim, jDim, kDim = 0, 2, 1 }
+	kOffset := w.domCb.Origin[kDim] - w.bufCb.Origin[kDim]
 
-	ptVal /= float64(bufCb.Width[kDim])
-	length := xCb.Width[iDim]
+	length := w.bufCb.Width[iDim]
+	ptVal /= float64(w.domCb.Width[kDim])
 
 	for idx := low; idx < high; idx++ {
 		pt := xs[idx]
-		
-		i := int(pt[iDim])
-		ii := bound(i - iDiff, w.cells)
-		if ii < bufCb.Width[iDim] && ii >= 0 {
-			j := int(pt[jDim])
-			jj := bound(j - jDiff, w.cells)
-			if jj < bufCb.Width[jDim] && jj >= 0 {
-				k := int(pt[kDim])
-				kk := bound(k - kDiff, w.cells)
-				if kk < bufCb.Width[kDim] && kk >= 0 {
-					buf[i + j * length] += ptVal
-				}
-			}
+		i, j := int(pt[iDim]), int(pt[jDim])
+
+		k := intFloor(pt[kDim])
+		kk := bound(k - kOffset, w.cells)
+
+		if kk < w.domCb.Width[kDim] && kk >= 0 {
+			buf[i + j * length] += ptVal
 		}
 	}
 }
@@ -369,34 +359,17 @@ type segmentOverlap3D struct {
 	baseOverlap3D
 }
 
-// TODO: change from 'buf' and 'x' to 'dom' and 'seg'
-
 func (w *segmentOverlap3D) Interpolate(
-	buf []float64, bufCb *geom.CellBounds,
-	xs []geom.Vec, xCb *geom.CellBounds,
+	buf []float64, xs []geom.Vec,
 	ptVal float64, low, high int,
 ) {
-	length := xCb.Width[0]
-	area :=   xCb.Width[0] * xCb.Width[1]
-
-	xDiff, yDiff, zDiff := cbSubtr(bufCb, xCb)
+	length := w.bufCb.Width[0]
+	area :=   w.bufCb.Width[0] * w.bufCb.Width[1]
 
 	for idx := low; idx < high; idx++ {
 		pt := xs[idx]
-		
-		x := int(pt[0])
-		i := bound(x - xDiff, w.cells)
-		if i < bufCb.Width[0] && i >= 0 {
-			y := int(pt[1])
-			j := bound(y - yDiff, w.cells)
-			if j < bufCb.Width[1] && j >= 0 {
-				z := int(pt[2])
-				k := bound(z - zDiff, w.cells)
-				if k < bufCb.Width[2] && k >= 0 {
-					buf[x + y * length + z * area] += ptVal
-				}
-			}
-		}
+		x, y, z := int(pt[0]), int(pt[1]), int(pt[2])
+		buf[x + y * length + z * area] += ptVal
 	}
 }
 
@@ -405,26 +378,28 @@ type domainOverlap2D struct {
 }
 
 func (w *domainOverlap2D) Interpolate(
-	buf []float64, bufCb *geom.CellBounds,
-	xs []geom.Vec, cb *geom.CellBounds,
+	buf []float64, xs []geom.Vec,
 	ptVal float64, low, high int,
 ) {
 	iDim, jDim, kDim := 0, 1, 2
-	if w.proj == 0 { iDim, jDim, kDim = 1, 2, 0 }
-	if w.proj == 1 { iDim, jDim, kDim = 0, 2, 1 }
+	if w.proj == 0 {
+		iDim, jDim, kDim = 1, 2, 0
+	} else if w.proj ==1 {
+		iDim, jDim, kDim = 0, 2, 1
+	}
 
-	ptVal /= float64(bufCb.Width[kDim])
-	length := bufCb.Width[iDim]
+	length := w.bufCb.Width[iDim]
+	ptVal /= float64(w.bufCb.Width[kDim])
 
 	for idx := low; idx < high; idx++ {
 		pt := xs[idx]
-
-		i := bound(int(pt[iDim]), w.cells)
-		if i < bufCb.Width[iDim] {
-			j := bound(int(pt[jDim]), w.cells)
-			if j < bufCb.Width[jDim] {
-				k := bound(int(pt[kDim]), w.cells)
-				if k < bufCb.Width[kDim] {
+		
+		i := bound(intFloor(pt[iDim]), w.cells)
+		if i < w.bufCb.Width[iDim] {
+			j := bound(intFloor(pt[jDim]), w.cells)
+			if j < w.bufCb.Width[jDim] {
+				k := bound(intFloor(pt[kDim]), w.cells)
+				if k < w.bufCb.Width[kDim] {
 					buf[i + j * length] += ptVal
 				}
 			}
@@ -437,31 +412,33 @@ type domainOverlap3D struct {
 }
 
 func (w *domainOverlap3D) Interpolate(
-	buf []float64, bufCb *geom.CellBounds,
-	xs []geom.Vec, xCb *geom.CellBounds,
+	buf []float64, xs []geom.Vec,
 	ptVal float64, low, high int,
 ) {
-	// bufCb should be redundant with w.Cb.
-
-	length := bufCb.Width[0]
-	area :=   bufCb.Width[0] * bufCb.Width[1]
+	length := w.bufCb.Width[0]
+	area   := w.bufCb.Width[0] * w.bufCb.Width[1]
 
 	for idx := low; idx < high; idx++ {
 		pt := xs[idx]
 		
-		// If there's a bug in this function, try replacing int() with
-		// int(math.Floor())
-
-		i := bound(int(pt[0]), w.cells)
-		if i < bufCb.Width[0] {
-			j := bound(int(pt[1]), w.cells)
-			if j < bufCb.Width[1] {
-				k := bound(int(pt[2]), w.cells)
-				if k < bufCb.Width[2] {
+		i := bound(intFloor(pt[0]), w.cells)
+		if i < w.bufCb.Width[0] {
+			j := bound(intFloor(pt[1]), w.cells)
+			if j < w.bufCb.Width[1] {
+				k := bound(intFloor(pt[2]), w.cells)
+				if k < w.bufCb.Width[2] {
 					buf[i + j * length + k * area] += ptVal
 				}
 			}
 		}
+	}
+}
+
+func intFloor(x float32) int {
+	if x > 0 {
+		return int(x)
+	} else {
+		return int(x - 1)
 	}
 }
 

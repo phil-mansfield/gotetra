@@ -78,6 +78,7 @@ func pMod(x, y int) int {
 
 // Intersect retursn true if the two bounding boxes overlap and false otherwise.
 func (cb1 *CellBounds) Intersect(cb2 *CellBounds, width int) bool {
+	/*
 	intersect := true
 	w2 := width / 2
 
@@ -94,11 +95,40 @@ func (cb1 *CellBounds) Intersect(cb2 *CellBounds, width int) bool {
 			(diff < 0 && -diff < cb1.Width[i]))
 	}
 	return intersect
+	*/
+	intr := true
+	var ( 
+		oSmall, oBig, wSmall, wBig int
+	)
+	for i := 0; intr && i < 3; i++ {
+		if cb1.Width[i] < cb2.Width[i] {
+			oSmall, wSmall = cb1.Origin[i], cb1.Width[i]
+			oBig, wBig = cb2.Origin[i], cb2.Width[i]
+		} else {
+			oSmall, wSmall = cb2.Origin[i], cb2.Width[i]
+			oBig, wBig = cb1.Origin[i], cb1.Width[i]
+		}
+
+		eSmall := oSmall + wSmall
+		beSmall := bound(eSmall, oBig, width)
+		boSmall := bound(oSmall, oBig, width)
+
+		intr = intr && (beSmall < wBig || boSmall < wBig)
+	}
+	return intr
+}
+
+func bound(x, origin, width int) int {
+	diff := x - origin
+	if diff < 0 { return diff + width }
+	if diff > width { return diff - width }
+	return diff
 }
 
 func (cb *CellBounds) ScaleVecs(vs []Vec, cells int, boxWidth float64) {
-	scale := float64(cells) / boxWidth
 	fCells := float64(cells)
+	scale := fCells / boxWidth
+	f32Cells := float32(cells)
 
 	origin := &Vec{
 		float32(cb.Origin[0]), float32(cb.Origin[1]), float32(cb.Origin[2]),
@@ -107,6 +137,9 @@ func (cb *CellBounds) ScaleVecs(vs []Vec, cells int, boxWidth float64) {
 	for i := range vs {
 		vs[i].ScaleSelf(scale)
 		vs[i].SubSelf(origin, fCells)
+		for j := 0; j < 3; j++ {
+			if vs[i][j] < 0 { vs[i][j] += f32Cells }
+		}
 	}
 }
 

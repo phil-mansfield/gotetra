@@ -49,7 +49,7 @@ The binary format used for phase sheets is as follows:
     1 - (int32) Flag indicating the endianness of the file. 0 indicates a big
         endian byte ordering and -1 indicates a little endian byte order.
     2 - (int32) Size of a Header struct. Should be checked for consistency.
-    3 - (sheet.Header) Header dile containing meta-information about the
+    3 - (sheet.Header) Header file containing meta-information about the
         sheet fragment.
     4 - ([][3]float32) Contiguous block of x, y, z coordinates. Given in Mpc.
     5 - ([][3]float32) Contiguous block of v_x, v_y, v_z coordinates.
@@ -57,7 +57,7 @@ The binary format used for phase sheets is as follows:
 type SheetHeader struct {
 	Cosmo CosmologyHeader
 	Count, CountWidth int64
-	SegmentWidth, GridWidth, GridCount int64
+	SegmentWidth, GridWidth, GridCount int64 // GridWidth = SegmentWidth + 1
 	Idx, Cells int64
 
 	Mass float64

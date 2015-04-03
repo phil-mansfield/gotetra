@@ -10,10 +10,14 @@ import (
 
 type Interpolator interface {
 	Interpolate(
-		buf []float64, bufCb *geom.CellBounds,
-		xs []geom.Vec, xCb *geom.CellBounds,
+		buf []float64, xs []geom.Vec,
 		ptVal float64, low, high int,
 	)
+
+	// The bounding box around the box being written to.
+	DomainCellBounds() *geom.CellBounds
+	// The bounding box around the box being written from.
+	BufferCellBounds() *geom.CellBounds
 }
 
 type ngp struct { }
@@ -44,7 +48,7 @@ func MonteCarlo(
 ) Interpolator {
 	mc := &mcarlo{
 		subIntr, segWidth, points, cells,
-		rand.NewTimeSeed(rand.Golang), skip,
+		rand.NewTimeSeed(rand.Xorshift), skip,
 		geom.TetraIdxs{}, geom.Tetra{},
 		unitBufs, make([]geom.Vec, points),
 	}
@@ -52,9 +56,16 @@ func MonteCarlo(
 	return mc
 }
 
+func (intr *mcarlo) DomainCellBounds() *geom.CellBounds {
+	return intr.subIntr.DomainCellBounds()
+}
+
+func (intr *mcarlo) BufferCellBounds() *geom.CellBounds {
+	return intr.subIntr.BufferCellBounds()
+}
+
 func (intr *mcarlo) Interpolate(
-	buf []float64, bufCb *geom.CellBounds,
-	xs []geom.Vec, xCb *geom.CellBounds,
+	buf []float64, xs []geom.Vec,
 	ptVal float64, low, high int,
 ) {
 	segWidth := intr.segWidth
@@ -67,8 +78,9 @@ func (intr *mcarlo) Interpolate(
 	tetCb := &geom.CellBounds{}
 
 	relCb := &geom.CellBounds{}
-	relCb.Width = bufCb.Width
-	relCb.Origin[0], relCb.Origin[1], relCb.Origin[2] = cbSubtr(bufCb, xCb)
+	relCb.Width = intr.DomainCellBounds().Width
+	relCb.Origin[0], relCb.Origin[1], relCb.Origin[2] =
+		cbSubtr(intr.DomainCellBounds(), intr.BufferCellBounds())
 
 	for idx := int64(low); idx < int64(high); idx++ {
 		x, y, z := coords(idx, idxWidth)
@@ -94,7 +106,7 @@ func (intr *mcarlo) Interpolate(
 			)
 
 			intr.subIntr.Interpolate(
-				buf, bufCb, intr.vecBuf, xCb, 
+				buf, intr.vecBuf,
 				ptVal, 0, intr.points,
 			)
 		}
