@@ -78,24 +78,6 @@ func pMod(x, y int) int {
 
 // Intersect retursn true if the two bounding boxes overlap and false otherwise.
 func (cb1 *CellBounds) Intersect(cb2 *CellBounds, width int) bool {
-	/*
-	intersect := true
-	w2 := width / 2
-
-	for i := 0; intersect && i < 3; i++ {
-		diff := cb1.Origin[i] - cb2.Origin[i]
-		if diff > w2 { 
-			diff -= width 
-		} else if diff < -w2 {
-			diff += width
-		}
-
-		intersect = intersect &&
-			((diff >= 0 && diff < cb2.Width[i]) || 
-			(diff < 0 && -diff < cb1.Width[i]))
-	}
-	return intersect
-	*/
 	intr := true
 	var ( 
 		oSmall, oBig, wSmall, wBig int
@@ -114,6 +96,24 @@ func (cb1 *CellBounds) Intersect(cb2 *CellBounds, width int) bool {
 		boSmall := bound(oSmall, oBig, width)
 
 		intr = intr && (beSmall < wBig || boSmall < wBig)
+	}
+	return intr
+}
+
+
+func (cb1 *CellBounds) IntersectUnbounded(cb2 *CellBounds) bool {
+	intr := true
+	var (
+		oLow, oHigh, wLow int
+	)
+	for i := 0; intr && i < 3; i++ {
+		if cb1.Origin[i] < cb2.Origin[i] {
+			oLow, oHigh, wLow = cb1.Origin[i], cb2.Origin[i], cb1.Width[i]
+		} else {
+			oLow, oHigh, wLow = cb2.Origin[i], cb1.Origin[i], cb2.Width[i]
+		}
+
+		intr = intr && (oLow + wLow > oHigh)
 	}
 	return intr
 }
@@ -151,4 +151,20 @@ func fMinMax(min, max, x float32) (float32, float32) {
 		return min, x
 	}
 	return min, max
+}
+
+func (cb *CellBounds) ScaleVecsUnbounded(
+	vs []Vec, cells int, boxWidth float64,
+) {
+	fCells := float32(cells)
+	scale := fCells / float32(boxWidth)
+	origin := &Vec{
+		float32(cb.Origin[0]), float32(cb.Origin[1]), float32(cb.Origin[2]),
+	}
+
+	for i := range vs {
+		for j := 0; j < 3; j++ {
+			vs[i][j] = vs[i][j] * scale - origin[j]
+		}
+	}
 }
