@@ -39,7 +39,7 @@ type Overlap interface {
 	// position vectors onto the grid self.
 	Interpolate(
 		rhos []float64, xs []geom.Vec,
-		ptVal float64, low, high int,
+		ptVal float64, low, high, jump int,
 	)
 	DomainCellBounds() *geom.CellBounds
 	BufferCellBounds() *geom.CellBounds
@@ -332,7 +332,7 @@ type segmentOverlap2D struct {
 
 func (w *segmentOverlap2D) Interpolate(
 	buf []float64, xs []geom.Vec,
-	ptVal float64, low, high int,
+	ptVal float64, low, high, jump int,
 ) {
 	iDim, jDim, kDim := 0, 1, 2
 	if w.proj == 0 { iDim, jDim, kDim = 1, 2, 0 }	
@@ -342,7 +342,7 @@ func (w *segmentOverlap2D) Interpolate(
 	length := w.bufCb.Width[iDim]
 	ptVal /= float64(w.domCb.Width[kDim])
 
-	for idx := low; idx < high; idx++ {
+	for idx := low; idx < high; idx += jump {
 		pt := xs[idx]
 		i, j := int(pt[iDim]), int(pt[jDim])
 
@@ -361,12 +361,12 @@ type segmentOverlap3D struct {
 
 func (w *segmentOverlap3D) Interpolate(
 	buf []float64, xs []geom.Vec,
-	ptVal float64, low, high int,
+	ptVal float64, low, high, jump int,
 ) {
 	length := w.bufCb.Width[0]
 	area :=   w.bufCb.Width[0] * w.bufCb.Width[1]
 
-	for idx := low; idx < high; idx++ {
+	for idx := low; idx < high; idx += jump {
 		pt := xs[idx]
 		x, y, z := int(pt[0]), int(pt[1]), int(pt[2])
 		buf[x + y * length + z * area] += ptVal
@@ -379,7 +379,7 @@ type domainOverlap2D struct {
 
 func (w *domainOverlap2D) Interpolate(
 	buf []float64, xs []geom.Vec,
-	ptVal float64, low, high int,
+	ptVal float64, low, high, jump int,
 ) {
 	iDim, jDim, kDim := 0, 1, 2
 	if w.proj == 0 {
@@ -391,7 +391,7 @@ func (w *domainOverlap2D) Interpolate(
 	length := w.bufCb.Width[iDim]
 	ptVal /= float64(w.bufCb.Width[kDim])
 
-	for idx := low; idx < high; idx++ {
+	for idx := low; idx < high; idx += jump {
 		pt := xs[idx]
 		
 		i := bound(intFloor(pt[iDim]), w.cells)
@@ -413,12 +413,12 @@ type domainOverlap3D struct {
 
 func (w *domainOverlap3D) Interpolate(
 	buf []float64, xs []geom.Vec,
-	ptVal float64, low, high int,
+	ptVal float64, low, high, jump int,
 ) {
 	length := w.bufCb.Width[0]
 	area   := w.bufCb.Width[0] * w.bufCb.Width[1]
 
-	for idx := low; idx < high; idx++ {
+	for idx := low; idx < high; idx += jump {
 		pt := xs[idx]
 		
 		i := bound(intFloor(pt[0]), w.cells)

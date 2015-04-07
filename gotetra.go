@@ -14,6 +14,7 @@ import (
 
 const (
 	UnitBufCount = 1 << 12
+	tetraIntr = true
 )
 
 type Manager struct {
@@ -157,7 +158,7 @@ func (r *renderer) ptVal(man *Manager) float64 {
 func (r *renderer) initWorkspaces(man *Manager) {
 	segFrac := int(man.hd.SegmentWidth) / man.skip
 	segLen := segFrac * segFrac * segFrac
-	chunkLen := segLen / man.workers
+	// chunkLen := segLen / man.workers
 
 	for i := range man.unitBufs {
 		man.unitBufs[i] = man.unitBufs[i][0: r.box.Points()]
@@ -172,11 +173,13 @@ func (r *renderer) initWorkspaces(man *Manager) {
 
 		man.workspaces[id].buf =
 			man.workspaces[id].buf[0: r.over.BufferSize()]
-		man.workspaces[id].lowX = chunkLen * id
-		man.workspaces[id].highX = chunkLen * (id + 1)
-		if id == man.workers - 1 {
-			man.workspaces[id].highX = segLen
-		}
+		man.workspaces[id].lowX = id * man.skip
+		man.workspaces[id].highX = segLen
+		// man.workspaces[id].lowX = chunkLen * id
+		// man.workspaces[id].highX = chunkLen * (id + 1)
+		// if id == man.workers - 1 {
+		//	man.workspaces[id].highX = segLen
+		//}
 	}
 }
 
@@ -280,9 +283,19 @@ func (man *Manager) chanInterpolate(id int, r *renderer, out chan<- int) {
 	w := &man.workspaces[id]
 
 	for i := range w.buf { w.buf[i] = 0.0 }
-	w.intr.Interpolate(
-		w.buf, man.scaledXs,
-		r.ptVal(man), w.lowX, w.highX,
-	)
+	if tetraIntr {
+		w.intr.Interpolate(
+			w.buf, man.scaledXs,
+			r.ptVal(man), w.lowX, w.highX,
+			man.workers * man.skip,
+		)
+	} else {
+		r.over.Interpolate(
+			w.buf, man.scaledXs,
+			r.ptVal(man), w.lowX, w.highX,
+			man.workers * man.skip,
+		)
+	}
+	
 	out <- id
 }

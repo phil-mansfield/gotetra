@@ -11,7 +11,7 @@ import (
 type Interpolator interface {
 	Interpolate(
 		buf []float64, xs []geom.Vec,
-		ptVal float64, low, high int,
+		ptVal float64, low, high, jump int,
 	)
 
 	// The bounding box around the box being written to.
@@ -66,7 +66,7 @@ func (intr *mcarlo) BufferCellBounds() *geom.CellBounds {
 
 func (intr *mcarlo) Interpolate(
 	buf []float64, xs []geom.Vec,
-	ptVal float64, low, high int,
+	ptVal float64, low, high, jump int,
 ) {
 	segWidth := intr.segWidth
 	gridWidth := segWidth + 1
@@ -82,7 +82,9 @@ func (intr *mcarlo) Interpolate(
 	relCb.Origin[0], relCb.Origin[1], relCb.Origin[2] =
 		cbSubtr(intr.DomainCellBounds(), intr.BufferCellBounds())
 
-	for idx := int64(low); idx < int64(high); idx++ {
+	jump64 := int64(jump)
+
+	for idx := int64(low); idx < int64(high); idx += jump64 {
 		x, y, z := coords(idx, idxWidth)
 		gridIdx := index(x * intr.skip, y * intr.skip, z * intr.skip, gridWidth)
 
@@ -107,7 +109,7 @@ func (intr *mcarlo) Interpolate(
 
 			intr.subIntr.Interpolate(
 				buf, intr.vecBuf,
-				ptVal, 0, intr.points,
+				ptVal, 0, intr.points, 1,
 			)
 		}
 	}

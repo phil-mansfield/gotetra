@@ -311,6 +311,7 @@ func (tet *Tetra) Distribute(xs, ys, zs []float64, vecBuf []Vec) {
 	}
 
 	// Note: this inner loop is very optimized. Don't try to "fix" it.
+	// Later note: Try to stop me.
 	for i := range vecBuf {
 		// Find three of the four barycentric coordinates, see
 		// C. Rocchini, P. Cignoni, 2001.
@@ -367,8 +368,6 @@ func DistributeUnit(vecBuf []Vec) {
 // and distributed them across the given tetrahedron through barycentric
 // coordinate transformations.
 func (tet *Tetra) DistributeTetra(pts []Vec, out []Vec) {
-	// TODO: Now that we don't need to worry about boundaries, this can probably
-	// be cleaned up.
 	bary := tet.Barycenter()
 
 	for i := 0; i < 4; i++ {
@@ -377,6 +376,8 @@ func (tet *Tetra) DistributeTetra(pts []Vec, out []Vec) {
 		}
 	}
 
+	// This loop is about 60% of the program's runtime. If you *ever* think
+	// of a way to speed it up, you need to do it.
 	for i := range pts {
 		pt := &pts[i]
 		s, t, u := pt[0], pt[1], pt[2]
