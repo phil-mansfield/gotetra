@@ -100,6 +100,24 @@ func (cb1 *CellBounds) Intersect(cb2 *CellBounds, width int) bool {
 	return intr
 }
 
+
+func (cb1 *CellBounds) IntersectUnbounded(cb2 *CellBounds) bool {
+	intr := true
+	var (
+		oLow, oHigh, wLow int
+	)
+	for i := 0; intr && i < 3; i++ {
+		if cb1.Origin[i] < cb2.Origin[i] {
+			oLow, oHigh, wLow = cb1.Origin[i], cb2.Origin[i], cb1.Width[i]
+		} else {
+			oLow, oHigh, wLow = cb2.Origin[i], cb1.Origin[i], cb2.Width[i]
+		}
+
+		intr = intr && (oLow + wLow > oHigh)
+	}
+	return intr
+}
+
 func bound(x, origin, width int) int {
 	diff := x - origin
 	if diff < 0 { return diff + width }
@@ -129,4 +147,20 @@ func fMinMax(min, max, x float32) (float32, float32) {
 		return min, x
 	}
 	return min, max
+}
+
+func (cb *CellBounds) ScaleVecsUnbounded(
+	vs []Vec, cells int, boxWidth float64,
+) {
+	fCells := float32(cells)
+	scale := fCells / float32(boxWidth)
+	origin := &Vec{
+		float32(cb.Origin[0]), float32(cb.Origin[1]), float32(cb.Origin[2]),
+	}
+
+	for i := range vs {
+		for j := 0; j < 3; j++ {
+			vs[i][j] = vs[i][j] * scale - origin[j]
+		}
+	}
 }
