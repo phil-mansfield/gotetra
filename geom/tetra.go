@@ -370,6 +370,7 @@ func DistributeUnit(vecBuf []Vec) {
 func (tet *Tetra) DistributeTetra(pts []Vec, out []Vec) {
 	bary := tet.Barycenter()
 
+	// TODO: check wheter or not putting these in variables speeds things up.
 	for i := 0; i < 4; i++ {
 		for j := 0; j < 3; j++ {
 			tet.sb.c[i][j] = tet.Corners[i][j] - bary[j]

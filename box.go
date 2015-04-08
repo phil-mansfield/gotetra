@@ -43,6 +43,7 @@ type Overlap interface {
 	)
 	DomainCellBounds() *geom.CellBounds
 	BufferCellBounds() *geom.CellBounds
+	Cells() int
 
 	// Add adds the contents of buf to grid where buf is the overlap grid and
 	// grid is the domain grid. The domain grid is contained within the given
@@ -89,7 +90,10 @@ func (b *box2D) Overlap(hd *io.SheetHeader) Overlap {
 	dom.bufCb = b.cb
 	seg.bufCb = *hd.CellBounds(b.cells)
 
-	if seg.BufferSize() <= dom.BufferSize() {
+	if seg.BufferSize() <= dom.BufferSize() || 
+		(dom.bufCb.Width[0] >= b.cells / 2 ||
+		dom.bufCb.Width[1] >= b.cells / 2 ||
+		dom.bufCb.Width[2] >= b.cells / 2) {
 		return seg
 	} else {
 		return dom
@@ -218,6 +222,7 @@ func (b *baseOverlap) DomainCellBounds() *geom.CellBounds { return &b.domCb }
 func (w *baseOverlap) ScaleVecs(vs []geom.Vec) {
 	w.bufCb.ScaleVecs(vs, w.cells, w.boxWidth)
 }
+func (b *baseOverlap) Cells() int { return b.cells }
 
 type baseOverlap2D struct {
 	baseOverlap
@@ -226,7 +231,7 @@ type baseOverlap2D struct {
 
 func (w *baseOverlap2D) BufferSize() int {
 	// I'm not doing this the obvious way (with a division) to avoid
-	// integer overflow.
+	// integer overflow. (However unlikely that might be.)
 	prod := 1
 	for i := 0; i < 3; i++ {
 		if i == w.proj { continue }

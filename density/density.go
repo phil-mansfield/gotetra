@@ -18,6 +18,8 @@ type Interpolator interface {
 	DomainCellBounds() *geom.CellBounds
 	// The bounding box around the box being written from.
 	BufferCellBounds() *geom.CellBounds
+
+	Cells() int
 }
 
 type ngp struct { }
@@ -64,6 +66,10 @@ func (intr *mcarlo) BufferCellBounds() *geom.CellBounds {
 	return intr.subIntr.BufferCellBounds()
 }
 
+func (intr *mcarlo) Cells() int {
+	return intr.subIntr.Cells()
+}
+
 func (intr *mcarlo) Interpolate(
 	buf []float64, xs []geom.Vec,
 	ptVal float64, low, high, jump int,
@@ -84,6 +90,13 @@ func (intr *mcarlo) Interpolate(
 
 	jump64 := int64(jump)
 
+	neverMod := *intr.subIntr.DomainCellBounds() != *intr.subIntr.BufferCellBounds() ||
+		(intr.Cells() / 2 > relCb.Width[0] &&
+		intr.Cells() / 2 > relCb.Width[1] &&
+		intr.Cells() / 2 > relCb.Width[2])
+	// neverMod is only false for very malicious cases :)
+	mods := 0
+
 	for idx := int64(low); idx < int64(high); idx += jump64 {
 		x, y, z := coords(idx, idxWidth)
 		gridIdx := index(x * intr.skip, y * intr.skip, z * intr.skip, gridWidth)
@@ -99,6 +112,7 @@ func (intr *mcarlo) Interpolate(
 			)
 			
 			intr.tet.CellBoundsAt(1.0, tetCb)
+
 			if !tetCb.Intersect(relCb, intr.cells) { continue }
 
 			bufIdx := intr.gen.UniformInt(0, len(intr.unitBufs))
@@ -107,11 +121,33 @@ func (intr *mcarlo) Interpolate(
 				intr.vecBuf,
 			)
 
+			if !neverMod {
+				for j := 0; j < 3; j++ {
+					if coordNeg(&intr.tet, j) {
+						mods++
+						modCoord(intr.vecBuf, j, float32(intr.Cells()))
+					}
+				}
+			}
+
 			intr.subIntr.Interpolate(
 				buf, intr.vecBuf,
 				ptVal, 0, intr.points, 1,
 			)
 		}
+	}
+}
+
+func coordNeg(tet *geom.Tetra, j int) bool {
+	for i := 0; i < 4; i++ {
+		if tet.Corners[i][j] < 0 { return true }
+	}
+	return false
+}
+
+func modCoord(buf []geom.Vec, j int, width float32) {
+	for i := range buf {
+		if buf[i][j] < 0 { buf[i][j] += width }
 	}
 }
 

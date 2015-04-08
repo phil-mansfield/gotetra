@@ -1,7 +1,6 @@
 package gotetra
 
 import (
-	"fmt"
 	"log"
 	"path"
 	"runtime"
@@ -158,7 +157,6 @@ func (r *renderer) ptVal(man *Manager) float64 {
 func (r *renderer) initWorkspaces(man *Manager) {
 	segFrac := int(man.hd.SegmentWidth) / man.skip
 	segLen := segFrac * segFrac * segFrac
-	// chunkLen := segLen / man.workers
 
 	for i := range man.unitBufs {
 		man.unitBufs[i] = man.unitBufs[i][0: r.box.Points()]
@@ -175,11 +173,6 @@ func (r *renderer) initWorkspaces(man *Manager) {
 			man.workspaces[id].buf[0: r.over.BufferSize()]
 		man.workspaces[id].lowX = id * man.skip
 		man.workspaces[id].highX = segLen
-		// man.workspaces[id].lowX = chunkLen * id
-		// man.workspaces[id].highX = chunkLen * (id + 1)
-		// if id == man.workers - 1 {
-		//	man.workspaces[id].highX = segLen
-		//}
 	}
 }
 
@@ -247,26 +240,6 @@ func (man *Manager) RenderDensityFromFile(file string) error {
 		)
 	}
 	return nil
-}
-
-func printBox(xs []float64, cb *geom.CellBounds) {
-	idx := 0
-	for z := 0; z < cb.Width[2]; z++ {
-		for y := 0; y < cb.Width[1]; y++ {
-			for x := 0; x < cb.Width[0]; x++ {
-				fmt.Print(xs[idx])
-				idx++
-			}
-			fmt.Println()
-		}
-		fmt.Println()
-	}
-}
-
-func sum(xs []float64) float64 {
-	s := 0.0
-	for _, x := range xs { s += x }
-	return s
 }
 
 func (man *Manager) loadFile(file string) error {
