@@ -234,7 +234,7 @@ func lGadget2Main(con *io.ConvertSnapshotConfig) {
 		files := make([]string, len(infos))
 		
 		for i, info := range infos {
-			files[i] = path.Join(con.Output, info.Name())
+			files[i] = path.Join(input, info.Name())
 		}
 		
 		hd, xs, vs := createGrids(files)
@@ -291,7 +291,7 @@ func createGrids(
 		log.Printf("Read %d/%d catalogs", len(catalogs), len(catalogs))
 	}
 
-	hs[0].CountWidth = intCubeRoot(hs[0].Count)
+	hs[0].CountWidth = intCubeRoot(hs[0].TotalCount)
 
 	return &hs[0], xs, vs
 }
@@ -307,7 +307,7 @@ func round(x float64) float64 {
 }
 
 func intCubeRoot(x int64) int64 {
-	cr := int64(math.Pow(float64(x), 1.0 / 3.0))
+	cr := int64(round(math.Pow(float64(x), 1.0 / 3.0)))
 	if cr * cr * cr != x { panic("You gave a non-cube to intCubeRoot") }
 	return cr
 }
@@ -448,8 +448,8 @@ func copyToSegment(shd *io.SheetHeader, xs, vs, xsSeg, vsSeg []geom.Vec) {
 	shd.Origin.ModSelf(shd.TotalWidth)
 	box.ToMax.ScaleAt(2.0, &shd.Width)
 
-	shd.Origin = vMin
-	for dim := range vMax { shd.Width[dim] = vMax[dim] - vMin[dim] }
+	shd.VelocityOrigin = vMin
+	for dim := range vMax { shd.VelocityWidth[dim] = vMax[dim] - vMin[dim] }
 }
 
 func validCellNum(cells int) bool {
