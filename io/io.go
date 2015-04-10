@@ -7,6 +7,7 @@ import (
 	"math"
 	"log"
 	"os"
+	"reflect"
 
 	"unsafe"
 
@@ -159,9 +160,8 @@ func ReadGadgetHeader(path string, order binary.ByteOrder) *CatalogHeader {
 func ReadGadgetParticlesAt(
 	path string,
 	order binary.ByteOrder,
-	floatBuf []float32,
-	intBuf []int64,
-	ps []Particle,
+	xs, vs []geom.Vec,
+	ids []int64,
 ) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -176,50 +176,39 @@ func ReadGadgetParticlesAt(
 
 	h := gh.Standardize()
 
-	if int64(len(floatBuf)) != 3*h.Count {
+	if int64(len(xs)) != h.Count {
 		panic(fmt.Sprintf(
-			"Incorrect length for float buffer. Found %d, expected %d",
-			len(floatBuf), 3*h.Count,
+			"Incorrect length for xs buffer. Found %d, expected %d",
+			len(xs), h.Count,
 		))
-	} else if int64(len(intBuf)) != h.Count {
+	} else if int64(len(vs)) != h.Count {
+		panic(fmt.Sprintf(
+			"Incorrect length for vs buffer. Found %d, expected %d",
+			len(vs), h.Count,
+		))
+	} else if int64(len(ids)) != h.Count {
 		panic(fmt.Sprintf(
 			"Incorrect length for int buffer. Found %d, expected %d",
-			len(intBuf), h.Count,
-		))
-	} else if int64(len(ps)) != h.Count {
-		panic(fmt.Sprintf(
-			"Incorrect length for Particle buffer. Found %d, expected %d",
-			len(ps), h.Count,
+			len(ids), h.Count,
 		))
 	}
 
 	_ = readInt32(f, order)
-	binary.Read(f, order, floatBuf)
+	readVecAsByte(f, order, xs)
 	_ = readInt32(f, order)
-
-	for i := range ps {
-		ps[i].Xs[0] = float32(gh.WrapDistance(float64(floatBuf[3*i+0])))
-		ps[i].Xs[1] = float32(gh.WrapDistance(float64(floatBuf[3*i+1])))
-		ps[i].Xs[2] = float32(gh.WrapDistance(float64(floatBuf[3*i+2])))
-	}
-
 	_ = readInt32(f, order)
-	binary.Read(f, order, floatBuf)
+	readVecAsByte(f, order, vs)
+	_ = readInt32(f, order)
+	_ = readInt32(f, order)
+	readInt64AsByte(f, order, ids)
 	_ = readInt32(f, order)
 
 	rootA := float32(math.Sqrt(float64(gh.Time)))
-	for i := range ps {
-		ps[i].Vs[0] = floatBuf[3*i+0] * rootA
-		ps[i].Vs[1] = floatBuf[3*i+1] * rootA
-		ps[i].Vs[2] = floatBuf[3*i+2] * rootA
-	}
-
-	_ = readInt32(f, order)
-	binary.Read(f, order, intBuf)
-	_ = readInt32(f, order)
-
-	for i := range ps {
-		ps[i].Id = intBuf[i]
+	for i := range xs {
+		for j := 0; j < 3; j++ {
+			xs[i][j] = float32(gh.WrapDistance(float64(xs[i][j])))
+			vs[i][j] = vs[i][j] * rootA
+		}
 	}
 }
 
@@ -228,14 +217,15 @@ func ReadGadgetParticlesAt(
 // are returned in a standardized format.
 func ReadGadget(
 	path string, order binary.ByteOrder,
-) (*CatalogHeader, []Particle) {
+) (hd *CatalogHeader, xs, vs []geom.Vec, ids []int64) {
 
-	h := ReadGadgetHeader(path, order)
-	floatBuf := make([]float32, 3 * h.Count)
-	intBuf := make([]int64, h.Count)
-	ps := make([]Particle, h.Count)
-	ReadGadgetParticlesAt(path, order, floatBuf, intBuf, ps)
-	return h, ps
+	hd = ReadGadgetHeader(path, order)
+	xs = make([]geom.Vec,  hd.Count)
+	vs = make([]geom.Vec,  hd.Count)
+	ids = make([]int64, hd.Count)
+
+	ReadGadgetParticlesAt(path, order, xs, vs, ids)
+	return hd, xs, vs, ids
 }
 
 // endianness is a utility function converting an endianness flag to a
@@ -298,7 +288,7 @@ func ReadSheetPositionsAt(file string, xsBuf []geom.Vec) error {
 	// Go to block 4 in the file.
 	// The file pointer should already be here, but let's just be safe, okay?
 	f.Seek(int64(4 + 4 + int(unsafe.Sizeof(SheetHeader{}))), 0)
-	if err := binary.Read(f, order, xsBuf); err != nil { return err }
+	if err := readVecAsByte(f, order, xsBuf); err != nil { return err }
 
 	if err := f.Close(); err != nil { return err }
 	return nil
@@ -314,10 +304,9 @@ func ReadSheetVelocitiesAt(file string, vsBuf []geom.Vec) error {
 			"vectors.", len(vsBuf), file, h.GridCount)
 	}
 
-	// Go to block 5 in the file.
 	f.Seek(int64(4 + 4 + int(unsafe.Sizeof(SheetHeader{})) +
 		3 * 4 * len(vsBuf)), 0)
-	if err := binary.Read(f, order, vsBuf); err != nil { return err }
+	if err := readVecAsByte(f, order, vsBuf); err != nil { return err }
 	if err := f.Close(); err != nil { return err }
 	return nil
 }
@@ -348,13 +337,14 @@ func WriteSheet(file string, h *SheetHeader, xs, vs []geom.Vec) {
 		); err != nil {
 		log.Fatalf(err.Error())
 	}
+
 	if err = binary.Write(f, order, h); err != nil {
 		log.Fatalf(err.Error())
 	}
-	if err = binary.Write(f, order, xs); err != nil {
+	if err = writeVecAsByte(f, order, xs); err != nil {
 		log.Fatalf(err.Error())
 	}
-	if err = binary.Write(f, order, vs); err != nil {
+	if err = writeVecAsByte(f, order, vs); err != nil {
 		log.Fatalf(err.Error())
 	}
 }
@@ -375,4 +365,97 @@ func (hd *SheetHeader) CellBounds(cells int) *geom.CellBounds {
 	}
 
 	return cb
+}
+
+func readVecAsByte(rd io.Reader, end binary.ByteOrder, buf []geom.Vec) error {
+	bufLen := len(buf)
+
+	hd := *(*reflect.SliceHeader)(unsafe.Pointer(&buf))
+	hd.Len *= 12
+	hd.Cap *= 12
+	
+	byteBuf := *(*[]byte)(unsafe.Pointer(&hd))
+	_, err := rd.Read(byteBuf)
+	if err != nil { return err }
+
+	if !isSysOrder(end) {
+		for i := 0; i < bufLen * 3; i++ {
+			for j := 0; j < 2; j++ {
+				idx1, idx2 := i*4 + j, i*4 + 3 - j
+				byteBuf[idx1], byteBuf[idx2] = byteBuf[idx2], byteBuf[idx1]
+			}
+		}
+	}
+
+	hd.Len /= 12
+	hd.Cap /= 12
+
+	return nil
+}
+
+func writeVecAsByte(wr io.Writer, end binary.ByteOrder, buf []geom.Vec) error {
+	bufLen := len(buf)
+
+	hd := *(*reflect.SliceHeader)(unsafe.Pointer(&buf))
+	hd.Len *= 12
+	hd.Cap *= 12
+	
+	byteBuf := *(*[]byte)(unsafe.Pointer(&hd))
+
+	if !isSysOrder(end) {
+		for i := 0; i < bufLen * 3; i++ {
+			for j := 0; j < 2; j++ {
+				idx1, idx2 := i*4 + j, i*4 + 3 - j
+				byteBuf[idx1], byteBuf[idx2] = byteBuf[idx2], byteBuf[idx1]
+			}
+		}
+	}
+
+	_, err := wr.Write(byteBuf)
+	if err != nil { return err }
+
+	hd.Len /= 12
+	hd.Cap /= 12
+
+	return nil
+}
+
+func readInt64AsByte(rd io.Reader, end binary.ByteOrder, buf []int64) error {
+	bufLen := len(buf)
+
+	hd := *(*reflect.SliceHeader)(unsafe.Pointer(&buf))
+	hd.Len *= 8
+	hd.Cap *= 8
+	
+	byteBuf := *(*[]byte)(unsafe.Pointer(&hd))
+	_, err := rd.Read(byteBuf)
+	if err != nil { return err }
+
+	if !isSysOrder(end) {
+		for i := 0; i < bufLen; i++ {
+			for j := 0; j < 4; j++ {
+				idx1, idx2 := i*8 + j, i*8 + 7 - j
+				byteBuf[idx1], byteBuf[idx2] = byteBuf[idx2], byteBuf[idx1]
+			}
+		}
+	}
+
+	hd.Len /= 8
+	hd.Cap /= 8
+
+	return nil
+}
+
+func isSysOrder(end binary.ByteOrder) bool {
+	buf32 := []int32{1}
+
+	hd := *(*reflect.SliceHeader)(unsafe.Pointer(&buf32))
+	hd.Len *= 4
+	hd.Cap *= 4
+
+	buf8 := *(*[]int8)(unsafe.Pointer(&hd))
+	if buf8[0] == 1 {
+		return binary.LittleEndian == end
+	}
+	return binary.BigEndian == end
 }

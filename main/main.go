@@ -264,10 +264,10 @@ func createGrids(
 	xs = make([]geom.Vec, hs[0].TotalCount)
 	vs = make([]geom.Vec, hs[0].TotalCount)
 	
-	pBuf := make([]io.Particle, maxLen)
-	intBuf := make([]int64, maxLen)
-	floatBuf := make([]float32, maxLen * 3)
-
+	idBuf := make([]int64, maxLen)
+	xBuf := make([]geom.Vec, maxLen)
+	vBuf := make([]geom.Vec, maxLen)
+	
 	buf := io.NewParticleBuffer(xs, vs, catalogBufLen)
 
 	for i, cat := range catalogs {
@@ -277,15 +277,19 @@ func createGrids(
 		}
 
 		N := hs[i].Count
-		floatBuf = floatBuf[0: 3*N]
-		intBuf = intBuf[0: N]
-		pBuf = pBuf[0: N]
 
-		io.ReadGadgetParticlesAt(cat, gadgetEndianness,
-			floatBuf, intBuf, pBuf)
+		idBuf = idBuf[0: N]
+		xBuf = xBuf[0: N]
+		vBuf = vBuf[0: N]
+
+		io.ReadGadgetParticlesAt(
+			cat, gadgetEndianness, xBuf, vBuf, idBuf,
+		)
+		// This might not be neccessary anymore.
 		runtime.GC()
-		buf.Append(pBuf)
+		buf.Append(xBuf, vBuf, idBuf)
 	}
+	buf.Flush()
 
 	if len(catalogs) % 25 != 0 {
 		log.Printf("Read %d/%d catalogs", len(catalogs), len(catalogs))
