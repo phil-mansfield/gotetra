@@ -260,13 +260,13 @@ func (man *Manager) chanInterpolate(id int, r *renderer, out chan<- int) {
 		w.intr.Interpolate(
 			w.buf, man.scaledXs,
 			r.ptVal(man), w.lowX, w.highX,
-			man.workers * man.skip,
+			man.workers,
 		)
 	} else {
 		r.over.Interpolate(
 			w.buf, man.scaledXs,
 			r.ptVal(man), w.lowX, w.highX,
-			man.workers * man.skip,
+			man.workers,
 		)
 	}
 	
