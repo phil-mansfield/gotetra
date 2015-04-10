@@ -412,6 +412,9 @@ func copyToSegment(shd *io.SheetHeader, xs, vs, xsSeg, vsSeg []geom.Vec) {
 	box.Init(&xs[xStart + N * yStart + N2 * zStart], shd.TotalWidth)
 
 	smallIdx := 0
+	vMin := vs[0]
+	vMax := vs[0]
+
 	for z := zStart; z < zStart + shd.GridWidth; z++ {
 		zIdx := z
 		if zIdx == shd.CountWidth { zIdx = 0 }
@@ -428,6 +431,13 @@ func copyToSegment(shd *io.SheetHeader, xs, vs, xsSeg, vsSeg []geom.Vec) {
 				vsSeg[smallIdx] = vs[largeIdx]
 
 				box.Add(&xsSeg[smallIdx])
+				for dim, v := range vs[largeIdx] {
+					if v < vMin[dim] {
+						vMin[dim] = v
+					} else if v > vMax[dim] {
+						vMax[dim] = v
+					}
+				}
 
 				smallIdx++
 			}
@@ -437,6 +447,9 @@ func copyToSegment(shd *io.SheetHeader, xs, vs, xsSeg, vsSeg []geom.Vec) {
 	box.Center.AddAt(&box.ToMin, &shd.Origin)
 	shd.Origin.ModSelf(shd.TotalWidth)
 	box.ToMax.ScaleAt(2.0, &shd.Width)
+
+	shd.Origin = vMin
+	for dim := range vMax { shd.Width[dim] = vMax[dim] - vMin[dim] }
 }
 
 func validCellNum(cells int) bool {
@@ -547,13 +560,15 @@ func densitySetupIO(con *io.DensityConfig) (
 	return files, hd, fg
 }
 
-func totalPixels(con *io.DensityConfig, box *io.BoxConfig, boxWidth float64) int {
+func totalPixels(
+	con *io.DensityConfig, box *io.BoxConfig, boxWidth float64,
+) int {
 	if con.ValidImagePixels() {
 		w := maxWidth(box)
 		if w > boxWidth {
 			log.Fatalf(
-				"Requested dimensions of '%s' are larger than the simulation box.",
-				box.Name,
+				"Requested dimensions of '%s' are larger than the " + 
+				"simulation box.", box.Name,
 			) 
 		}
 

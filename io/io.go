@@ -63,8 +63,8 @@ type SheetHeader struct {
 	Mass float64
 	TotalWidth float64
 
-	Origin geom.Vec
-	Width geom.Vec
+	Origin, Width geom.Vec
+	VelocityOrigin, VelocityWidth geom.Vec
 }
 
 // CosmologyHeader contains information describing the cosmological
@@ -343,7 +343,9 @@ func WriteSheet(file string, h *SheetHeader, xs, vs []geom.Vec) {
 	if err = binary.Write(f, order, endiannessFlag); err != nil {
 		log.Fatalf(err.Error())
 	}
-	if err = binary.Write(f, order, int32(unsafe.Sizeof(SheetHeader{}))); err != nil {
+	if err = binary.Write(
+		f, order, int32(unsafe.Sizeof(SheetHeader{})),
+		); err != nil {
 		log.Fatalf(err.Error())
 	}
 	if err = binary.Write(f, order, h); err != nil {
