@@ -261,6 +261,8 @@ func createGrids(
 		}
 	}
 
+	
+
 	xs = make([]geom.Vec, hs[0].TotalCount)
 	vs = make([]geom.Vec, hs[0].TotalCount)
 	
@@ -268,10 +270,10 @@ func createGrids(
 	xBuf := make([]geom.Vec, maxLen)
 	vBuf := make([]geom.Vec, maxLen)
 	
+	// I have no idea why I do this.
 	buf := io.NewParticleBuffer(xs, vs, catalogBufLen)
 
 	for i, cat := range catalogs {
-
 		if i % 25 == 0 {
 			log.Printf("Read %d/%d catalogs", i, len(catalogs))
 		}
