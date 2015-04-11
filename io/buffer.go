@@ -44,8 +44,8 @@ func (pb *ParticleBuffer) Append(xBuf, vBuf []geom.Vec, idBuf []int64) {
 // be called automatically whenever the buffer fills.
 func (pb *ParticleBuffer) Flush() {
 	for i := 0; i < pb.idx; i++ {
-		pb.xs[pb.idBuf[i] - 1] = pb.vBuf[i]
-		pb.vs[pb.idBuf[i] - 1] = pb.xBuf[i]
+		pb.xs[pb.idBuf[i] - 1] = pb.xBuf[i]
+		pb.vs[pb.idBuf[i] - 1] = pb.vBuf[i]
 	}
 	pb.idx = 0
 }
