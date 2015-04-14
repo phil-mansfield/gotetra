@@ -16,6 +16,7 @@ Header
   CosmoInfo
   RenderInfo
   LocationInfo
+  VelocityInfo
 """
 
 import array
@@ -29,19 +30,49 @@ DENSITY_GRADIENT    = 1
 VELOCITY            = 2
 VELOCITY_DIVERGENCE = 3
 VELOCITY_CURL       = 4
+PHASE_3D            = 5
+PHASE_1D            = 6
 
-HEADER_SIZE = 240
-TYPE_INFO_SIZE = 32
-COSMO_INFO_SIZE = 64
-RENDER_INFO_SIZE = 40
-LOCATION_INFO_SIZE = 104
+class Sizes(object):
+    def __init__(self, ver):
+        if ver == 1:
+            self.header = 232
+            self.type_info = 24
+            self.cosmo_info = 64
+            self.render_info = 40
+            self.location_info = 104
+        else:
+            print("Unrecognized gotetra output version, %d." % ver)
+            exit(1)
+        assert(self.header == (
+            self.type_info + self.cosmo_info +
+            self.render_info + self.location_info
+        ))
+
+def _read_endianness_version(s):
+    flag = struct.unpack("q", s)
+    ver = flag[0] & 0xffffffff
+    # Why can't your bitwise operations just do the correct thing? You aren't
+    # "helping" anyone here, Python.
+    end = -1 if ver >> 31 != 0 else 0
+    ver = 1 + (~ver & 0x00000000ffffffff) if end else ver
+    return end, ver
+
+def _read_endianness_flag(s):
+    return _read_endianness_version(s)[0]
+def _read_version(s):
+    return _read_endianness_version(s)[1]
 
 def read_header(filename):
     """ read_header returns the header information at the top of a gotetra
     output file as a Header object.
     """
-    with open(filename, "r") as fp: s = fp.read(HEADER_SIZE)
-    return Header(s)
+    with open(filename, "r") as fp:
+        flag_s = fp.read(8)
+        ver = _read_version(flag_s)
+        sizes = Sizes(ver)
+        s = fp.read(sizes.header)
+    return Header(flag_s + s, sizes)
 
 def read_grid(filename):
     """ read_grid returns the grid data stored in a gotetra output file as a
@@ -62,7 +93,6 @@ def read_grid(filename):
             return
         xs.byteswap()
 
-
     n = 1
     for i in range(3):
         if i != hd.axis: n *= hd.dim[i]
@@ -74,7 +104,7 @@ def read_grid(filename):
     if hd.type.is_vector_grid:
         xs, ys, zs = array.array("f"), array.array("f"), array.array("f")
         with open(filename, "rb") as fp:
-            fp.read(HEADER_SIZE)
+            fp.read(hd.sizes.header + 8)
             xs.fromfile(fp, n)
             ys.fromfile(fp, n)
             zs.fromfile(fp, n)
@@ -96,7 +126,7 @@ def read_grid(filename):
     else:
         xs = array.array("f")
         with open(filename, "rb") as fp:
-            fp.read(HEADER_SIZE)
+            fp.read(hd.sizes.header + 8)
             xs.fromfile(fp, n)
         maybe_swap(xs)
         if hd.axis == -1:
@@ -112,49 +142,53 @@ class Header(object):
         cosmo  : CosmoInfo
         render : RenderInfo
         loc    : LocationInfo
+        vel    : VelocityInfo - Only included in phase-space grids.
 
     These contain many fields, but the three most useful are reproduced as
     top-level fields:
-        dim  : numpy.array - The dimensions of the grid in pixels. Equivalent to
-                             Header.loc.pixel_span.
-        pw   : float       - The width of a single pixel. Equivalent to
-                             Header.loc.pixel_width.
-        axis : int         - The axis over which the image is projected over. If
-                             no projection was performed and the array is 3D,
-                             this will be set to -1.
+        dim  : np.array - The dimensions of the grid in pixels. Equivalent to
+                          Header.loc.pixel_span if it is a position-space grid
+                          and np.append(Header.loc.pixel_span, Header.vel.pixel_span)
+        pw   : float    - The width of a single pixel. Equivalent to
+                          Header.loc.pixel_width.
+        vpw  : float    - The width of a single velocity-space pixel.
+        axis : int      - The axis over which the image is projected over. If
+                          no projection was performed and the array is 3D,
+                          this will be set to -1.
     
     (These are the only fields which are truly neccessary to form images. The
     others can be learned as needed.)
     """
-    def __init__(self, s):
-        assert len(s) == HEADER_SIZE
-        type_start = 0
-        type_end = TYPE_INFO_SIZE
-        cosmo_start = type_end
-        cosmo_end = cosmo_start + COSMO_INFO_SIZE
-        render_start = cosmo_end
-        render_end = render_start + RENDER_INFO_SIZE
-        loc_start = render_end
-        loc_end = render_end + LOCATION_INFO_SIZE
-        assert(loc_end == HEADER_SIZE)
+    def __init__(self, s, sizes):
+        end = _read_endianness_flag(s[0:8])
+        self.version = _read_version(s[0:8])
+        self.sizes = sizes
 
-        self.type =  TypeInfo(s[type_start: type_end])
-        self.cosmo = CosmoInfo(s[cosmo_start: cosmo_end],
-                               self.type.endianness_flag)
-        self.render = RenderInfo(s[render_start: render_end],
-                                 self.type.endianness_flag)
-        self.loc = LocationInfo(s[loc_start: loc_end],
-                                self.type.endianness_flag)
+        assert len(s) == self.sizes.header + 8
+        type_start = 8
+        type_end = self.sizes.type_info + type_start
+        cosmo_start = type_end
+        cosmo_end = cosmo_start + self.sizes.cosmo_info
+        render_start = cosmo_end
+        render_end = render_start + self.sizes.render_info
+        loc_start = render_end
+        loc_end = render_end + self.sizes.location_info
+        assert(loc_end == self.sizes.header + 8)
+
+        self.type = TypeInfo(s[type_start: type_end], end)
+        if self.type.header_size != 8 + sizes.header:
+            print(
+                "Header size %d is different from expected, %d." % 
+                (self.type.header_size, sizes.header + 8)
+            )
+        self.cosmo = CosmoInfo(s[cosmo_start: cosmo_end], end)
+        self.render = RenderInfo(s[render_start: render_end], end)
+        self.loc = LocationInfo(s[loc_start: loc_end], end)
 
         self.dim = self.loc.pixel_span
         self.pw = self.loc.pixel_width
         self.axis = self.render.projection_axis
 
-        if self.type.header_size != HEADER_SIZE:
-            print(("Using grid files with header size %d, but gotetra.py" +
-                   " expects %d") % (self.type.header_size, HEADER_SIZE))
-            exit(1)
-        
     def __str__(self):
         return "\n".join([
             "TypeInfo:", str(self.type), "",
@@ -179,12 +213,11 @@ class TypeInfo(object):
             is_vector_grid  : bool - Flag indicating whether the file is a
                                      vector field or a scalar field.
     """
-    def __init__(self, s):
-        assert(len(s) == TYPE_INFO_SIZE)
+    def __init__(self, s, end):
+        self.endianness_flag = end
 
-        self.endianness_flag = struct.unpack("q", s[:8])[0]
         fmt = "qqq"
-        data = endian_unpack(fmt, s[8:], self.endianness_flag)
+        data = endian_unpack(fmt, s, self.endianness_flag)
 
         self.header_size = data[0]
         self.grid_type = data[1]
@@ -197,7 +230,8 @@ class TypeInfo(object):
             "    grid_type       = %s" % self.grid_type_str(),
             "    is_vector_grid  = %r" % self.is_vector_grid,
         ])
-        
+
+
     def endianness_str(self):
         if little_endian(self.endianness_flag):
             return "Little Endian"
@@ -215,6 +249,8 @@ class TypeInfo(object):
             return "Velocity Divergence"
         elif self.grid_type == VELOCITY_CURL:
             return "Velocity Curl"
+        elif self.grid_type == PHASE:
+            return "Phase"
 
 
 class CosmoInfo(object):
@@ -230,8 +266,6 @@ class CosmoInfo(object):
         box_width    : float - units are Mpc / h
     """
     def __init__(self, s, end):
-        assert len(s) == COSMO_INFO_SIZE
-        
         fmt = "d" * 8
         data = endian_unpack(fmt, s, end)
         self.redshift = data[0]
@@ -272,8 +306,6 @@ class RenderInfo(object):
     """
 
     def __init__(self, s, end):
-        assert len(s) == RENDER_INFO_SIZE
-
         fmt = "qqqqq"
         data = endian_unpack(fmt, s, end)
 
@@ -319,8 +351,6 @@ class LocationInfo(object):
                                          Mpc / h.
     """
     def __init__(self, s, end):
-        assert len(s) == LOCATION_INFO_SIZE
-
         fmt = ("d" * 6) + ("q" * 6) + "d"
         data = endian_unpack(fmt, s, end)
 
@@ -346,5 +376,6 @@ class LocationInfo(object):
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("%s requires a target file" % (sys.argv[0]))
+        exit(1)
 
     print(read_header(sys.argv[1]))

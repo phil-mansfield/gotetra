@@ -3,6 +3,7 @@ package io
 import (
 	"encoding/binary"
 	"io"
+	"fmt"
 	"math"
 
 	"github.com/phil-mansfield/gotetra/cosmo"
@@ -10,18 +11,23 @@ import (
 	"unsafe"
 )
 
-var end = binary.LittleEndian
-
+var (
+	end = binary.LittleEndian
+)
+const (
+	Version = uint64(2)
+)
 
 type GridHeader struct {
+	EndiannessVersion uint64
 	Type TypeInfo
     Cosmo CosmoInfo
     Render RenderInfo
 	Loc LocationInfo
+	Vel LocationInfo
 }
 
 type TypeInfo struct {
-    Endianness int64
 	HeaderSize int64
     GridType int64
     IsVectorGrid int64
@@ -58,6 +64,8 @@ const (
 	Velocity
 	VelocityDivergence
 	VelocityCurl
+	Phase3D
+	Phase1D
 )
 
 func NewCosmoInfo(H0, omegaM, omegaL, z, boxWidth float64) CosmoInfo {
@@ -125,15 +133,8 @@ func WriteGrid(
 	flag GridFlag, xs []float32, cosmo CosmoInfo, render RenderInfo,
 	loc LocationInfo, wr io.Writer,
 ) {
-	var endFlag int64
-	if end == binary.LittleEndian {
-		endFlag = -1
-	} else {
-		endFlag = 0
-	}
-
 	hd := GridHeader{ }
-	hd.Type.Endianness = endFlag
+	hd.EndiannessVersion = EndiannessVersionFlag(end)
 	hd.Type.HeaderSize = int64(unsafe.Sizeof(hd))
 	hd.Type.GridType = int64(flag)
 	if flag != Density && flag != VelocityDivergence {
@@ -148,6 +149,23 @@ func WriteGrid(
 
 	binary.Write(wr, end, &hd)
 	binary.Write(wr, end, xs)
+}
+
+func EndiannessVersionFlag(end binary.ByteOrder) uint64 {
+	// If the version number ever gets larger than IntMax32, we have bigger
+	// problems on our hands.
+
+	flag := reverse(Version-1) | (Version-1)
+	if end == binary.LittleEndian { return ^flag }
+	return flag
+}
+
+func reverse(x uint64) uint64 {
+	out := uint64(0)
+	for i := uint(0); i < 64; i++ {
+		if 1 & (x >> i) == 1 { out |= 1 << (63 - i) }
+	}
+	return out
 }
 
 func WriteVelocity() {
