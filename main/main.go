@@ -60,6 +60,10 @@ func main() {
 		"ExampleConfig": &exampleConfig,
 	}
 
+	flag.IntVar(
+		&gotetra.NumCores, "Threads", runtime.NumCPU(),
+		"Number of threads used. Default is the number of logical cores.",
+	)
 	flag.StringVar(
 		&density, "Density", "",
 		"Configuration file for [Density] mode.",
@@ -574,7 +578,7 @@ func totalPixels(
 		if w > boxWidth {
 			log.Fatalf(
 				"Requested dimensions of '%s' are larger than the " + 
-				"simulation box.", box.Name,
+					"simulation box.", box.Name,
 			) 
 		}
 

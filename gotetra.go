@@ -16,6 +16,10 @@ const (
 	tetraIntr = true
 )
 
+var (
+	NumCores = 0
+)
+
 type Manager struct {
 	// The currently loaded seet segment.
 	xs, scaledXs []geom.Vec
@@ -74,7 +78,7 @@ func NewManager(files []string, boxes []Box, logFlag bool) (*Manager, error) {
 	
 	man.skip = 1
 
-	man.workers = runtime.NumCPU()
+	man.workers = NumCores
 	runtime.GOMAXPROCS(man.workers)
 	man.workspaces = make([]workspace, man.workers)
 
