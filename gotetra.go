@@ -16,6 +16,10 @@ const (
 	tetraIntr = true
 )
 
+var (
+	NumCores = 0
+)
+
 type Manager struct {
 	// The currently loaded sheet segment.
 	xs, scaledXs []geom.Vec
@@ -78,7 +82,7 @@ func NewManager(
 	
 	man.skip = 1
 
-	man.workers = runtime.NumCPU()
+	man.workers = NumCores
 	runtime.GOMAXPROCS(man.workers)
 	man.workspaces = make([]workspace, man.workers)
 

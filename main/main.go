@@ -61,6 +61,10 @@ func main() {
 		"ExampleConfig": &exampleConfig,
 	}
 
+	flag.IntVar(
+		&gotetra.NumCores, "Threads", runtime.NumCPU(),
+		"Number of threads used. Default is the number of logical cores.",
+	)
 	flag.StringVar(
 		&render, "Render", "",
 		"Configuration file for [Render] mode.",
@@ -262,6 +266,8 @@ func createGrids(
 		}
 	}
 
+	
+
 	xs = make([]geom.Vec, hs[0].TotalCount)
 	vs = make([]geom.Vec, hs[0].TotalCount)
 	
@@ -269,10 +275,10 @@ func createGrids(
 	xBuf := make([]geom.Vec, maxLen)
 	vBuf := make([]geom.Vec, maxLen)
 	
+	// I have no idea why I do this.
 	buf := io.NewParticleBuffer(xs, vs, catalogBufLen)
 
 	for i, cat := range catalogs {
-
 		if i % 25 == 0 {
 			log.Printf("Read %d/%d catalogs", i, len(catalogs))
 		}
@@ -581,7 +587,7 @@ func totalPixels(
 		if w > boxWidth {
 			log.Fatalf(
 				"Requested dimensions of '%s' are larger than the " + 
-				"simulation box.", box.Name,
+					"simulation box.", box.Name,
 			) 
 		}
 
