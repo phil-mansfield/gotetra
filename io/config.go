@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"code.google.com/p/gcfg"
+	// I'm not sure if I hate this dependency or not.
+	"github.com/phil-mansfield/gotetra/density"
 )
 
 
@@ -36,11 +38,15 @@ Cells = 8 # It's unlikely that you will want to change this.
 # IterationEnd = 100
 # Inclusive. If IterationEnd isn't set, folders will be iterated through until
 # an invalid one is found.`
-	ExampleDensityFile = `[Density]
+	ExampleRenderFile = `[Render]
 
 ######################
 # RequiredParameters #
 ######################
+
+# Quantity can be set to one of:
+# [ Density | Velocity | DensityGradient | VelocityCurl | VelocityDivergence ].
+Quantity = Density
 
 Input  = path/to/input/dir
 Output = path/to/output/dir
@@ -57,7 +63,6 @@ Particles = 25
 #####################
 # OptionalParamters #
 #####################
-
 
 # Alternative way of specifying pixel size: the number of pixels required to
 # render the longest axis of each box. All rendered boxes will, in general,
@@ -107,6 +112,8 @@ ZWidth = 4.21
 # ProjectionAxis = Z
 
 [Ball "my_halo"]
+Quantity = VelocityCurl
+
 # A bounding box around a sphere whose radius is three times larger than
 # the halo's R_vir.
 
@@ -175,9 +182,11 @@ func (con *ConvertSnapshotConfig) ValidIterationEnd() bool {
 	return con.IterationEnd >= 0
 }
 
-type DensityConfig struct {
+type RenderConfig struct {
 	SharedConfig
+	
 	// Required
+	Quantity string
 	TotalPixels, Particles int
 
 	// Optional
@@ -187,25 +196,36 @@ type DensityConfig struct {
 	AppendName, PrependName string
 }
 
-func DefaultDensityWrapper() *DensityWrapper {
-	dc := DensityConfig{ }
-	dc.SubsampleLength = 1
-	return &DensityWrapper{dc}
+func DefaultRenderWrapper() *RenderWrapper {
+	rc := RenderConfig{ }
+	rc.SubsampleLength = 1
+	return &RenderWrapper{rc}
 }
 
-func (con *DensityConfig) ValidTotalPixels() bool {
+func (b *RenderConfig) ValidQuantity() bool {
+	var q density.Quantity
+	for q = 0; q < density.EndQuantity; q++ {
+		if strings.ToLower(q.String()) == strings.ToLower(b.Quantity) {
+			return true
+		}
+	}
+	return false
+}
+
+func (con *RenderConfig) ValidTotalPixels() bool {
 	return con.TotalPixels > 0
 }
-func (con *DensityConfig) ValidParticles() bool {
+
+func (con *RenderConfig) ValidParticles() bool {
 	return con.Particles > 0
 }
-func (con *DensityConfig) ValidSubsampleLength() bool {
+func (con *RenderConfig) ValidSubsampleLength() bool {
 	return con.SubsampleLength > 0
 }
-func (con *DensityConfig) ValidImagePixels() bool {
+func (con *RenderConfig) ValidImagePixels() bool {
 	return con.ImagePixels > 0
 }
-func (con *DensityConfig) ValidProjectionDepth() bool {
+func (con *RenderConfig) ValidProjectionDepth() bool {
 	return con.ProjectionDepth > 0
 }
 
@@ -213,8 +233,8 @@ type ConvertSnapshotWrapper struct {
 	ConvertSnapshot ConvertSnapshotConfig
 }
 
-type DensityWrapper struct {
-	Density DensityConfig
+type RenderWrapper struct {
+	Render RenderConfig
 }
 
 type BallConfig struct {
@@ -288,7 +308,7 @@ func (ball *BallConfig) Box(totalWidth float64) *BoxConfig {
 	}
 
 	box.Name = ball.Name
-	
+
 	return box
 }
 

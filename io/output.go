@@ -3,10 +3,10 @@ package io
 import (
 	"encoding/binary"
 	"io"
-	"fmt"
 	"math"
 
 	"github.com/phil-mansfield/gotetra/cosmo"
+	"github.com/phil-mansfield/gotetra/density"
 
 	"unsafe"
 )
@@ -57,17 +57,6 @@ type LocationInfo struct {
 type Vector [3]float64
 type IntVector [3]int64
 
-type GridFlag int64
-const (
-	Density GridFlag = iota
-	DensityGradient
-	Velocity
-	VelocityDivergence
-	VelocityCurl
-	Phase3D
-	Phase1D
-)
-
 func NewCosmoInfo(H0, omegaM, omegaL, z, boxWidth float64) CosmoInfo {
 	a := 1 / (1 + z)
 	rhoC := cosmo.RhoCritical(H0, omegaM, omegaL, z)
@@ -115,29 +104,16 @@ func NewLocationInfo(origin, span [3]int, cellWidth float64) LocationInfo {
 	return loc
 }
 
-func WriteDensity(
-	rhos []float32, cos CosmoInfo, render RenderInfo,
-	loc LocationInfo, wr io.Writer,
+func WriteBuffer(
+	buf density.Buffer,
+	cosmo CosmoInfo, render RenderInfo, loc LocationInfo,
+	wr io.Writer,
 ) {
-	WriteGrid(Density, rhos, cos, render, loc,  wr)
-}
-
-func WriteVelocityDivergence(
-	divs []float32, cos CosmoInfo, render RenderInfo,
-	loc LocationInfo, wr io.Writer,
-) {
-	WriteGrid(VelocityDivergence, divs, cos, render, loc, wr)
-}
-
-func WriteGrid(
-	flag GridFlag, xs []float32, cosmo CosmoInfo, render RenderInfo,
-	loc LocationInfo, wr io.Writer,
-) {
-	hd := GridHeader{ }
+	hd := GridHeader{}
 	hd.EndiannessVersion = EndiannessVersionFlag(end)
 	hd.Type.HeaderSize = int64(unsafe.Sizeof(hd))
-	hd.Type.GridType = int64(flag)
-	if flag != Density && flag != VelocityDivergence {
+	hd.Type.GridType = int64(buf.Quantity())
+	if _, ok := buf.ScalarBuffer(); ok {
 		hd.Type.IsVectorGrid = 1
 	} else {
 		hd.Type.IsVectorGrid = 0
@@ -148,7 +124,15 @@ func WriteGrid(
 	hd.Loc = loc
 
 	binary.Write(wr, end, &hd)
-	binary.Write(wr, end, xs)
+	if xs, ok := buf.FinalizedScalarBuffer(); ok {
+		binary.Write(wr, end, xs)
+	} else if xs, ys, zs, ok := buf.FinalizedVectorBuffer(); ok {
+		binary.Write(wr, end, xs)
+		binary.Write(wr, end, ys)
+		binary.Write(wr, end, zs)
+	} else {
+		panic("Buffer is neither scalar nor vector.")
+	}
 }
 
 func EndiannessVersionFlag(end binary.ByteOrder) uint64 {
@@ -166,20 +150,4 @@ func reverse(x uint64) uint64 {
 		if 1 & (x >> i) == 1 { out |= 1 << (63 - i) }
 	}
 	return out
-}
-
-func WriteVelocity() {
-	panic("Not yet implemented.")
-}
-
-func WriteDensityGradient() {
-	panic("Not yet implemented.")
-}
-
-func WriteVelocityCurl() {
-	panic("Not yet implemented.")
-}
-
-func WriteVectorGrid() {
-	panic("NOt yet implemented.")
 }

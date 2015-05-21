@@ -365,12 +365,11 @@ func DistributeUnit(vecBuf []Vec) {
 }
 
 // DistributeTetra takes a set of points distributed across a unit tetrahedron
-// and distributed them across the given tetrahedron through barycentric
+// and distributes them across the given tetrahedron through barycentric
 // coordinate transformations.
 func (tet *Tetra) DistributeTetra(pts []Vec, out []Vec) {
 	bary := tet.Barycenter()
 
-	// TODO: check wheter or not putting these in variables speeds things up.
 	for i := 0; i < 4; i++ {
 		for j := 0; j < 3; j++ {
 			tet.sb.c[i][j] = tet.Corners[i][j] - bary[j]
@@ -392,6 +391,31 @@ func (tet *Tetra) DistributeTetra(pts []Vec, out []Vec) {
 			
 			val := bary[j] + d0 + d1 + d2 + d3
 			out[i][j] = val
+		}
+	}
+}
+
+// I hate that this function exists. Go, you make my life so hard sometimes.
+func (tet *Tetra) DistributeTetra64(pts []Vec, out [][3]float64) {
+	bary := tet.Barycenter()
+	for i := 0; i < 4; i++ {
+		for j := 0; j < 3; j++ {
+			tet.sb.c[i][j] = tet.Corners[i][j] - bary[j]
+		}
+	}
+	for i := range pts {
+		pt := &pts[i]
+		s, t, u := pt[0], pt[1], pt[2]
+		v := 1 - s - t - u
+
+		for j := 0; j < 3; j++ {
+			d0 := tet.sb.c[0][j] * s
+			d1 := tet.sb.c[1][j] * t
+			d2 := tet.sb.c[2][j] * u
+			d3 := tet.sb.c[3][j] * v
+			
+			val := bary[j] + d0 + d1 + d2 + d3
+			out[i][j] = float64(val)
 		}
 	}
 }

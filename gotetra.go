@@ -17,7 +17,7 @@ const (
 )
 
 type Manager struct {
-	// The currently loaded seet segment.
+	// The currently loaded sheet segment.
 	xs, scaledXs []geom.Vec
 	xCb geom.CellBounds
 	hd io.SheetHeader
@@ -32,24 +32,28 @@ type Manager struct {
 	ms runtime.MemStats
 
 	// workspaces
+	q density.Quantity
 	workers int
 	workspaces []workspace
 }
 
 type renderer struct {
 	box Box
+	g *geom.GridLocation
 	cb geom.CellBounds
 	over Overlap
 	validSegs map[string]bool
 }
 
 type workspace struct {
-	buf []float64
+	buf density.Buffer
 	intr density.Interpolator
 	lowX, highX int
 }
 
-func NewManager(files []string, boxes []Box, logFlag bool) (*Manager, error) {
+func NewManager(
+	files []string, boxes []Box, logFlag bool, q density.Quantity,
+) (*Manager, error) {
 	man := new(Manager)
 	man.log = logFlag
 
@@ -85,6 +89,12 @@ func NewManager(files []string, boxes []Box, logFlag bool) (*Manager, error) {
 			boxes[i].CellOrigin(), boxes[i].CellSpan(),
 		}
 		man.renderers[i].validSegs = make(map[string]bool)
+		g := geom.NewGridLocation(
+			boxes[i].CellOrigin(), boxes[i].CellSpan(),
+			boxes[i].CellWidth() * float64(boxes[i].Cells()), boxes[i].Cells(),
+		)
+		man.renderers[i].g = g
+		
 	}
 
 	man.files = make([]string, 0)
@@ -125,8 +135,12 @@ func NewManager(files []string, boxes []Box, logFlag bool) (*Manager, error) {
 		)
 	}
 
+	man.q = q
+	// Fuck. This feature is way more trouble than it's worth.
 	for i := range man.workspaces {
-		man.workspaces[i].buf = make([]float64, maxBufSize)
+		man.workspaces[i].buf = density.NewBuffer(
+			q, maxBufSize, man.renderers[0].g,
+		)
 	}
 
 	if man.log {
@@ -162,15 +176,17 @@ func (r *renderer) initWorkspaces(man *Manager) {
 		man.unitBufs[i] = man.unitBufs[i][0: r.box.Points()]
 	}
 
-	// TODO: fix this int64 silliness
 	for id := range man.workspaces {
+		// TODO: fix this int64 silliness
 		man.workspaces[id].intr = density.MonteCarlo(
 			man.hd.SegmentWidth, r.box.Points(), r.box.Cells(),
 			int64(man.skip), man.unitBufs, r.over,
 		)
 
-		man.workspaces[id].buf =
-			man.workspaces[id].buf[0: r.over.BufferSize()]
+		man.workspaces[id].buf.Slice(0, r.over.BufferSize())
+		man.workspaces[id].buf.SetGridLocation(r.g)
+		man.workspaces[id].buf.Clear()
+
 		man.workspaces[id].lowX = id * man.skip
 		man.workspaces[id].highX = segLen
 	}
@@ -197,6 +213,15 @@ func (man *Manager) RenderDensity() error {
 		if err != nil { return err }
 	}
 	return nil
+}
+
+
+func (man *Manager) RenderVelocity() error {
+	panic("Not Yet Implemented")
+}
+
+func (man *Manager) RenderCurl() error {
+	panic("Not Yet Implemented")
 }
 
 func (man *Manager) RenderDensityFromFile(file string) error {
@@ -255,17 +280,18 @@ func (man *Manager) loadFile(file string) error {
 func (man *Manager) chanInterpolate(id int, r *renderer, out chan<- int) {
 	w := &man.workspaces[id]
 
-	for i := range w.buf { w.buf[i] = 0.0 }
 	if tetraIntr {
 		w.intr.Interpolate(
 			w.buf, man.scaledXs,
-			r.ptVal(man), w.lowX, w.highX,
+			r.ptVal(man), density.NilBuffer,
+			w.lowX, w.highX,
 			man.workers,
 		)
 	} else {
 		r.over.Interpolate(
 			w.buf, man.scaledXs,
-			r.ptVal(man), w.lowX, w.highX,
+			r.ptVal(man), density.NilBuffer,
+			w.lowX, w.highX,
 			man.workers,
 		)
 	}

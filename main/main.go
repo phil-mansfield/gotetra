@@ -16,6 +16,7 @@ import (
 	"code.google.com/p/gcfg"
 
 	"github.com/phil-mansfield/gotetra"
+	"github.com/phil-mansfield/gotetra/density"
 	"github.com/phil-mansfield/gotetra/geom"
 	"github.com/phil-mansfield/gotetra/io"
 )
@@ -51,18 +52,18 @@ var (
 
 func main() {
 	var (
-		density, convertSnapshot string
+		render, convertSnapshot string
 		exampleConfig string
 	)
 	vars := map[string]*string {
-		"Density": &density,
+		"Render": &render,
 		"ConvertSnapshot": &convertSnapshot,
 		"ExampleConfig": &exampleConfig,
 	}
 
 	flag.StringVar(
-		&density, "Density", "",
-		"Configuration file for [Density] mode.",
+		&render, "Render", "",
+		"Configuration file for [Render] mode.",
 	)
 	flag.StringVar(
 		&convertSnapshot, "ConvertSnapshot", "",
@@ -81,12 +82,12 @@ func main() {
 	if err != nil { log.Fatal(err.Error()) }
 
 	switch modeName {
-	case "Density":
-		wrap := io.DefaultDensityWrapper()
-		err := gcfg.ReadFileInto(wrap, density)
+	case "Render":
+		wrap := io.DefaultRenderWrapper()
+		err := gcfg.ReadFileInto(wrap, render)
 
 		if err != nil { log.Fatal(err.Error()) }
-		con := &wrap.Density
+		con := &wrap.Render
 
 		if !con.ValidInput() {
 			log.Fatal("Invalid/non-existent 'Input' value.")
@@ -115,7 +116,7 @@ func main() {
 		if len(bounds) < 1 {
 			log.Fatal("Must supply at least one bounds file.")
 		}
-		densityMain(con, bounds)
+		renderMain(con, bounds)
 
 	case "ConvertSnapshot":
 		wrap := io.DefaultConvertSnapshotWrapper()
@@ -150,8 +151,8 @@ func main() {
 		switch exampleConfig {
 		case "ConvertSnapshot":
 			fmt.Println(io.ExampleConvertSnapshotFile)
-		case "Density":
-			fmt.Println(io.ExampleDensityFile)
+		case "Render":
+			fmt.Println(io.ExampleRenderFile)
 		case "Bounds":
 			fmt.Println(io.ExampleBoundsFile)
 		default:
@@ -461,7 +462,7 @@ func validCellNum(cells int) bool {
 	return cells == 1
 }
 
-func densityMain(con *io.DensityConfig, bounds []string) {
+func renderMain(con *io.RenderConfig, bounds []string) {
 	fileNames, hd, fg := densitySetupIO(con)
 	defer fg.Close()
 
@@ -475,11 +476,19 @@ func densityMain(con *io.DensityConfig, bounds []string) {
 		configBoxes = append(configBoxes, boxes...)
 	}
 
+	
+	q, ok := density.QuantityFromString(con.Quantity)
+	if !ok {
+		log.Fatalf("Invalid quantity, '%s'", con.Quantity)
+	}
+	
 	boxes := make([]gotetra.Box, len(configBoxes))
 	for i := range boxes {
 		cells := totalPixels(con, &configBoxes[i], hd.TotalWidth)
 		pts := particles(con, &configBoxes[i], hd.TotalWidth)
-		boxes[i] = gotetra.NewBox(hd.TotalWidth, pts, cells, &configBoxes[i])
+		boxes[i] = gotetra.NewBox(
+			hd.TotalWidth, pts, cells, q, &configBoxes[i],
+		)
 		log.Println(
 			"Rendering to box:", boxes[i].CellSpan(),
 			"pixels,", pts, "particles per tetrahedron",
@@ -487,7 +496,7 @@ func densityMain(con *io.DensityConfig, bounds []string) {
 	}
 
 	// Interpolate.
-	man, err := gotetra.NewManager(fileNames, boxes, true)
+	man, err := gotetra.NewManager(fileNames, boxes, true, q)
 	if err != nil { log.Fatal(err.Error()) }
 
 	man.Subsample(con.SubsampleLength)
@@ -520,7 +529,7 @@ func densityMain(con *io.DensityConfig, bounds []string) {
 		)
 
 		// TODO: don't keep creating new float32 buffers, man.
-		io.WriteDensity(toFloat32(box.Vals()), cos, render, loc, f)
+		io.WriteBuffer(box.Vals(), cos, render, loc, f)
 	}
 }
 
@@ -530,7 +539,7 @@ func toFloat32(xs []float64) []float32 {
 	return ys
 }
 
-func densitySetupIO(con *io.DensityConfig) (
+func densitySetupIO(con *io.RenderConfig) (
 	files []string,
 	hd *io.SheetHeader,
 	fg *FileGroup,
@@ -545,7 +554,7 @@ func densitySetupIO(con *io.DensityConfig) (
 		log.SetOutput(fg.log)
 	}
 
-	log.Println("Running BoundedDensity main.")
+	log.Println("Running BoundedRender main.")
 
 	if con.ValidProfileFile() {
 		fg.prof, err = os.Create(con.ProfileFile)
@@ -565,7 +574,7 @@ func densitySetupIO(con *io.DensityConfig) (
 }
 
 func totalPixels(
-	con *io.DensityConfig, box *io.BoxConfig, boxWidth float64,
+	con *io.RenderConfig, box *io.BoxConfig, boxWidth float64,
 ) int {
 	if con.ValidImagePixels() {
 		w := maxWidth(box)
@@ -597,7 +606,7 @@ func maxWidth(box *io.BoxConfig) float64 {
 	}
 }
 
-func particles(con *io.DensityConfig, box *io.BoxConfig, boxWidth float64) int {
+func particles(con *io.RenderConfig, box *io.BoxConfig, boxWidth float64) int {
 
 	if con.AutoParticles {
 		cells := totalPixels(con, box, boxWidth)

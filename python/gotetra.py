@@ -41,6 +41,13 @@ class Sizes(object):
             self.cosmo_info = 64
             self.render_info = 40
             self.location_info = 104
+        elif ver == 2:
+            self.header = 232
+            self.type_info = 24
+            self.cosmo_info = 64
+            self.render_info = 40
+            self.location_info = 104
+            self.velocity_info = 104
         else:
             print("Unrecognized gotetra output version, %d." % ver)
             exit(1)
@@ -101,7 +108,32 @@ def read_grid(filename):
     if hd.axis == 1: j, k = 0, 2
     if hd.axis == 2: j, k = 0, 1
     
-    if hd.type.is_vector_grid:
+    if hd.type.grid_type == PHASE_1D:
+        # TODO: FINISH THIS!!
+        n =  hd.vdim[0] * hd.xdim[0]
+
+        xs = array.array("f")
+        with open(filename, "rb") as fp:
+            fp.read(hd.sizes.header + 8)
+            xs.fromfile(fp, n)
+
+        maybe_swap(xs)
+        xs = np.reshape(xs, (hd.vdim[0], hd.dim[0]))
+        return xs
+    elif hd.type.grid_type == PHASE_3D:
+        # TODO: FINISH THIS!!
+        n *= hd.vdim[0] * hd.vidm[1] * hd.vdim[2]
+
+        xs = array.array("f")
+        with open(filename, "rb") as fp:
+            fp.read(hd.sizes.header + 8)
+            xs.fromfile(fp, n)
+
+        maybe_swap(xs)
+        xs = np.reshape(xs, (hd.vdim[0], hd.vdim[1], hs.vdim[2],
+                             hd.dim[0], hd.dim[1], hd.dim[2]))
+        return xs
+    elif hd.type.is_vector_grid:
         xs, ys, zs = array.array("f"), array.array("f"), array.array("f")
         with open(filename, "rb") as fp:
             fp.read(hd.sizes.header + 8)
@@ -147,11 +179,18 @@ class Header(object):
     These contain many fields, but the three most useful are reproduced as
     top-level fields:
         dim  : np.array - The dimensions of the grid in pixels. Equivalent to
-                          Header.loc.pixel_span if it is a position-space grid
-                          and np.append(Header.loc.pixel_span, Header.vel.pixel_span)
+                          Header.loc.pixel_span.
         pw   : float    - The width of a single pixel. Equivalent to
                           Header.loc.pixel_width.
-        vpw  : float    - The width of a single velocity-space pixel.
+
+        vdim : np.array - The dimensions of the velocity grid in pixels.
+                          Equivalent to Header.vel.pxiel_span. Only available
+                          for phase space grids.
+        vpw  : float    - The width of a single velocity-space pixel. Only
+                          exists for phase space grids. Equivalent to
+                          Header.vel.pixels_width. Only available for phase
+                          space grids.
+
         axis : int      - The axis over which the image is projected over. If
                           no projection was performed and the array is 3D,
                           this will be set to -1.
@@ -173,7 +212,16 @@ class Header(object):
         render_end = render_start + self.sizes.render_info
         loc_start = render_end
         loc_end = render_end + self.sizes.location_info
-        assert(loc_end == self.sizes.header + 8)
+
+        if ver >= 2:
+            vel_start = loc_end
+            vel_end = vel_star + self.sizes.velocity_info
+
+        if ver == 1:
+            assert(loc_end == self.sizes.header + 8)
+        elif ver >= 2:
+            assert(vel_end == self.sizes.header + 8)
+
 
         self.type = TypeInfo(s[type_start: type_end], end)
         if self.type.header_size != 8 + sizes.header:
@@ -184,6 +232,12 @@ class Header(object):
         self.cosmo = CosmoInfo(s[cosmo_start: cosmo_end], end)
         self.render = RenderInfo(s[render_start: render_end], end)
         self.loc = LocationInfo(s[loc_start: loc_end], end)
+        if ver >= 2:
+            if (self.type.grid_type == PHASE_1D or
+                self.type.grid_type == PHASE_3D):
+                self.vel = LocationInfo(s[vel_start: vel_end])
+                self.vpw = self.vel.pixel_width
+                self.vdim = self.vel.pixel_span
 
         self.dim = self.loc.pixel_span
         self.pw = self.loc.pixel_width
