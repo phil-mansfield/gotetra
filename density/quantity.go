@@ -62,7 +62,7 @@ func (q Quantity) RequiresVelocity() bool {
 }
 
 func (q Quantity) CanProject() bool {
-	if q <= 0 || q >= EndQuantity {
+	if q < 0 || q >= EndQuantity {
 		panic(fmt.Sprintf("Value %d out of range for Quantity type.", q))
 	}
 
