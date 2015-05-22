@@ -450,7 +450,7 @@ type segmentOverlap2D struct {
 }
 
 func (w *segmentOverlap2D) Interpolate(
-	bbuf density.Buffer, xs []geom.Vec,
+	bbuf density.Buffer, xs, vs []geom.Vec,
 	ptVal float64, bweights density.Buffer,
 	low, high, jump int,
 ) {
@@ -495,7 +495,7 @@ type segmentOverlap3D struct {
 }
 
 func (w *segmentOverlap3D) Interpolate(
-	bbuf density.Buffer, xs []geom.Vec,
+	bbuf density.Buffer, xs, vs []geom.Vec,
 	ptVal float64, bweights density.Buffer,
 	low, high, jump int,
 ) {
@@ -536,7 +536,7 @@ type domainOverlap2D struct {
 }
 
 func (w *domainOverlap2D) Interpolate(
-	bbuf density.Buffer, xs []geom.Vec,
+	bbuf density.Buffer, xs, vs []geom.Vec,
 	ptVal float64, bweights density.Buffer,
 	low, high, jump int,
 ) {
@@ -585,7 +585,7 @@ type domainOverlap3D struct {
 }
 
 func (w *domainOverlap3D) Interpolate(
-	bbuf density.Buffer, xs []geom.Vec,
+	bbuf density.Buffer, xs, vs []geom.Vec,
 	ptVal float64, bweights density.Buffer,
 	low, high, jump int,
 ) {

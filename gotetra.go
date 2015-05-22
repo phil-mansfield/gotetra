@@ -22,7 +22,7 @@ var (
 
 type Manager struct {
 	// The currently loaded sheet segment.
-	xs, scaledXs []geom.Vec
+	xs, vs, scaledXs []geom.Vec
 	xCb geom.CellBounds
 	hd io.SheetHeader
 
@@ -131,6 +131,11 @@ func NewManager(
 	if err != nil { return nil, err }
 	man.xs = make([]geom.Vec, man.hd.GridCount)
 	man.scaledXs = make([]geom.Vec, man.hd.GridCount)
+	if q.RequiresVelocity() {
+		man.vs = make([]geom.Vec, man.hd.GridCount)
+	} else {
+		man.vs = nil
+	}
 
 	if man.log {
 		log.Printf(
@@ -272,10 +277,15 @@ func (man *Manager) RenderDensityFromFile(file string) error {
 }
 
 func (man *Manager) loadFile(file string) error {
+	runtime.GC()
 	err := io.ReadSheetHeaderAt(file, &man.hd)
 	if err != nil { return err }
 	err = io.ReadSheetPositionsAt(file, man.xs)
 	if err != nil { return err }
+	if man.q.RequiresVelocity() {
+		err = io.ReadSheetVelocitiesAt(file, man.vs)
+		if err != nil { return err }
+	}
 	runtime.GC()
 
 	return nil
@@ -286,17 +296,15 @@ func (man *Manager) chanInterpolate(id int, r *renderer, out chan<- int) {
 
 	if tetraIntr {
 		w.intr.Interpolate(
-			w.buf, man.scaledXs,
+			w.buf, man.scaledXs, man.vs,
 			r.ptVal(man), density.NilBuffer,
-			w.lowX, w.highX,
-			man.workers,
+			w.lowX, w.highX, man.workers,
 		)
 	} else {
 		r.over.Interpolate(
-			w.buf, man.scaledXs,
+			w.buf, man.scaledXs, man.vs,
 			r.ptVal(man), density.NilBuffer,
-			w.lowX, w.highX,
-			man.workers,
+			w.lowX, w.highX, man.workers,
 		)
 	}
 	
