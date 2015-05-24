@@ -176,7 +176,7 @@ func newBox2D(
 	len := b.cb.Width[iDim] * b.cb.Width[jDim]
 
 	g := geom.NewGridLocation(b.cb.Origin, b.cb.Width, boxWidth, cells)
-	b.bvals = density.NewBuffer(q, len, g)
+	b.bvals = density.NewBuffer(q, len, b.pts, g)
 	b.q = q
 
 	return b
@@ -207,7 +207,7 @@ func newBox3D(
 
 	len := b.cb.Width[0] * b.cb.Width[1] * b.cb.Width[2]
 	g := geom.NewGridLocation(b.cb.Origin, b.cb.Width, boxWidth, cells)
-	b.bvals = density.NewBuffer(q, len, g)
+	b.bvals = density.NewBuffer(q, len, b.pts, g)
 
 	return b
 }
@@ -248,10 +248,16 @@ func (w *baseOverlap2D) BufferSize() int {
 
 
 func (w *domainOverlap2D) Add(bbuf, bgrid density.Buffer) {
+	bufNum, valid := bbuf.CountBuffer()
+	gridNum, _ := bgrid.CountBuffer()
+
 	if buf, ok := bbuf.ScalarBuffer(); ok {
 		grid, _ := bgrid.ScalarBuffer()
 
-		for i, val := range buf { grid[i] += val }
+		for i, val := range buf {
+			grid[i] += val
+			if valid { gridNum[i] += bufNum[i] }
+		}
 	} else if buf, ok := bbuf.VectorBuffer(); ok {
 		grid, _ := bgrid.VectorBuffer()
 
@@ -259,20 +265,28 @@ func (w *domainOverlap2D) Add(bbuf, bgrid density.Buffer) {
 			grid[i][0] += val[0]
 			grid[i][1] += val[1]
 			grid[i][2] += val[2]
+			if valid { gridNum[i] += bufNum[i] }
 		}
 	}
 }
 
 func (w *domainOverlap3D) Add(bbuf, bgrid density.Buffer) {
+	bufNum, valid := bbuf.CountBuffer()
+	gridNum, _ := bgrid.CountBuffer()
+
 	if buf, ok := bbuf.ScalarBuffer(); ok {
 		grid, _ := bgrid.ScalarBuffer()
-		for i, val := range buf { grid[i] += val }
+		for i, val := range buf { 
+			grid[i] += val
+			if valid { gridNum[i] += bufNum[i] }
+		}
 	} else if buf, ok := bbuf.VectorBuffer(); ok {
 		grid, _ := bgrid.VectorBuffer()
 		for i, val := range buf {
 			grid[i][0] += val[0]
 			grid[i][1] += val[1]
-			grid[i][2] += val[2]		
+			grid[i][2] += val[2]
+			if valid { gridNum[i] += bufNum[i] }
 		}
 	}
 }
@@ -286,6 +300,9 @@ func (w *baseOverlap3D) BufferSize() int {
 }
 
 func (w *segmentOverlap2D) Add(bbuf, bgrid density.Buffer) {
+	bufNum, valid := bbuf.CountBuffer()
+	gridNum, _ := bgrid.CountBuffer()
+
 	if buf, ok := bbuf.ScalarBuffer(); ok {
 		grid, _ := bgrid.ScalarBuffer()
 
@@ -317,6 +334,7 @@ func (w *segmentOverlap2D) Add(bbuf, bgrid density.Buffer) {
 				domIdx := iDom + flatDomJ
 				bufIdx := iBuf + flatBufJ
 				grid[domIdx] += buf[bufIdx]
+				if valid { gridNum[domIdx] += bufNum[bufIdx] }
 			}
 		}
 	} else if buf, ok := bbuf.VectorBuffer(); ok {
@@ -352,12 +370,16 @@ func (w *segmentOverlap2D) Add(bbuf, bgrid density.Buffer) {
 				grid[domIdx][0] += buf[bufIdx][0]
 				grid[domIdx][1] += buf[bufIdx][1]
 				grid[domIdx][2] += buf[bufIdx][2]
+				if valid { gridNum[domIdx] += bufNum[bufIdx] }
 			}
 		}
 	}
 }
 
 func (w *segmentOverlap3D) Add(bbuf, bgrid density.Buffer) {
+	bufNum, valid := bbuf.CountBuffer()
+	gridNum, _ := bgrid.CountBuffer()
+
 	if buf, ok := bbuf.ScalarBuffer(); ok {
 		grid, _ := bgrid.ScalarBuffer()
 
@@ -395,7 +417,7 @@ func (w *segmentOverlap3D) Add(bbuf, bgrid density.Buffer) {
 					
 					domIdx := xDom + flatDomY + flatDomZ
 					bufIdx := xBuf + flatBufY + flatBufZ
-					grid[domIdx] += buf[bufIdx]
+					if valid { grid[domIdx] += buf[bufIdx] }
 				}
 			}
 		}
@@ -439,6 +461,7 @@ func (w *segmentOverlap3D) Add(bbuf, bgrid density.Buffer) {
 					grid[domIdx][0] += buf[bufIdx][0]
 					grid[domIdx][1] += buf[bufIdx][1]
 					grid[domIdx][2] += buf[bufIdx][2]
+					if valid { gridNum[domIdx] += bufNum[bufIdx] }
 				}
 			}
 		}
@@ -467,6 +490,7 @@ func (w *segmentOverlap2D) Interpolate(
 	wbuf, _ := bweights.ScalarBuffer()
 	vbuf, _ := bbuf.VectorBuffer()
 	vwbuf, _ := bweights.VectorBuffer()
+	counts, countValid := bbuf.CountBuffer()
 
 	for idx := low; idx < high; idx += jump {
 		pt := xs[idx]
@@ -476,15 +500,18 @@ func (w *segmentOverlap2D) Interpolate(
 		kk := bound(k - kOffset, w.cells)
 		
 		if kk < w.domCb.Width[kDim] && kk >= 0 {
+			bufIdx := i + j * length
 			if !scalar {
-				// Vectors need to be weighted.
 				for dim := 0; dim < 3; dim++ {
-					vbuf[i + j * length][dim] += ptVal * vwbuf[idx][dim]
+					vbuf[bufIdx][dim] += ptVal * vwbuf[idx][dim]
 				}
+				if countValid { counts[bufIdx]++ }
 			} else if wlen == 0 {
-				buf[i + j * length] += ptVal
+				buf[bufIdx] += ptVal
+				if countValid { counts[bufIdx]++ }
 			} else {
-				buf[i + j * length] += ptVal * wbuf[idx]
+				buf[bufIdx] += ptVal * wbuf[idx]
+				if countValid { counts[bufIdx]++ }
 			}
 		}
 	}
@@ -507,26 +534,33 @@ func (w *segmentOverlap3D) Interpolate(
 	wbuf, _ := bweights.ScalarBuffer()
 	vbuf, _ := bbuf.VectorBuffer()
 	vwbuf, _ := bweights.VectorBuffer()
+	counts, countValid := bbuf.CountBuffer()
 
 	if !scalar {
 		for idx := low; idx < high; idx += jump {
 			pt := xs[idx]
 			x, y, z := int(pt[0]), int(pt[1]), int(pt[2])
+			bufIdx := x + y * length + z * area
 			for dim := 0; dim < 3; dim++ {
-				vbuf[x + y * length + z * area][dim] += ptVal * vwbuf[idx][dim]
+				vbuf[bufIdx][dim] += ptVal * vwbuf[idx][dim]
 			}
+			if countValid { counts[bufIdx]++ }
 		}
 	} else if wlen == 0 {
 		for idx := low; idx < high; idx += jump {
 			pt := xs[idx]
 			x, y, z := int(pt[0]), int(pt[1]), int(pt[2])
-			buf[x + y * length + z * area] += ptVal
+			bufIdx := x + y * length + z * area
+			buf[bufIdx] += ptVal
+			if countValid { counts[bufIdx]++ }
 		}
 	} else {
 		for idx := low; idx < high; idx += jump {
 			pt := xs[idx]
 			x, y, z := int(pt[0]), int(pt[1]), int(pt[2])
-			buf[x + y * length + z * area] += ptVal * wbuf[idx]
+			bufIdx := x + y * length + z * area
+			buf[bufIdx] += ptVal * wbuf[idx]
+			if countValid { counts[bufIdx]++ }
 		}
 	}
 }
@@ -555,6 +589,7 @@ func (w *domainOverlap2D) Interpolate(
 	wbuf, _ := bweights.ScalarBuffer()
 	vbuf, _ := bbuf.VectorBuffer()
 	vwbuf, _ := bweights.VectorBuffer()
+	counts, countValid := bbuf.CountBuffer()
 
 	for idx := low; idx < high; idx += jump {
 		pt := xs[idx]
@@ -565,14 +600,18 @@ func (w *domainOverlap2D) Interpolate(
 			if j < w.bufCb.Width[jDim] {
 				k := bound(intFloor(pt[kDim]), w.cells)
 				if k < w.bufCb.Width[kDim] {
+					bufIdx := i + j * length
 					if !scalar {
 						for dim := 0; dim < 3; dim++ {
-							vbuf[i + j * length][dim] += ptVal * vwbuf[idx][dim]
+							vbuf[bufIdx][dim] += ptVal * vwbuf[idx][dim]
 						}
+						if countValid { counts[bufIdx]++ }
 					} else if wlen == 0 {
-						buf[i + j * length] += ptVal
+						buf[bufIdx] += ptVal
+						if countValid { counts[bufIdx]++ }
 					} else {
-						buf[i + j * length] += ptVal * wbuf[idx]
+						buf[bufIdx] += ptVal * wbuf[idx]
+						if countValid { counts[bufIdx]++ }
 					}
 				}
 			}
@@ -597,6 +636,7 @@ func (w *domainOverlap3D) Interpolate(
 	wbuf, _ := bweights.ScalarBuffer()
 	vbuf, _ := bbuf.VectorBuffer()
 	vwbuf, _ := bweights.VectorBuffer()
+	counts, countValid := bbuf.CountBuffer()
 
 	for idx := low; idx < high; idx += jump {
 		pt := xs[idx]
@@ -607,15 +647,18 @@ func (w *domainOverlap3D) Interpolate(
 			if j < w.bufCb.Width[1] {
 				k := bound(intFloor(pt[2]), w.cells)
 				if k < w.bufCb.Width[2] {
+					bufIdx := i + j * length + k * area
 					if !scalar {	
 						for dim := 0; dim < 3; dim++ {
-							vbuf[i + j * length + k * area][dim] += (ptVal * 
-								vwbuf[idx][dim])
+							vbuf[bufIdx][dim] += (ptVal * vwbuf[idx][dim])
 						}
+						if countValid { counts[bufIdx]++ }
 					} else if wlen == 0 {
-						buf[i + j * length + k * area] += ptVal
+						buf[bufIdx] += ptVal
+						if countValid { counts[bufIdx]++ }
 					} else {
-						buf[i + j * length + k * area] += ptVal * wbuf[idx]
+						buf[bufIdx] += ptVal * wbuf[idx]
+						if countValid { counts[bufIdx]++ }
 					}
 				}
 			}

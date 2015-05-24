@@ -81,8 +81,11 @@ func (intr *mcarlo) Interpolate(
 	gridWidth := segWidth + 1
 	idxWidth := intr.segWidth / intr.skip
 
-	ptVal = ptVal / float64(intr.points) / 6.0 *
-		float64(intr.skip * intr.skip * intr.skip)
+	reqVel := buf.Quantity().RequiresVelocity()
+	if !reqVel {
+		ptVal = ptVal / float64(intr.points) / 6.0 *
+			float64(intr.skip * intr.skip * intr.skip)
+	}
 
 	tetCb := &geom.CellBounds{}
 
@@ -102,8 +105,6 @@ func (intr *mcarlo) Interpolate(
 		intr.Cells() / 2 > relCb.Width[1] &&
 		intr.Cells() / 2 > relCb.Width[2])
 	mods := 0
-
-	reqVel := buf.Quantity().RequiresVelocity()
 
 	for idx := int64(low); idx < int64(high); idx += jump64 {
 		x, y, z := coords(idx, idxWidth)
