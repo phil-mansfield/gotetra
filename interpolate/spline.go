@@ -62,8 +62,7 @@ func NewSpline(xs, ys []float64) *Spline {
 	return sp
 }
 
-// Interpolate interpolates the table of x and y values given in NewSpline to
-// the point x.
+// Interpolate computes the value of the spline at the given point.
 //
 // x must be within the range of x values given to NewSpline().
 func (sp *Spline) Interpolate(x float64) float64 {
@@ -86,6 +85,51 @@ func (sp *Spline) Interpolate(x float64) float64 {
 	D := (B*B*B - B) * sp.sqrs[lo] / 6
 	return A*sp.ys[lo] + B*sp.ys[hi] + C*sp.y2s[lo] + D*sp.y2s[hi]
 }
+
+func (sp *Spline) Interp(x float64) float64 {
+	return sp.Interpolate(x)
+}
+
+// Differentiate computes the derivative of spline at the given point to the
+// specified order.
+//
+// x must be within the range of x values given to NewSpline().
+func (sp *Spline) Differentiate(x float64, order int) float64 {
+	if x < sp.xs[0] == sp.incr || x > sp.xs[len(sp.xs)-1] == sp.incr {
+		log.Fatalf("Point %g given to Spline.Differentiate() out of bounds.", x)
+	}
+
+	lo := sp.bsearch(x)
+	if lo == -1 {
+		lo = 0
+	}
+	hi := lo + 1
+	if hi == len(sp.xs) {
+		hi = len(sp.xs) - 1
+	}
+
+	A := (sp.xs[hi] - x) / (sp.xs[hi] - sp.xs[lo])
+	B := 1 - A
+	if order == 1 {
+		y1 := (sp.ys[hi] - sp.ys[0]) / (sp.xs[hi] - sp.ys[lo])
+		C := (3*A*A - 1) / 6 * (sp.xs[hi] - sp.xs[lo])
+		D := (3*B*B - 1) / 6 * (sp.xs[hi] - sp.xs[lo])
+		return y1 - C*sp.y2s[lo] + D*sp.y2s[hi]
+	} else if order == 2 {
+		return A*sp.y2s[lo] + B*sp.y2s[hi]
+	} else if order > 2 {
+		return 0
+	} else {
+		log.Fatal("Order given to Spline.Differentiate() must be non-negative.")
+	}
+	return 0
+}
+
+func (sp *Spline) Diff(x float64, order int) float64 {
+	return sp.Differentiate(x, order)
+}
+
+
 
 // bsearch returns the the index of the largest element in xs which is smaller
 // than x.
@@ -137,7 +181,7 @@ func (sp *Spline) secondDerivative() {
 			((ys[j] - ys[j-1]) / (xs[j] - xs[j-1]))
 	}
 
-	TriDiagAt(as, bs, cs, rs, sp.y2s)
+	TriDiagAt(as, bs, cs, rs, sp.y2s[1: n-1])
 }
 
 // TriTiagAt solves the system of equations
