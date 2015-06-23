@@ -148,7 +148,7 @@ func NewManager(
 	// Fuck. This feature is way more trouble than it's worth.
 	for i := range man.workspaces {
 		man.workspaces[i].buf = density.NewBuffer(
-			q, maxBufSize, man.renderers[0].g,
+			q, maxBufSize, maxPoints, man.renderers[0].g,
 		)
 	}
 
@@ -173,8 +173,12 @@ func (r *renderer) scaleXs(man *Manager) {
 }
 
 func (r *renderer) ptVal(man *Manager) float64 {
-	frac := float64(r.box.Cells()) / float64(man.hd.CountWidth)
-	return frac * frac * frac
+	if man.q.RequiresVelocity() {
+		return 1
+	} else {
+		frac := float64(r.box.Cells()) / float64(man.hd.CountWidth)
+		return frac * frac * frac
+	}
 }
 
 func (r *renderer) initWorkspaces(man *Manager) {

@@ -19,6 +19,7 @@ type Buffer interface {
 	SetVectors(vecs []geom.Vec) bool
 
 	// Buffer Retrieval
+	CountBuffer() (num []int, ok bool)
 	ScalarBuffer() (vals []float64, ok bool)
 	VectorBuffer() (vals [][3]float64, ok bool)
 	FinalizedScalarBuffer() (vals []float32, ok bool)
@@ -27,7 +28,7 @@ type Buffer interface {
 
 var NilBuffer = &scalarBuffer{ []float64{} }
 
-func NewBuffer(q Quantity, len int, g *geom.GridLocation) Buffer {
+func NewBuffer(q Quantity, len, wlen int, g *geom.GridLocation) Buffer {
 	switch q {
 	case Density:
 		return &densityBuffer{
@@ -40,18 +41,21 @@ func NewBuffer(q Quantity, len int, g *geom.GridLocation) Buffer {
 	case Velocity:
 		return &velocityBuffer{
 			vectorBuffer{ make([][3]float64, len) },
-			&vectorBuffer{ make([][3]float64, len) },
+			&vectorBuffer{ make([][3]float64, wlen) },
+			make([]int, len),
 		}
 	case VelocityDivergence:
 		return &divergenceBuffer{
 			vectorBuffer{ make([][3]float64, len) },
-			&vectorBuffer{ make([][3]float64, len) },
+			&vectorBuffer{ make([][3]float64, wlen) },
+			make([]int, len),
 			g,
 		}
 	case VelocityCurl:
 		return &curlBuffer{
 			vectorBuffer{ make([][3]float64, len) },
-			&vectorBuffer{ make([][3]float64, len) },
+			&vectorBuffer{ make([][3]float64, wlen) },
+			make([]int, len),
 			g,
 		}
 	default:
@@ -93,6 +97,10 @@ func (b *scalarBuffer) SetVectors(vecs []geom.Vec) bool { return false }
 
 
 // Buffer Retreival //
+
+func (buf *scalarBuffer) CountBuffer() (num []int, ok bool) {
+	return nil, false
+}
 
 func (buf *scalarBuffer) ScalarBuffer() (vals []float64, ok bool) {
 	return buf.vals, true
@@ -150,6 +158,10 @@ func (b *vectorBuffer) SetVectors(vecs []geom.Vec) bool {
 }
 
 // Buffer Retrieval //
+
+func (buf *vectorBuffer) CountBuffer() (num []int, ok bool) {
+	return nil, false
+}
 
 func (buf *vectorBuffer) ScalarBuffer() (vals []float64, ok bool) {
 	return nil, false
@@ -243,13 +255,21 @@ func (buf *gradientBuffer) FinalizedVectorBuffer() (xs, ys, zs []float32, ok boo
 type velocityBuffer struct {
 	vectorBuffer
 	weights *vectorBuffer
+	num []int
 }
 
 // Array Manipulation //
 
 func (buf *velocityBuffer) Slice(low, high int) {
 	buf.vectorBuffer.Slice(low, high)
-	buf.weights.Slice(low, high)
+	buf.num = buf.num[low: high]
+}
+
+func (buf *velocityBuffer) Clear() {
+	for i := range buf.vecs {
+		buf.vecs[i][0], buf.vecs[i][1], buf.vecs[i][2] = 0, 0, 0
+		buf.num[i] = 0
+	}
 }
 
 // vectorBuffer.Length
@@ -264,6 +284,25 @@ func (b *velocityBuffer) Quantity() Quantity { return Velocity }
 
 // Buffer Retrieval //
 
+func (buf *velocityBuffer) CountBuffer() (num []int, ok bool) {
+	return buf.num, true
+}
+
+func (buf *velocityBuffer) FinalizedVectorBuffer() (xs, ys, zs []float32, ok bool) {
+	xs = make([]float32, len(buf.vecs))
+	ys = make([]float32, len(buf.vecs))
+	zs = make([]float32, len(buf.vecs))
+	for i, vec := range buf.vecs {
+		if i % (len(buf.vecs) / 30) == 0 {
+			fmt.Println(i, buf.num[i], vec[0], vec[1], vec[2])
+		}
+		n := float32(buf.num[i])
+		if buf.num[i] == 0 { continue }
+		xs[i], ys[i], zs[i] = float32(vec[0])/n, float32(vec[1])/n, float32(vec[2])/n
+	}
+	return xs, ys, zs, true
+}
+
 ///////////////////////////////////
 // divergenceBuffer implemtation //
 ///////////////////////////////////
@@ -271,6 +310,7 @@ func (b *velocityBuffer) Quantity() Quantity { return Velocity }
 type divergenceBuffer struct {
 	vectorBuffer
 	weights *vectorBuffer
+	num []int
 	g *geom.GridLocation
 }
 
@@ -278,7 +318,14 @@ type divergenceBuffer struct {
 
 func (buf *divergenceBuffer) Slice(low, high int) {
 	buf.vectorBuffer.Slice(low, high)
-	buf.weights.Slice(low, high)
+	buf.num = buf.num[low: high]
+}
+
+func (buf *divergenceBuffer) Clear() {
+	for i := range buf.vecs {
+		buf.vecs[i][0], buf.vecs[i][1], buf.vecs[i][2] = 0, 0, 0
+		buf.num[i] = 0
+	}
 }
 
 // scalarBuffer.Length
@@ -291,6 +338,8 @@ func (b *divergenceBuffer) SetGridLocation(g *geom.GridLocation) { b.g = g }
 
 // scalarBuffer.SetVectors
 
+// Buffer Retrieval //
+
 func (buf *divergenceBuffer) FinalizedScalarBuffer() (vals []float32, ok bool) {
 	out := make([]float32, len(buf.vecs))
 	vecs := [3][]float32 {
@@ -298,6 +347,14 @@ func (buf *divergenceBuffer) FinalizedScalarBuffer() (vals []float32, ok bool) {
 		make([]float32, len(buf.vecs)),
 		make([]float32, len(buf.vecs)),
 	}
+
+	for i, vec := range buf.vecs {
+		n := float32(buf.num[i])
+		if buf.num[i] == 0 { continue }
+		vecs[0][i] = float32(vec[0])/n
+		vecs[1][i] = float32(vec[0])/n
+		vecs[2][i] = float32(vec[2])/n
+	} 
 
 	buf.g.Divergence(vecs, out, &geom.DerivOptions{ true, geom.None, 4 })
 
@@ -308,7 +365,9 @@ func (buf *divergenceBuffer) FinalizedVectorBuffer() (xs, ys, zs []float32, ok b
 	return nil, nil, nil, false
 }
 
-// Buffer Retrieval //
+func (buf *divergenceBuffer) CountBuffer() (num []int, ok bool) {
+	return buf.num, true
+}
 
 /////////////////////////////
 // curlBuffer implemtation //
@@ -317,6 +376,7 @@ func (buf *divergenceBuffer) FinalizedVectorBuffer() (xs, ys, zs []float32, ok b
 type curlBuffer struct {
 	vectorBuffer
 	weights *vectorBuffer
+	num []int
 	g *geom.GridLocation
 }
 
@@ -324,7 +384,14 @@ type curlBuffer struct {
 
 func (buf *curlBuffer) Slice(low, high int) {
 	buf.vectorBuffer.Slice(low, high)
-	buf.weights.Slice(low, high)
+	buf.num = buf.num[low: high]
+}
+
+func (buf *curlBuffer) Clear() {
+	for i := range buf.vecs {
+		buf.vecs[i][0], buf.vecs[i][1], buf.vecs[i][2] = 0, 0, 0
+		buf.num[i] = 0
+	}
 }
 
 // vectorBuffer.Length
@@ -339,12 +406,18 @@ func (b *curlBuffer) SetGridLocation(g *geom.GridLocation) { b.g = g }
 
 // Buffer Retrieval //
 
+func (buf *curlBuffer) CountBuffer() (num []int, ok bool) {
+	return buf.num, true
+}
+
 func (buf *curlBuffer) FinalizedVectorBuffer() (xs, ys, zs []float32, ok bool) {
 	xs, oxs := make([]float32, len(buf.vecs)), make([]float32, len(buf.vecs))
 	ys, oys := make([]float32, len(buf.vecs)), make([]float32, len(buf.vecs))
 	zs, ozs := make([]float32, len(buf.vecs)), make([]float32, len(buf.vecs))
 	for i, vec := range buf.vecs {
-		xs[i], ys[i], zs[i] = float32(vec[0]), float32(vec[1]), float32(vec[2])
+		n := float32(buf.num[i])
+		if buf.num[i] == 0 { continue }
+		xs[i], ys[i], zs[i] = float32(vec[0])/n, float32(vec[1])/n, float32(vec[2])/n
 	}
 	vecs := [3][]float32{ xs, ys, zs }
 	out := [3][]float32{ oxs, oys, ozs }

@@ -114,9 +114,9 @@ func WriteBuffer(
 	hd.Type.HeaderSize = int64(unsafe.Sizeof(hd))
 	hd.Type.GridType = int64(buf.Quantity())
 	if _, ok := buf.ScalarBuffer(); ok {
-		hd.Type.IsVectorGrid = 1
-	} else {
 		hd.Type.IsVectorGrid = 0
+	} else {
+		hd.Type.IsVectorGrid = 1
 	}		
 
 	hd.Cosmo = cosmo
