@@ -115,34 +115,49 @@ func (luf *LUFactors) SolveVector(bs, xs []float64) {
 		panic("len(x) != luf.Width")
 	}
 
-	copy(xs, bs)
+	// A x = b -> (L U) x = b -> L (U x) = b -> L y = b
+	ys := xs
+	copy(ys, bs)
 	lu := luf.lu.Vals
-	nzIdx := 0
 
+	// Solve L * y = b for y.
+	forwardSubst(n, luf.pivot, lu, ys)
+	// Solve U * x = y for x.
+	backSubst(n, lu, ys, xs)
+}
+
+// Solves L * y = b for y.
+// y_i = (b_i - sum_j=0^i-1 (alpha_ij y_j)) / alpha_ij
+func forwardSubst(n int, pivot []int, lu, ys []float64) {
+	nzIdx := 0
 	for i := 0; i < n ; i++ {
-		piv := luf.pivot[i]
-		sum := xs[piv]
-		xs[piv] = xs[i]
+		piv := pivot[i]
+		sum := ys[piv]
+		ys[piv] = ys[i]
 
 		if nzIdx != 0 {
 			iOffset := i*n
 			for j := nzIdx - 1; j < i; j++ {
-				sum -= lu[iOffset + j] * xs[j]
+				sum -= lu[iOffset + j] * ys[j]
 			}
 		} else if sum != 0 {
 			nzIdx = i+1
 		}
 
-		xs[i] = sum
+		ys[i] = sum
 	}
+}
 
+// Solves U * x = y for x.
+// x_i = (y_i - sum_j=i+^N-1 (beta_ij x_j)) / beta_ii
+func backSubst(n int, lu, ys, xs []float64) {
 	for i := n - 1; i >= 0; i-- {
 		sum := xs[i]
 		iOffset := n * i
 		for j := i + 1; j < n; j++ {
 			sum -= lu[iOffset + j] * xs[j]
 		}
-		xs[i] = sum / lu[iOffset + i]
+		ys[i] = sum / lu[iOffset + i]
 	}
 }
 
@@ -176,8 +191,8 @@ func (luf *LUFactors) SolveMatrix(b, x *Matrix) {
 	}
 }
 
-func (luf *LUFactors) Inverse(out *Matrix) {
-	n := lu.lu.Width
+func (luf *LUFactors) Invert(out *Matrix) {
+	n := luf.lu.Width
 	if out.Width != out.Height {
 		panic("out matrix is non-square.")
 	} else if n != out.Width {
@@ -188,7 +203,7 @@ func (luf *LUFactors) Inverse(out *Matrix) {
 		out.Vals[i] = 0
 	}
 	for i := 0; i < n; i++ {
-		out.Vals[i*n + i]
+		out.Vals[i*n + i] = 1
 	}
 
 	luf.SolveMatrix(out, out)
@@ -197,6 +212,8 @@ func (luf *LUFactors) Inverse(out *Matrix) {
 func (luf *LUFactors) Determinant() float64 {
 	d := luf.d
 	lu := luf.lu.Vals
+	n := luf.lu.Width
+
 	for i := 0; i < luf.lu.Width; i++ {
 		d *= lu[i*n + i]
 	}
