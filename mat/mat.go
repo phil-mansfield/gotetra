@@ -51,47 +51,29 @@ func (m *Matrix) LUFactorsAt(luf *LUFactors) {
 	}
 
 	n := m.Width
-	scale := make([]float64, n)
+	for i := 0; i < n; i++ { luf.pivot[i] = i }
 	lu := luf.lu.Vals
+	mat := m.Vals
+
+	// Maintained for determinant calculations.
 	luf.d = 1
+
+	// Crout's algorithm.
 	copy(lu, m.Vals)
 
-	for i := 0; i < n; i++ {
-		iOffset := i * n
+	// Swap rows.
+	for k := 0; k < n; k++ {
+		maxRow := findMaxRow(n, mat, k)
+		luf.pivot[k], luf.pivot[maxRow] = luf.pivot[maxRow], luf.pivot[k]
 
-		max := 0.0
-		for j := 0; j < n; j++ {
-			tmp := math.Abs(lu[iOffset + j])
-			if tmp > max { max = tmp }
+		if k != maxRow {
+			swapRows(k, maxRow, n, lu)
+			luf.d = -luf.d
 		}
-		if max == 0 { panic("m is singular") }
-		scale[i] = 1 / max
 	}
 
+	// This nonsense.
 	for k := 0; k < n; k++ {
-		max := 0.0
-		maxi := 0
-		for i := k; i < n; i++ {
-			tmp := scale[i] * math.Abs(lu[i*n + k])
-			if tmp > max {
-				max = tmp
-				maxi = i
-			}
-		}
-
-		if k != maxi {
-			kOffset, maxiOffset := n*k, n*maxi
-			for j := 0; j < n; j++ {
-				idx1, idx2 := kOffset + j, maxiOffset + j
-				lu[idx1], lu[idx2] = lu[idx2], lu[idx1]
-			}
-			luf.d = -luf.d
-			scale[maxi] = scale[k]
-		}
-		luf.pivot[k] = maxi
-
-		if lu[n*k + k] == 0 { lu[n*k + k] = 1e-40 }
-
 		kOffset := k*n
 		for i := k + 1; i < n; i++ {
 			iOffset := i*n
@@ -101,6 +83,30 @@ func (m *Matrix) LUFactorsAt(luf *LUFactors) {
 				lu[iOffset + j] -= tmp * lu[kOffset + j]
 			}
 		}
+	}
+}
+
+// Finds the index of the row containing the maximum value in the column.
+// Ignores the values above the point m_col,col since those have already been
+// swapped.
+func findMaxRow(n int, m []float64, col int) int {
+	max, maxRow := -1.0, 0
+	
+	for i := col; i < n; i++ {
+		val := math.Abs(m[i*n + col])
+		if val > max {
+			max = val
+			maxRow = i
+		}
+	}
+	return maxRow
+}
+
+func swapRows(i1, i2, n int, lu []float64) {
+	i1Offset, i2Offset := n*i1, n*i2
+	for j := 0; j < n; j++ {
+		idx1, idx2 := i1Offset + j, i2Offset + j
+		lu[idx1], lu[idx2] = lu[idx2], lu[idx1]
 	}
 }
 
@@ -117,34 +123,29 @@ func (luf *LUFactors) SolveVector(bs, xs []float64) {
 
 	// A x = b -> (L U) x = b -> L (U x) = b -> L y = b
 	ys := xs
-	copy(ys, bs)
-	lu := luf.lu.Vals
+	if &bs[0] == &ys[0] {
+		bs = make([]float64, n)
+		copy(bs, ys)
+	}
 
 	// Solve L * y = b for y.
-	forwardSubst(n, luf.pivot, lu, ys)
+	forwardSubst(n, luf.pivot, luf.lu.Vals, bs, ys)
 	// Solve U * x = y for x.
-	backSubst(n, lu, ys, xs)
+	backSubst(n, luf.lu.Vals, ys, xs)
 }
 
 // Solves L * y = b for y.
 // y_i = (b_i - sum_j=0^i-1 (alpha_ij y_j)) / alpha_ij
-func forwardSubst(n int, pivot []int, lu, ys []float64) {
-	nzIdx := 0
-	for i := 0; i < n ; i++ {
-		piv := pivot[i]
-		sum := ys[piv]
-		ys[piv] = ys[i]
-
-		if nzIdx != 0 {
-			iOffset := i*n
-			for j := nzIdx - 1; j < i; j++ {
-				sum -= lu[iOffset + j] * ys[j]
-			}
-		} else if sum != 0 {
-			nzIdx = i+1
+func forwardSubst(n int, pivot []int, lu, bs, ys []float64) {
+	for i := 0; i < n; i++ {
+		ys[pivot[i]] = bs[i]
+	}
+	for i := 0; i < n; i++ {
+		sum := 0.0
+		for j := 0; j < i; j++ {
+			sum += lu[i*n + j] * ys[j]
 		}
-
-		ys[i] = sum
+		ys[i] = (ys[i] - sum)
 	}
 }
 
@@ -152,12 +153,11 @@ func forwardSubst(n int, pivot []int, lu, ys []float64) {
 // x_i = (y_i - sum_j=i+^N-1 (beta_ij x_j)) / beta_ii
 func backSubst(n int, lu, ys, xs []float64) {
 	for i := n - 1; i >= 0; i-- {
-		sum := xs[i]
-		iOffset := n * i
+		sum := 0.0
 		for j := i + 1; j < n; j++ {
-			sum -= lu[iOffset + j] * xs[j]
+			sum += lu[i*n + j] * xs[j]
 		}
-		ys[i] = sum / lu[iOffset + i]
+		xs[i] = (ys[i] - sum) / lu[i*n + i]
 	}
 }
 
@@ -165,7 +165,7 @@ func backSubst(n int, lu, ys, xs []float64) {
 // 
 // x and b may point to the same physical memory.
 func (luf *LUFactors) SolveMatrix(b, x *Matrix) {
-	lu := luf.lu.Vals
+	xs := x.Vals
 	n := luf.lu.Width
 
 	if b.Width != b.Height {
@@ -182,11 +182,11 @@ func (luf *LUFactors) SolveMatrix(b, x *Matrix) {
 
 	for j := 0; j < n; j++ {
 		for i := 0; i < n; i++ {
-			col[i] = lu[i*n + j]
+			col[i] = xs[i*n + j]
 		}
 		luf.SolveVector(col, col)
 		for i := 0; i < n; i++ {
-			lu[i*n + j] = col[i]
+			xs[i*n + j] = col[i]
 		}
 	}
 }
