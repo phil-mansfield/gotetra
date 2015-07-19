@@ -88,7 +88,6 @@ func ReadGrid(fname string) ([]float64, error) {
     return vals, nil
 }
 
-
 type Vector [3]float64
 type IntVector [3]int64
 
@@ -148,11 +147,6 @@ func WriteBuffer(
 	hd.EndiannessVersion = EndiannessVersionFlag(end)
 	hd.Type.HeaderSize = int64(unsafe.Sizeof(hd))
 	hd.Type.GridType = int64(buf.Quantity())
-	if _, ok := buf.ScalarBuffer(); ok {
-		hd.Type.IsVectorGrid = 0
-	} else {
-		hd.Type.IsVectorGrid = 1
-	}		
 
 	hd.Cosmo = cosmo
 	hd.Render = render
@@ -160,8 +154,10 @@ func WriteBuffer(
 
 	binary.Write(wr, end, &hd)
 	if xs, ok := buf.FinalizedScalarBuffer(); ok {
+		hd.Type.IsVectorGrid = 0
 		binary.Write(wr, end, xs)
 	} else if xs, ys, zs, ok := buf.FinalizedVectorBuffer(); ok {
+		hd.Type.IsVectorGrid = 1
 		binary.Write(wr, end, xs)
 		binary.Write(wr, end, ys)
 		binary.Write(wr, end, zs)
