@@ -35,7 +35,7 @@ type Overlap interface {
 	BufferSize() int
 
 	// ScaleVecs converts a vector array into the overlap's code units.
-	ScaleVecs(vs []geom.Vec)
+	ScaleVecs(vs []geom.Vec, vcb *geom.CellBounds)
 
 	// Add adds the contents of buf to grid where buf is the overlap grid and
 	// grid is the domain grid. The domain grid is contained within the given
@@ -224,8 +224,8 @@ type baseOverlap struct {
 
 func (b *baseOverlap) BufferCellBounds() *geom.CellBounds { return &b.bufCb }
 func (b *baseOverlap) DomainCellBounds() *geom.CellBounds { return &b.domCb }
-func (w *baseOverlap) ScaleVecs(vs []geom.Vec) {
-	w.bufCb.ScaleVecs(vs, w.cells, w.boxWidth)
+func (b *baseOverlap) ScaleVecs(vs []geom.Vec, vcb *geom.CellBounds) {
+	panic("Method call to baseOverlap.ScaleVecs()")
 }
 func (b *baseOverlap) Cells() int { return b.cells }
 
@@ -246,6 +246,9 @@ func (w *baseOverlap2D) BufferSize() int {
 	return prod
 }
 
+func (w *domainOverlap2D) ScaleVecs(vs []geom.Vec, vcb *geom.CellBounds) {
+	vcb.ScaleVecsDomain(&w.bufCb, vs, w.cells, w.boxWidth)
+}
 
 func (w *domainOverlap2D) Add(bbuf, bgrid density.Buffer) {
 	bufNum, valid := bbuf.CountBuffer()
@@ -268,6 +271,10 @@ func (w *domainOverlap2D) Add(bbuf, bgrid density.Buffer) {
 			if valid { gridNum[i] += bufNum[i] }
 		}
 	}
+}
+
+func (w *domainOverlap3D) ScaleVecs(vs []geom.Vec, vcb *geom.CellBounds) {
+	vcb.ScaleVecsDomain(&w.bufCb, vs, w.cells, w.boxWidth)
 }
 
 func (w *domainOverlap3D) Add(bbuf, bgrid density.Buffer) {
@@ -297,6 +304,10 @@ type baseOverlap3D struct {
 
 func (w *baseOverlap3D) BufferSize() int {
 	return w.bufCb.Width[0] * w.bufCb.Width[1] * w.bufCb.Width[2]
+}
+
+func (w *segmentOverlap2D) ScaleVecs(vs []geom.Vec, vcb *geom.CellBounds) {
+	vcb.ScaleVecsSegment(vs, w.cells, w.boxWidth)
 }
 
 func (w *segmentOverlap2D) Add(bbuf, bgrid density.Buffer) {
@@ -376,6 +387,10 @@ func (w *segmentOverlap2D) Add(bbuf, bgrid density.Buffer) {
 	}
 }
 
+func (w *segmentOverlap3D) ScaleVecs(vs []geom.Vec, vcb *geom.CellBounds) {
+	vcb.ScaleVecsSegment(vs, w.cells, w.boxWidth)
+}
+
 func (w *segmentOverlap3D) Add(bbuf, bgrid density.Buffer) {
 	bufNum, valid := bbuf.CountBuffer()
 	gridNum, _ := bgrid.CountBuffer()
@@ -417,7 +432,8 @@ func (w *segmentOverlap3D) Add(bbuf, bgrid density.Buffer) {
 					
 					domIdx := xDom + flatDomY + flatDomZ
 					bufIdx := xBuf + flatBufY + flatBufZ
-					if valid { grid[domIdx] += buf[bufIdx] }
+					grid[domIdx] += buf[bufIdx]
+					if valid { gridNum[domIdx] += bufNum[bufIdx] }
 				}
 			}
 		}

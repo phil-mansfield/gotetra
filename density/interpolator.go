@@ -1,6 +1,8 @@
 package density
 
 import (
+	"log"
+
 	"github.com/phil-mansfield/gotetra/geom"
 	"github.com/phil-mansfield/gotetra/rand"	
 )
@@ -104,7 +106,8 @@ func (intr *mcarlo) Interpolate(
 		(intr.Cells() / 2 > relCb.Width[0] &&
 		intr.Cells() / 2 > relCb.Width[1] &&
 		intr.Cells() / 2 > relCb.Width[2])
-	mods := 0
+
+	maxWidth := 0.0
 
 	for idx := int64(low); idx < int64(high); idx += jump64 {
 		x, y, z := coords(idx, idxWidth)
@@ -119,6 +122,10 @@ func (intr *mcarlo) Interpolate(
 				&xs[intr.idxBuf[2]],
 				&xs[intr.idxBuf[3]],
 			)
+
+			if width(&intr.tet) > maxWidth {
+				maxWidth = width(&intr.tet)
+			}
 
 			if reqVel {
 				intr.vtet.Init(
@@ -143,7 +150,6 @@ func (intr *mcarlo) Interpolate(
 			if !neverMod {
 				for j := 0; j < 3; j++ {
 					if coordNeg(&intr.tet, j) {
-						mods++
 						modCoord(intr.vecBuf, j, float32(intr.Cells()))
 					}
 				}
@@ -174,6 +180,13 @@ func (intr *mcarlo) Interpolate(
 				buf, intr.vecBuf, nil, ptVal, bweights, 0, intr.points, 1,
 			)
 		}
+	}
+	
+	if maxWidth > 1000 {
+		log.Printf(
+			"width: %.5g, bound: %v\n", maxWidth,
+			intr.subIntr.BufferCellBounds(),
+		)
 	}
 }
 
@@ -206,4 +219,13 @@ func cbSubtr(cb1, cb2 *geom.CellBounds) (i, j, k int) {
 	j = cb1.Origin[1] - cb2.Origin[1]
 	k = cb1.Origin[2] - cb2.Origin[2]
 	return i, j, k
+}
+
+func width(tet *geom.Tetra) float64 {
+	minX, maxX := tet.Corners[0][0], tet.Corners[0][0]
+	for i := 1; i < 4; i++ {
+		x := tet.Corners[i][0]
+		if x < minX { minX = x } else if x > maxX { maxX = x }
+	}
+	return float64(maxX - minX)
 }

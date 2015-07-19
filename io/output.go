@@ -2,8 +2,10 @@ package io
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
 	"math"
+	"os"
 
 	"github.com/phil-mansfield/gotetra/cosmo"
 	"github.com/phil-mansfield/gotetra/density"
@@ -52,6 +54,38 @@ type LocationInfo struct {
     Origin, Span Vector
     PixelOrigin, PixelSpan IntVector
     PixelWidth float64
+}
+
+func ReadGridHeader(fname string) (*GridHeader, error) {
+	f, err := os.Open(fname)
+	defer f.Close()
+	if err != nil { return nil, err }
+	hd := &GridHeader{}
+	err = binary.Read(f, end, hd)
+	if err != nil { return nil, err }
+	return hd, nil
+}
+
+func ReadGrid(fname string) ([]float64, error) {
+	f, err := os.Open(fname)
+	defer f.Close()
+	if err != nil { return nil, err }
+	hd := &GridHeader{}
+	err = binary.Read(f, end, hd)
+	if err != nil { return nil, err }
+
+	if hd.Type.IsVectorGrid == 1 {
+		return nil, fmt.Errorf("io.ReadGrid() can only read scalar grids.")
+	}
+
+	sp := hd.Loc.PixelSpan
+	val32s := make([]float32, sp[0] * sp[1] * sp[2])
+	err = binary.Read(f, end, val32s)
+	if err != nil { return nil, err }
+
+	vals := make([]float64, len(val32s))
+	for i, x := range val32s { vals[i] = float64(x) }
+	return vals, nil
 }
 
 type Vector [3]float64
@@ -113,11 +147,6 @@ func WriteBuffer(
 	hd.EndiannessVersion = EndiannessVersionFlag(end)
 	hd.Type.HeaderSize = int64(unsafe.Sizeof(hd))
 	hd.Type.GridType = int64(buf.Quantity())
-	if _, ok := buf.ScalarBuffer(); ok {
-		hd.Type.IsVectorGrid = 0
-	} else {
-		hd.Type.IsVectorGrid = 1
-	}		
 
 	hd.Cosmo = cosmo
 	hd.Render = render
@@ -125,8 +154,10 @@ func WriteBuffer(
 
 	binary.Write(wr, end, &hd)
 	if xs, ok := buf.FinalizedScalarBuffer(); ok {
+		hd.Type.IsVectorGrid = 0
 		binary.Write(wr, end, xs)
 	} else if xs, ys, zs, ok := buf.FinalizedVectorBuffer(); ok {
+		hd.Type.IsVectorGrid = 1
 		binary.Write(wr, end, xs)
 		binary.Write(wr, end, ys)
 		binary.Write(wr, end, zs)

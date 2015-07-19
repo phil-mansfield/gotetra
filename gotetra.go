@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	UnitBufCount = 1 << 12
+	UnitBufCount = 1 << 6
 	tetraIntr = true
 )
 
@@ -169,7 +169,7 @@ func (r *renderer) requiresFile(file string) bool {
 
 func (r *renderer) scaleXs(man *Manager) {
 	copy(man.scaledXs, man.xs)
-	r.over.ScaleVecs(man.scaledXs)
+	r.over.ScaleVecs(man.scaledXs, &man.xCb)
 }
 
 func (r *renderer) ptVal(man *Manager) float64 {
