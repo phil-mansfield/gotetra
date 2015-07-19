@@ -30,8 +30,6 @@ DENSITY_GRADIENT    = 1
 VELOCITY            = 2
 VELOCITY_DIVERGENCE = 3
 VELOCITY_CURL       = 4
-PHASE_3D            = 5
-PHASE_1D            = 6
 
 class Sizes(object):
     def __init__(self, ver):
@@ -42,7 +40,7 @@ class Sizes(object):
             self.render_info = 40
             self.location_info = 104
         elif ver == 2:
-            self.header = 232
+            self.header = 336
             self.type_info = 24
             self.cosmo_info = 64
             self.render_info = 40
@@ -51,16 +49,10 @@ class Sizes(object):
         else:
             print("Unrecognized gotetra output version, %d." % ver)
             exit(1)
-        assert(self.header == (
-            self.type_info + self.cosmo_info +
-            self.render_info + self.location_info
-        ))
 
 def _read_endianness_version(s):
     flag = struct.unpack("q", s)
     ver = flag[0] & 0xffffffff
-    # Why can't your bitwise operations just do the correct thing? You aren't
-    # "helping" anyone here, Python.
     end = -1 if ver >> 31 != 0 else 0
     ver = 1 + (~ver & 0x00000000ffffffff) if end else ver
     return end, ver
@@ -107,33 +99,8 @@ def read_grid(filename):
     if hd.axis == 0: j, k = 1, 2
     if hd.axis == 1: j, k = 0, 2
     if hd.axis == 2: j, k = 0, 1
-    
-    if hd.type.grid_type == PHASE_1D:
-        # TODO: FINISH THIS!!
-        n =  hd.vdim[0] * hd.xdim[0]
 
-        xs = array.array("f")
-        with open(filename, "rb") as fp:
-            fp.read(hd.sizes.header + 8)
-            xs.fromfile(fp, n)
-
-        maybe_swap(xs)
-        xs = np.reshape(xs, (hd.vdim[0], hd.dim[0]))
-        return xs
-    elif hd.type.grid_type == PHASE_3D:
-        # TODO: FINISH THIS!!
-        n *= hd.vdim[0] * hd.vidm[1] * hd.vdim[2]
-
-        xs = array.array("f")
-        with open(filename, "rb") as fp:
-            fp.read(hd.sizes.header + 8)
-            xs.fromfile(fp, n)
-
-        maybe_swap(xs)
-        xs = np.reshape(xs, (hd.vdim[0], hd.vdim[1], hs.vdim[2],
-                             hd.dim[0], hd.dim[1], hd.dim[2]))
-        return xs
-    elif hd.type.is_vector_grid:
+    if hd.type.is_vector_grid:
         xs, ys, zs = array.array("f"), array.array("f"), array.array("f")
         with open(filename, "rb") as fp:
             fp.read(hd.sizes.header + 8)
@@ -160,6 +127,7 @@ def read_grid(filename):
         with open(filename, "rb") as fp:
             fp.read(hd.sizes.header + 8)
             xs.fromfile(fp, n)
+
         maybe_swap(xs)
         if hd.axis == -1:
             xs = np.reshape(xs, (hd.dim[2], hd.dim[1], hd.dim[0]))
@@ -182,15 +150,6 @@ class Header(object):
                           Header.loc.pixel_span.
         pw   : float    - The width of a single pixel. Equivalent to
                           Header.loc.pixel_width.
-
-        vdim : np.array - The dimensions of the velocity grid in pixels.
-                          Equivalent to Header.vel.pxiel_span. Only available
-                          for phase space grids.
-        vpw  : float    - The width of a single velocity-space pixel. Only
-                          exists for phase space grids. Equivalent to
-                          Header.vel.pixels_width. Only available for phase
-                          space grids.
-
         axis : int      - The axis over which the image is projected over. If
                           no projection was performed and the array is 3D,
                           this will be set to -1.
@@ -201,6 +160,7 @@ class Header(object):
     def __init__(self, s, sizes):
         end = _read_endianness_flag(s[0:8])
         self.version = _read_version(s[0:8])
+        ver = self.version
         self.sizes = sizes
 
         assert len(s) == self.sizes.header + 8
@@ -215,7 +175,7 @@ class Header(object):
 
         if ver >= 2:
             vel_start = loc_end
-            vel_end = vel_star + self.sizes.velocity_info
+            vel_end = vel_start + self.sizes.velocity_info
 
         if ver == 1:
             assert(loc_end == self.sizes.header + 8)
@@ -233,11 +193,7 @@ class Header(object):
         self.render = RenderInfo(s[render_start: render_end], end)
         self.loc = LocationInfo(s[loc_start: loc_end], end)
         if ver >= 2:
-            if (self.type.grid_type == PHASE_1D or
-                self.type.grid_type == PHASE_3D):
-                self.vel = LocationInfo(s[vel_start: vel_end])
-                self.vpw = self.vel.pixel_width
-                self.vdim = self.vel.pixel_span
+            pass
 
         self.dim = self.loc.pixel_span
         self.pw = self.loc.pixel_width
@@ -275,7 +231,8 @@ class TypeInfo(object):
 
         self.header_size = data[0]
         self.grid_type = data[1]
-        self.is_vector_grid = data[2] == 1
+        self.is_vector_grid = not (self.grid_type == DENSITY or 
+                                   self.grid_type == VELOCITY_DIVERGENCE)
 
     def __str__(self):
         return "\n".join([
@@ -303,8 +260,6 @@ class TypeInfo(object):
             return "Velocity Divergence"
         elif self.grid_type == VELOCITY_CURL:
             return "Velocity Curl"
-        elif self.grid_type == PHASE:
-            return "Phase"
 
 
 class CosmoInfo(object):
@@ -350,13 +305,14 @@ class RenderInfo(object):
         total_pixels         : int - Number of pixels required to render to a
                                      single side of the sim box. Equal to
                                      box_width / pixel_width.
-        subsample_length     : int - Level of subsampling used. 1 indicates not
+        subsample_length     : int - Level of subsampling used. 1 indicates no
                                      subsampling.
         min_projection_depth : int - Suggested minimum layers to use when
-                                     forming a projected image.
-        projection_axis      : int - If the image is projected along an axis, the
-                                     index of that axis. Otherwise this will be set
-                                     to -1.
+                                     forming a projected image. WARNING: This
+                                     feature is totally broken.
+        projection_axis      : int - If the image is projected along an axis,
+                                     the index of that axis. Otherwise this
+                                     will be set to -1.
     """
 
     def __init__(self, s, end):
