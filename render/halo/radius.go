@@ -4,7 +4,7 @@ import (
 	"math"
 	"strings"
 
-	"github.com/phil-mansfield/gotetra/io"
+	"github.com/phil-mansfield/gotetra/render/io"
 	"github.com/phil-mansfield/gotetra/cosmo"
 )
 

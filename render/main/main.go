@@ -15,10 +15,10 @@ import (
 
 	"code.google.com/p/gcfg"
 
-	"github.com/phil-mansfield/gotetra"
-	"github.com/phil-mansfield/gotetra/density"
-	"github.com/phil-mansfield/gotetra/geom"
-	"github.com/phil-mansfield/gotetra/io"
+	"github.com/phil-mansfield/gotetra/render"
+	"github.com/phil-mansfield/gotetra/render/density"
+	"github.com/phil-mansfield/gotetra/redner/geom"
+	"github.com/phil-mansfield/gotetra/redner/io"
 )
 
 const (
@@ -62,7 +62,7 @@ func main() {
 	}
 
 	flag.IntVar(
-		&gotetra.NumCores, "Threads", runtime.NumCPU(),
+		&render.NumCores, "Threads", runtime.NumCPU(),
 		"Number of threads used. Default is the number of logical cores.",
 	)
 	flag.StringVar(
@@ -488,11 +488,11 @@ func renderMain(con *io.RenderConfig, bounds []string) {
 		log.Fatalf("Invalid quantity, '%s'", con.Quantity)
 	}
 	
-	boxes := make([]gotetra.Box, len(configBoxes))
+	boxes := make([]render.Box, len(configBoxes))
 	for i := range boxes {
 		cells := totalPixels(con, &configBoxes[i], hd.TotalWidth)
 		pts := particles(con, &configBoxes[i], hd.TotalWidth)
-		boxes[i] = gotetra.NewBox(
+		boxes[i] = render.NewBox(
 			hd.TotalWidth, pts, cells, q, &configBoxes[i],
 		)
 		log.Println(
@@ -502,7 +502,7 @@ func renderMain(con *io.RenderConfig, bounds []string) {
 	}
 
 	// Interpolate.
-	man, err := gotetra.NewManager(fileNames, boxes, true, q)
+	man, err := render.NewManager(fileNames, boxes, true, q)
 	if err != nil { log.Fatal(err.Error()) }
 
 	man.Subsample(con.SubsampleLength)

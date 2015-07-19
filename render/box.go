@@ -3,9 +3,9 @@ package gotetra
 import (
 	"math"
 
-	"github.com/phil-mansfield/gotetra/density"
-	"github.com/phil-mansfield/gotetra/geom"
-	"github.com/phil-mansfield/gotetra/io"
+	"github.com/phil-mansfield/gotetra/render/density"
+	"github.com/phil-mansfield/gotetra/render/geom"
+	"github.com/phil-mansfield/gotetra/render/io"
 )
 
 ////////////////

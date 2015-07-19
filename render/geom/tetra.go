@@ -5,8 +5,7 @@ import (
 	"math"
 	"log"
 
-	"github.com/phil-mansfield/gotetra/rand"
-	"github.com/gonum/matrix/mat64"
+	"github.com/phil-mansfield/gotetra/math/rand"
 )
 
 // Tetra is a tetrahedron with points inside a box with periodic boundary
@@ -22,9 +21,7 @@ type Tetra struct {
 	bary    Vec
 	vb      volumeBuffer
 	sb      sampleBuffer
-	jInv    *mat64.Dense
-
-	volumeValid, baryValid, jInvValid bool
+	volumeValid, baryValid bool
 }
 
 type TetraIdxs [4]int64
@@ -80,13 +77,12 @@ func NewTetra(c0, c1, c2, c3 *Vec) *Tetra {
 func (t *Tetra) Init(c0, c1, c2, c3 *Vec) *Tetra {
 	t.volumeValid = false
 	t.baryValid = false
-	t.jInvValid = false
 
 	t.Corners[0] = *c0
 	t.Corners[1] = *c1
 	t.Corners[2] = *c2
 	t.Corners[3] = *c3
-	
+
 	// Remaining fields are buffers and need not be initialized.
 
 	return t

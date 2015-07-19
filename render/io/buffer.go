@@ -1,7 +1,7 @@
 package io
 
 import (
-	"github.com/phil-mansfield/gotetra/geom"
+	"github.com/phil-mansfield/gotetra/render/geom"
 )
 
 // ParticleBuffer is a wrapper around catalog files which allows floats to be

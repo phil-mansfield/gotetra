@@ -2,11 +2,13 @@ package io
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
 	"math"
+	"os"
 
 	"github.com/phil-mansfield/gotetra/cosmo"
-	"github.com/phil-mansfield/gotetra/density"
+	"github.com/phil-mansfield/gotetra/render/density"
 
 	"unsafe"
 )
@@ -53,6 +55,39 @@ type LocationInfo struct {
     PixelOrigin, PixelSpan IntVector
     PixelWidth float64
 }
+
+func ReadGridHeader(fname string) (*GridHeader, error) {
+    f, err := os.Open(fname)
+    defer f.Close()
+    if err != nil { return nil, err }
+    hd := &GridHeader{}
+    err = binary.Read(f, end, hd)
+    if err != nil { return nil, err }
+    return hd, nil
+}
+
+func ReadGrid(fname string) ([]float64, error) {
+    f, err := os.Open(fname)
+    defer f.Close()
+    if err != nil { return nil, err }
+    hd := &GridHeader{}
+    err = binary.Read(f, end, hd)
+    if err != nil { return nil, err }
+
+    if hd.Type.IsVectorGrid == 1 {
+        return nil, fmt.Errorf("io.ReadGrid() can only read scalar grids.")
+    }
+
+    sp := hd.Loc.PixelSpan
+    val32s := make([]float32, sp[0] * sp[1] * sp[2])
+    err = binary.Read(f, end, val32s)
+    if err != nil { return nil, err }
+
+    vals := make([]float64, len(val32s))
+    for i, x := range val32s { vals[i] = float64(x) }
+    return vals, nil
+}
+
 
 type Vector [3]float64
 type IntVector [3]int64

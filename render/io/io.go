@@ -11,7 +11,7 @@ import (
 
 	"unsafe"
 
-	"github.com/phil-mansfield/gotetra/geom"
+	"github.com/phil-mansfield/gotetra/render/geom"
 )
 
 // TODO: swtich from logging error statements to returning error codes.

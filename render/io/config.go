@@ -6,7 +6,7 @@ import (
 
 	"code.google.com/p/gcfg"
 	// I'm not sure if I hate this dependency or not.
-	"github.com/phil-mansfield/gotetra/density"
+	"github.com/phil-mansfield/gotetra/render/density"
 )
 
 

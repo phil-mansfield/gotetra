@@ -3,7 +3,7 @@ package density
 import (
 	"fmt"
 
-	"github.com/phil-mansfield/gotetra/geom"
+	"github.com/phil-mansfield/gotetra/render/geom"
 )
 
 // This is a giant clusterfuck.

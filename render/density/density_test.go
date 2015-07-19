@@ -5,7 +5,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/phil-mansfield/gotetra/geom"
+	"github.com/phil-mansfield/gotetra/render/geom"
 )
 
 
