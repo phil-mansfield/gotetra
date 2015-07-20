@@ -97,23 +97,45 @@ func (p1 *PluckerVec) SignDot(p2 *PluckerVec, flip bool) (float32, int) {
 // Tetra is a tetrahedron. (Duh!)
 //
 // Face ordering is:
-// F3(V0, V1, V2)
-// F2(V1, V0, V3)
-// F1(V2, V3, V0)
 // F0(V3, V2, V1)
+// F1(V2, V3, V0)
+// F2(V1, V0, V3)
+// F3(V0, V1, V2)
 type Tetra [4]Vec
 
 var tetraIdxs = [4][3]int {
-	[3]int{ 0, 1, 2 },
-	[3]int{ 1, 0, 3 },
-	[3]int{ 2, 3, 0 },
 	[3]int{ 3, 2, 1 },
+	[3]int{ 2, 3, 0 },
+	[3]int{ 1, 0, 3 },
+	[3]int{ 0, 1, 2 },
 }
 
 // VertexIdx returns the index into the given tetrahedron corresponding to
 // the specified face and vertex.
 func (_ *Tetra) VertexIdx(face, vertex int) int {
 	return tetraIdxs[face][vertex]
+}
+
+// Orient arranges tetrahedron points so that all faces point outward for
+// dir = +1 and inward for dir = -1.
+func (t *Tetra) Orient(dir int) {
+	v, w, n := Vec{}, Vec{}, Vec{}
+	for i := 0; i < 3; i++ {
+		v[i] = t[1][i] - t[0][i]
+		w[i] = t[2][i] - t[0][i]
+	}
+	n[0] = -v[1]*w[2] + v[2]*w[1]
+    n[1] = -v[2]*w[0] + v[0]*w[2]
+    n[2] = -v[0]*w[1] + v[1]*w[0]
+
+	var dot float32
+	for i := 0; i < 3; i++ {
+		dot += n[i] * (t[3][i] - t[0][i])
+	}
+
+	if (dot < 0 && dir == -1) || (dot > 0 && dir == +1) {
+		t[0], t[1] = t[1], t[0]
+	}
 }
 
 // TetraFaceBary contains information specifying the barycentric coordinates
@@ -129,19 +151,18 @@ func (t *Tetra) Distance(ap *AnchoredPluckerVec, bary *TetraFaceBary) float32 {
 	// Computes one coordinate of the intersection point from the barycentric
 	// coordinates of the intersection, then solves P_intr = P + t * L for t.
 	var sum float32
-	for i := 0; i < 4; i++ { sum += bary.w[i] }
+	for i := 0; i < 3; i++ { sum += bary.w[i] }
 	u0, u1, u2 := bary.w[0] / sum, bary.w[1] / sum, bary.w[2] / sum
-
 	var dim int
 	for dim = 0; dim < 3; dim++ {
 		if ap.U[dim] != 0 { break }
 	}
 
 	p0 := t[t.VertexIdx(bary.face, 0)][dim]
-	p1 := t[t.VertexIdx(bary.face, 0)][dim]
-	p2 := t[t.VertexIdx(bary.face, 0)][dim]
+	p1 := t[t.VertexIdx(bary.face, 1)][dim]
+	p2 := t[t.VertexIdx(bary.face, 2)][dim]
 
-	return (ap.P[dim] - (u0*p0 + u1*p1 + u2*p2)) / ap.U[dim]
+	return ((u0*p0 + u1*p1 + u2*p2) - ap.P[dim]) / ap.U[dim]
 }
 
 // PluckerTetra is a tetrahedron represented by the Plucker vectors that make
@@ -153,17 +174,17 @@ func (t *Tetra) Distance(ap *AnchoredPluckerVec, bary *TetraFaceBary) float32 {
 type PluckerTetra [6]PluckerVec
 
 var pluckerTetraEdges = [4][3]int{
-	[3]int{ 0, 3, 1 }, // {0-1, 1-2, 2-0}
-	[3]int{ 0, 2, 4 }, // {1-0, 0-3, 3-1}
-	[3]int{ 5, 2, 1 }, // {2-3, 3-0, 0-2}
 	[3]int{ 5, 3, 4 }, // {3-2, 2-1, 1-3}
+	[3]int{ 5, 2, 1 }, // {2-3, 3-0, 0-2}
+	[3]int{ 0, 2, 4 }, // {1-0, 0-3, 3-1}
+	[3]int{ 0, 3, 1 }, // {0-1, 1-2, 2-0}
 }
 
 var pluckerTetraFlips = [4][3]bool{
-	[3]bool{ false, false, true  }, // {0-1, 1-2, 2-0}
-	[3]bool{ true,  false, true  }, // {1-0, 0-3, 3-1}
-	[3]bool{ false, true,  false }, // {2-3, 3-0, 0-2}
 	[3]bool{ true,  true,  false }, // {3-2, 2-1, 1-3}
+	[3]bool{ false, true,  false }, // {2-3, 3-0, 0-2}
+	[3]bool{ true,  false, true  }, // {1-0, 0-3, 3-1}
+	[3]bool{ false, false, true  }, // {0-1, 1-2, 2-0}
 }
 
 // Init initializes a Plucker Tetrahedron from a normal Tetrahedron.
