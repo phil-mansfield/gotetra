@@ -6,9 +6,6 @@ package geom
 // Workspaces should not be shared between threads.
 type IntersectionWorkspace struct {
 	bLeave, bEnter TetraFaceBary
-	ds [6]float32
-	ss [6]int
-	valid [6]bool
 }
 
 func (w *IntersectionWorkspace) IntersectionBary(
