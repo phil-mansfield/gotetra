@@ -97,9 +97,9 @@ func (p1 *PluckerVec) SignDot(p2 *PluckerVec, flip bool) (float32, int) {
 // Tetra is a tetrahedron. (Duh!)
 type Tetra [4]Vec
 
-// Dist calculates the distance from an anchored Plucker vector to a point
+// Distance calculates the distance from an anchored Plucker vector to a point
 // in a tetrahedron described by the given unsacled barycentric coordinates.
-func (t *Tetra) Dist(ap *AnchoredPluckerVec, w *[4]float32) float32 {
+func (t *Tetra) Distance(ap *AnchoredPluckerVec, w *[4]float32) float32 {
 	// Computes one coordinate of the intersection point from the barycentric
 	// coordinates of the intersection, then solves P_intr = P + t * L for t.
 	var sum float32
