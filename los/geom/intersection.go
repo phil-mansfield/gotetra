@@ -15,7 +15,7 @@ type IntersectionWorkspace struct {
 	bLeave, bEnter TetraFaceBary
 }
 
-func (w *IntersectionWorkspace) Intersection(
+func (w *IntersectionWorkspace) IntersectionBary(
 	pt *PluckerTetra, p *PluckerVec, 
 ) (bEnter, bLeave *TetraFaceBary) {
 	switch targetIntersectionMode {
@@ -58,4 +58,23 @@ func (w *IntersectionWorkspace) Intersection(
 		return bEnter, bLeave
 	}
 	panic("Impossible.")
+}
+
+func (w *IntersectionWorkspace) IntersectionDistance(
+	pt *PluckerTetra, t *Tetra, ap *AnchoredPluckerVec, 
+) (lEnter, lLeave float32, okEnter, okLeave bool) {
+	bEnter, bLeave := w.IntersectionBary(pt, &ap.PluckerVec)
+	
+	if bEnter == nil {
+		lEnter, okEnter = 0, false
+	} else {
+		lEnter, okEnter = t.Distance(ap, bEnter), true
+	}
+
+	if bLeave == nil {
+		lLeave, okLeave = 0, false
+	} else {
+		lLeave, okLeave = t.Distance(ap, bLeave), true
+	}
+	return lEnter, lLeave, okEnter, okLeave
 }
