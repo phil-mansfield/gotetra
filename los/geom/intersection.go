@@ -35,9 +35,11 @@ func (w *IntersectionWorkspace) Intersection(
 			if fEnter == -1 && s0 >= 0 && s1 >= 0 && s2 >= 0 {
 				fEnter = face
 				w.bEnter.w[0], w.bEnter.w[1], w.bEnter.w[2] = d0, d1, d2
+				if fLeave != -1 { break }
 			} else if fLeave == - 1 && s0 <= 0 && s1 <= 0 && s2 <= 0 {
 				fLeave = face
 				w.bLeave.w[0], w.bLeave.w[1], w.bLeave.w[2] = d0, d1, d2
+				if fEnter != -1 { break }
 			}
 		}
 
