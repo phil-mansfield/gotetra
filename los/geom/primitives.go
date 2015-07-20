@@ -95,10 +95,29 @@ func (p1 *PluckerVec) SignDot(p2 *PluckerVec, flip bool) (float32, int) {
 }
 
 // Tetra is a tetrahedron. (Duh!)
+//
+// Face ordering is:
+// F3(V0, V1, V2)
+// F2(V1, V0, V3)
+// F1(V2, V3, V0)
+// F0(V3, V2, V1)
 type Tetra [4]Vec
 
+var tetraIdxs = [4][3]int {
+	[3]int{ 0, 1, 2 },
+	[3]int{ 1, 0, 3 },
+	[3]int{ 2, 3, 0 },
+	[3]int{ 3, 2, 1 },
+}
+
+// VertexIdx returns the index into the given tetrahedron corresponding to
+// the specified face and vertex.
+func (_ *Tetra) VertexIdx(face, vertex int) int {
+	return tetraIdxs[face][vertex]
+}
+
 // Distance calculates the distance from an anchored Plucker vector to a point
-// in a tetrahedron described by the given unsacled barycentric coordinates.
+// in a tetrahedron described by the given unscaled barycentric coordinates.
 func (t *Tetra) Distance(ap *AnchoredPluckerVec, w *[4]float32) float32 {
 	// Computes one coordinate of the intersection point from the barycentric
 	// coordinates of the intersection, then solves P_intr = P + t * L for t.
@@ -118,12 +137,6 @@ func (t *Tetra) Distance(ap *AnchoredPluckerVec, w *[4]float32) float32 {
 // PluckerTetra is a tetrahedron represented by the Plucker vectors that make
 // up its edges. It is used for Platis & Theoharis's interseciton detection
 // algorithm.
-//
-// Face ordering is:
-// F3(V0, V1, V2)
-// F2(V1, V0, V3)
-// F1(V2, V3, V0)
-// F0(V3, V2, V1).
 //
 // The raw ordering of edges is
 // {0-1, 0-2, 0-3, 1-2, 1-3, 2-3}
@@ -156,7 +169,7 @@ func (pt *PluckerTetra) Init(t *Tetra) {
 // EdgeIdx returns the index into pt which corresponds to the requested
 // face and edge. A flag is also returned indicating whether the vector stored
 // in pt needs to be flipped when doing operations on that face.
-func (pt *PluckerTetra) EdgeIdx(face, edge int) (idx int, flip bool) {
+func (_ *PluckerTetra) EdgeIdx(face, edge int) (idx int, flip bool) {
 	face = pluckerTetraEdges[face][edge]
 	flip = pluckerTetraFlips[face][edge]
 	return face, flip
