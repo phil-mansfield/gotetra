@@ -15,10 +15,10 @@ import (
 
 	"code.google.com/p/gcfg"
 
-	"github.com/phil-mansfield/gotetra/render"
+	ren "github.com/phil-mansfield/gotetra/render"
 	"github.com/phil-mansfield/gotetra/render/density"
-	"github.com/phil-mansfield/gotetra/redner/geom"
-	"github.com/phil-mansfield/gotetra/redner/io"
+	"github.com/phil-mansfield/gotetra/render/geom"
+	"github.com/phil-mansfield/gotetra/render/io"
 )
 
 const (
@@ -52,21 +52,21 @@ var (
 
 func main() {
 	var (
-		render, convertSnapshot string
+		renderStr, convertSnapshot string
 		exampleConfig string
 	)
 	vars := map[string]*string {
-		"Render": &render,
+		"Render": &renderStr,
 		"ConvertSnapshot": &convertSnapshot,
 		"ExampleConfig": &exampleConfig,
 	}
 
 	flag.IntVar(
-		&render.NumCores, "Threads", runtime.NumCPU(),
+		&ren.NumCores, "Threads", runtime.NumCPU(),
 		"Number of threads used. Default is the number of logical cores.",
 	)
 	flag.StringVar(
-		&render, "Render", "",
+		&renderStr, "Render", "",
 		"Configuration file for [Render] mode.",
 	)
 	flag.StringVar(
@@ -88,7 +88,7 @@ func main() {
 	switch modeName {
 	case "Render":
 		wrap := io.DefaultRenderWrapper()
-		err := gcfg.ReadFileInto(wrap, render)
+		err := gcfg.ReadFileInto(wrap, renderStr)
 
 		if err != nil { log.Fatal(err.Error()) }
 		con := &wrap.Render
@@ -488,11 +488,11 @@ func renderMain(con *io.RenderConfig, bounds []string) {
 		log.Fatalf("Invalid quantity, '%s'", con.Quantity)
 	}
 	
-	boxes := make([]render.Box, len(configBoxes))
+	boxes := make([]ren.Box, len(configBoxes))
 	for i := range boxes {
 		cells := totalPixels(con, &configBoxes[i], hd.TotalWidth)
 		pts := particles(con, &configBoxes[i], hd.TotalWidth)
-		boxes[i] = render.NewBox(
+		boxes[i] = ren.NewBox(
 			hd.TotalWidth, pts, cells, q, &configBoxes[i],
 		)
 		log.Println(
@@ -502,7 +502,7 @@ func renderMain(con *io.RenderConfig, bounds []string) {
 	}
 
 	// Interpolate.
-	man, err := render.NewManager(fileNames, boxes, true, q)
+	man, err := ren.NewManager(fileNames, boxes, true, q)
 	if err != nil { log.Fatal(err.Error()) }
 
 	man.Subsample(con.SubsampleLength)
@@ -529,13 +529,13 @@ func renderMain(con *io.RenderConfig, bounds []string) {
 			hd.Cosmo.OmegaL, hd.Cosmo.Z, hd.TotalWidth,
 		)
 
-		render := io.NewRenderInfo(
+		renderInfo := io.NewRenderInfo(
 			con.Particles, con.TotalPixels, con.SubsampleLength,
 			cBox.ProjectionAxis,
 		)
 
 		// TODO: don't keep creating new float32 buffers, man.
-		io.WriteBuffer(box.Vals(), cos, render, loc, f)
+		io.WriteBuffer(box.Vals(), cos, renderInfo, loc, f)
 	}
 }
 

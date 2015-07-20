@@ -13,8 +13,8 @@ import (
 	"math/rand"
 
 	"github.com/phil-mansfield/table"
-	"github.com/phil-mansfield/gotetra/halo"
-	"github.com/phil-mansfield/gotetra/io"
+	"github.com/phil-mansfield/gotetra/render/halo"
+	"github.com/phil-mansfield/gotetra/render/io"
 )
 
 const (
