@@ -180,7 +180,7 @@ func (pt *PluckerTetra) Init(t *Tetra) {
 // face and edge. A flag is also returned indicating whether the vector stored
 // in pt needs to be flipped when doing operations on that face.
 func (_ *PluckerTetra) EdgeIdx(face, edge int) (idx int, flip bool) {
-	face = pluckerTetraEdges[face][edge]
+	idx = pluckerTetraEdges[face][edge]
 	flip = pluckerTetraFlips[face][edge]
-	return face, flip
+	return idx, flip
 }
