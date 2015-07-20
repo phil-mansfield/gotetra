@@ -116,22 +116,32 @@ func (_ *Tetra) VertexIdx(face, vertex int) int {
 	return tetraIdxs[face][vertex]
 }
 
+// TetraFaceBary contains information specifying the barycentric coordinates
+// of a point on a face of a tetrahedron.
+type TetraFaceBary struct {
+	w [3]float32
+	face int
+}
+
 // Distance calculates the distance from an anchored Plucker vector to a point
 // in a tetrahedron described by the given unscaled barycentric coordinates.
-func (t *Tetra) Distance(ap *AnchoredPluckerVec, w *[4]float32) float32 {
+func (t *Tetra) Distance(ap *AnchoredPluckerVec, bary *TetraFaceBary) float32 {
 	// Computes one coordinate of the intersection point from the barycentric
 	// coordinates of the intersection, then solves P_intr = P + t * L for t.
 	var sum float32
-	for i := 0; i < 4; i++ { sum += w[i] }
-	u0, u1, u2 := w[0] / sum, w[1] / sum, w[2] / sum
+	for i := 0; i < 4; i++ { sum += bary.w[i] }
+	u0, u1, u2 := bary.w[0] / sum, bary.w[1] / sum, bary.w[2] / sum
 
 	var dim int
 	for dim = 0; dim < 3; dim++ {
 		if ap.U[dim] != 0 { break }
 	}
 
-	pIntr := u0*t[0][dim] + u1*t[1][dim] + u2*t[2][dim]
-	return (ap.P[dim] - pIntr) / ap.U[dim]
+	p0 := t[t.VertexIdx(bary.face, 0)][dim]
+	p1 := t[t.VertexIdx(bary.face, 0)][dim]
+	p2 := t[t.VertexIdx(bary.face, 0)][dim]
+
+	return (ap.P[dim] - (u0*p0 + u1*p1 + u2*p2)) / ap.U[dim]
 }
 
 // PluckerTetra is a tetrahedron represented by the Plucker vectors that make
