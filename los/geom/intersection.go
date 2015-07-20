@@ -12,7 +12,6 @@ func (w *IntersectionWorkspace) IntersectionBary(
 	pt *PluckerTetra, p *PluckerVec, 
 ) (bEnter, bLeave *TetraFaceBary) {
 	fEnter, fLeave := -1, -1
-	for i := 0; i < 6; i++ { w.valid[i] = false }
 
 	for face := 3; face >= 0; face-- {
 		if face == 0 && (fEnter == -1 && fLeave == -1) {
