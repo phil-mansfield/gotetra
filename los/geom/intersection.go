@@ -6,12 +6,16 @@ package geom
 // Workspaces should not be shared between threads.
 type IntersectionWorkspace struct {
 	bLeave, bEnter TetraFaceBary
+	ds [6]float32
+	ss [6]int
+	valid [6]bool
 }
 
 func (w *IntersectionWorkspace) IntersectionBary(
 	pt *PluckerTetra, p *PluckerVec, 
 ) (bEnter, bLeave *TetraFaceBary) {
 	fEnter, fLeave := -1, -1
+	for i := 0; i < 6; i++ { w.valid[i] = false }
 
 	for face := 3; face >= 0; face-- {
 		if face == 0 && (fEnter == -1 && fLeave == -1) {
@@ -21,12 +25,12 @@ func (w *IntersectionWorkspace) IntersectionBary(
 		i0, flip0 := pt.EdgeIdx(face, 0)
 		i1, flip1 := pt.EdgeIdx(face, 1)
 		i2, flip2 := pt.EdgeIdx(face, 2)
+
 		p0, p1, p2 := &pt[i0], &pt[i1], &pt[i2]
-		
 		d0, s0 := p.SignDot(p0, flip0)
 		d1, s1 := p.SignDot(p1, flip1)
 		d2, s2 := p.SignDot(p2, flip2)
-		
+
 		if fEnter == -1 && s0 >= 0 && s1 >= 0 && s2 >= 0 {
 			fEnter = face
 			w.bEnter.w[0], w.bEnter.w[1], w.bEnter.w[2] = d0, d1, d2

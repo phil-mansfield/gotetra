@@ -12,6 +12,7 @@ func randomizeTetra(t *Tetra, low, high float32) {
 			t[v][i] = (high - low) * rand.Float32() + low
 		}
 	}
+	t.Orient(+1)
 }
 
 func randomAnchoredPluckerVec() *AnchoredPluckerVec {
