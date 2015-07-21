@@ -22,7 +22,7 @@ var (
 	xs []rGeom.Vec
 	ts []Tetra
 	pts []PluckerTetra
-	_ = myMain()
+	mainSuccess = myMain()
 )
 
 func randomizeTetra(t *Tetra, low, high float32) {
@@ -63,6 +63,7 @@ func BenchmarkPluckerTetraInit(b *testing.B) {
 }
 
 func BenchmarkPluckerTetraInitSheet(b *testing.B) {
+	if mainSuccess == 1 { b.FailNow() }
 	for i := 0; i < b.N; i++ {
 		for idx := range ts {
 			pts[idx].Init(&ts[idx])
@@ -70,9 +71,9 @@ func BenchmarkPluckerTetraInitSheet(b *testing.B) {
 	}
 }
 
-
-
 func BenchmarkIntersectionSheet(b *testing.B) {
+	if mainSuccess == 1 { b.FailNow() }
+
 	for idx := range ts {
 		pts[idx].Init(&ts[idx])
 	}
@@ -91,6 +92,8 @@ func BenchmarkIntersectionSheet(b *testing.B) {
 }
 
 func BenchmarkIntersectionIntersectOnly(b *testing.B) {
+	if mainSuccess == 1 { b.FailNow() }
+
 	for idx := range ts {
 		pts[idx].Init(&ts[idx])
 	}
@@ -228,7 +231,7 @@ func myMain() int {
 	file := "/project/surph/mansfield/data/sheet_segments/" + 
 		"Box_L0063_N1024_G0008_CBol/snapdir_100/sheet167.dat"
 	if err := io.ReadSheetHeaderAt(file, &hd); err != nil {
-		panic(err.Error())
+		return 1
 	}
 	xs = make([]rGeom.Vec, hd.GridCount)
 	if err := io.ReadSheetPositionsAt(file, xs); err != nil {
