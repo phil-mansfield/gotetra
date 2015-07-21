@@ -4,6 +4,25 @@ import (
 	"testing"
 	"math"
 	"math/rand"
+
+	"github.com/phil-mansfield/gotetra/render/io"
+	rGeom "github.com/phil-mansfield/gotetra/render/geom"
+)
+
+var (
+	hx= float32(58.68211)
+	hy = float32(59.48198)
+	hz = float32(8.70855)
+	rMax = float32(0.6318755421407911)
+	rMin = float32(0)
+
+	L = Vec{0, 0, 1}
+
+	hd io.SheetHeader
+	xs []rGeom.Vec
+	ts []Tetra
+	pts []PluckerTetra
+	_ = myMain()
 )
 
 func randomizeTetra(t *Tetra, low, high float32) {
@@ -40,6 +59,61 @@ func BenchmarkPluckerTetraInit(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		i := n % len(ts)
 		pts[i].Init(&ts[i])
+	}
+}
+
+func BenchmarkPluckerTetraInitSheet(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		for idx := range ts {
+			pts[idx].Init(&ts[idx])
+		}
+	}
+}
+
+
+
+func BenchmarkIntersectionSheet(b *testing.B) {
+	for idx := range ts {
+		pts[idx].Init(&ts[idx])
+	}
+	ap := new(AnchoredPluckerVec)
+	P := Vec{float32(hx), float32(hy), float32(hz)}
+	ap.Init(&P, &L)
+	w := new(IntersectionWorkspace)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		for idx := range ts {
+			w.IntersectionDistance(&pts[idx], &ts[idx], ap)
+		}
+	}
+}
+
+func BenchmarkIntersectionIntersectOnly(b *testing.B) {
+	for idx := range ts {
+		pts[idx].Init(&ts[idx])
+	}
+	ap := new(AnchoredPluckerVec)
+	P := Vec{float32(hx), float32(hy), float32(hz)}
+	ap.Init(&P, &L)
+	w := new(IntersectionWorkspace)
+
+	valid := make([]bool, len(ts))
+	for idx := range ts {
+		re, rl, ok := w.IntersectionDistance(&pts[idx], &ts[idx], ap)
+		if ok && ((re < rMax && re > rMin) || (rl < rMax && rl > rMin)) {
+			valid[idx] = true
+		}
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for idx := range ts {
+			if valid[idx] {
+				w.IntersectionDistance(&pts[idx], &ts[idx], ap)
+			}
+		}
 	}
 }
 
@@ -130,4 +204,53 @@ func TestIntersectionDistance(t *testing.T) {
 			)
 		}
 	}
+}
+
+
+func coords(idx, cells int64) (x, y, z int64) {
+	x = idx % cells
+	y = (idx % (cells * cells)) / cells
+	z = idx / (cells * cells)
+	return x, y, z
+}
+
+func index(x, y, z, cells int64) int64 {
+	return x + y * cells + z * cells * cells
+}
+
+func readTetra(idxs *rGeom.TetraIdxs, xs []rGeom.Vec, t *Tetra) {
+	for i := 0; i < 4; i++ {
+		t[i] = Vec(xs[idxs[i]])
+	}
+}
+
+func myMain() int {
+	file := "/project/surph/mansfield/data/sheet_segments/" + 
+		"Box_L0063_N1024_G0008_CBol/snapdir_100/sheet167.dat"
+	if err := io.ReadSheetHeaderAt(file, &hd); err != nil {
+		panic(err.Error())
+	}
+	xs = make([]rGeom.Vec, hd.GridCount)
+	if err := io.ReadSheetPositionsAt(file, xs); err != nil {
+		panic(err.Error())
+	}
+
+	n := hd.SegmentWidth * hd.SegmentWidth * hd.SegmentWidth
+	ts = make([]Tetra, n * 6)
+	pts = make([]PluckerTetra, n * 6)
+
+	idxBuf := &rGeom.TetraIdxs{}
+	for writeIdx := int64(0); writeIdx < n; writeIdx++ {
+		x, y, z := coords(writeIdx, hd.SegmentWidth)
+		readIdx := index(x, y, z, hd.SegmentWidth)
+
+		for dir := int64(0); dir < 6; dir++ {
+			tIdx := 6 * writeIdx + dir
+			idxBuf.Init(readIdx, hd.GridWidth, 1, int(dir))
+			readTetra(idxBuf, xs, &ts[tIdx])
+			ts[tIdx].Orient(+1)
+		}
+	}
+
+	return 0
 }
