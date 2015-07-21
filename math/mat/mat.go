@@ -1,20 +1,35 @@
+/*mat contains routines for executing operations on matrices. Opersions are
+split into easy to use methods which might be somewhat wasteful with memory
+consumption and execution time and slightly less easy to use methods which
+require explictly managing LU decomposition:
+
+  
+
+Pretty much everything only works on square matrices because that's all I've
+needed so far.
+*/
 package mat
 
 import (
 	"math"
 )
 
+// Matrix represents a matrix of float64 values.
 type Matrix struct {
 	Vals []float64
 	Width, Height int
 }
 
+// LUFactors contains data fields neccessary for a number of matrix operations.
+// Exporting this type allows calling routines to better manage their memory
+// consumption and to prevent recomputing the same decomposition many times.
 type LUFactors struct {
 	lu Matrix
 	pivot []int
 	d float64
 }
 
+// New matrix creates a matrix with the specified values and dimensions.
 func NewMatrix(vals []float64, width, height int) *Matrix {
 	if width <= 0 {
 		panic("width must be positive.")
@@ -27,6 +42,7 @@ func NewMatrix(vals []float64, width, height int) *Matrix {
 	return &Matrix{Vals: vals, Width: width, Height: height}
 }
 
+// NewLUFactors creates an LUFactors instance of the requested dimensions.
 func NewLUFactors(n int) *LUFactors {
 	luf := new(LUFactors)
 
@@ -37,6 +53,7 @@ func NewLUFactors(n int) *LUFactors {
 	return luf
 }
 
+// LU returns the LU decomposition of a matrix.
 func (m *Matrix) LU() *LUFactors {
 	if m.Width != m.Height { panic("m is non-square.") }
 
@@ -45,6 +62,8 @@ func (m *Matrix) LU() *LUFactors {
 	return lu
 }
 
+// LUFactorsAt stores the LU decomposition of a matrix at the specified
+// location.
 func (m *Matrix) LUFactorsAt(luf *LUFactors) {
 	if luf.lu.Width != m.Width || luf.lu.Height != m.Height {
 		panic("luf has different dimenstions than m.")
@@ -191,7 +210,9 @@ func (luf *LUFactors) SolveMatrix(b, x *Matrix) {
 	}
 }
 
-func (luf *LUFactors) Invert(out *Matrix) {
+// InvertAt inverts the matrix represented by the given LU decomposition
+// and writes the results into the specified out matrix.
+func (luf *LUFactors) InvertAt(out *Matrix) {
 	n := luf.lu.Width
 	if out.Width != out.Height {
 		panic("out matrix is non-square.")
@@ -209,6 +230,8 @@ func (luf *LUFactors) Invert(out *Matrix) {
 	luf.SolveMatrix(out, out)
 }
 
+// Determinant compute the determinant of of the matrix represented by the
+// given LU decomposition.
 func (luf *LUFactors) Determinant() float64 {
 	d := luf.d
 	lu := luf.lu.Vals
