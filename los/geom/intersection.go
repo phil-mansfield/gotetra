@@ -8,14 +8,22 @@ type IntersectionWorkspace struct {
 	bLeave, bEnter TetraFaceBary
 }
 
+// IntersectionBary tests for intersection between the ray represented by p and
+// the tetrahedron represented by pt and returns the barycentric coordinates of
+// the intersection points if they exist.
+//
+// ok is returned as true if there is an intersection and as false if there
+// is no intersection.
+//
+// The ray represented by ap extends infinitely in both directions.
 func (w *IntersectionWorkspace) IntersectionBary(
 	pt *PluckerTetra, p *PluckerVec, 
-) (bEnter, bLeave *TetraFaceBary) {
+) (bEnter, bLeave *TetraFaceBary, ok bool) {
 	fEnter, fLeave := -1, -1
 
 	for face := 3; face >= 0; face-- {
 		if face == 0 && (fEnter == -1 && fLeave == -1) {
-			return nil, nil
+			return nil, nil, false
 		}
 
 		i0, flip0 := pt.EdgeIdx(face, 0)
@@ -40,14 +48,23 @@ func (w *IntersectionWorkspace) IntersectionBary(
 		}
 	}
 
-	if fEnter == -1 || fLeave == -1 { return nil, nil } 
-	return &w.bEnter, &w.bLeave
+	if fEnter == -1 || fLeave == -1 { return nil, nil, false } 
+	return &w.bEnter, &w.bLeave, true
 }
 
+// IntersectionDistance tests for intersection between the ray represented b
+// ap and the tetrahedron represented by t and pt and returns the distance to
+// the intersection points from the origin of ap if they exist.
+//
+// ok is returned as true if there is an intersection and as false if there
+// is no intersection.
+//
+// The ray represented by ap extends infinitely in both directions, so negative
+// distances are valid return values.
 func (w *IntersectionWorkspace) IntersectionDistance(
 	pt *PluckerTetra, t *Tetra, ap *AnchoredPluckerVec, 
 ) (lEnter, lLeave float32, ok bool) {
-	bEnter, bLeave := w.IntersectionBary(pt, &ap.PluckerVec)
-	if bEnter == nil { return 0, 0, false }
+	bEnter, bLeave, ok := w.IntersectionBary(pt, &ap.PluckerVec)
+	if !ok { return 0, 0, false }
 	return t.Distance(ap, bEnter), t.Distance(ap, bLeave), true
 }
