@@ -1,9 +1,7 @@
 /*mat contains routines for executing operations on matrices. Opersions are
 split into easy to use methods which might be somewhat wasteful with memory
 consumption and execution time and slightly less easy to use methods which
-require explictly managing LU decomposition:
-
-  
+require explictly managing LU decomposition.
 
 Pretty much everything only works on square matrices because that's all I've
 needed so far.
@@ -40,6 +38,33 @@ func NewMatrix(vals []float64, width, height int) *Matrix {
 	}
 
 	return &Matrix{Vals: vals, Width: width, Height: height}
+}
+
+// Invert computes the inverse of a matrix.
+func (m *Matrix) Invert() *Matrix {
+	lu := m.LU()
+	inv := NewMatrix(make([]float64, len(m.Vals)), m.Width, m.Height)
+	return lu.InvertAt(inv)
+}
+
+// Determinant computes the determinant of a matrix.
+func (m *Matrix) Determinant() float64 {
+	lu := m.LU()
+	return lu.Determinant()
+}
+
+// SolveVector solves the equation m * xs = bs for xs.
+func (m *Matrix) SolveVector(bs []float64) []float64 {
+	xs := make([]float64, len(bs))
+	lu := m.LU()
+	return lu.SolveVector(bs, xs)
+}
+
+// SolveMatrix solves the equation m * x = b for x.
+func (m *Matrix) SolveMatrix(b *Matrix) *Matrix {
+	x := NewMatrix(make([]float64, len(m.Vals)), m.Width, m.Height)
+	lu := m.LU()
+	return lu.SolveMatrix(b, x)
 }
 
 // NewLUFactors creates an LUFactors instance of the requested dimensions.
@@ -132,7 +157,7 @@ func swapRows(i1, i2, n int, lu []float64) {
 // SolveVector solves M * xs = bs for xs.
 //
 // bs and xs may poin to the same physical memory.
-func (luf *LUFactors) SolveVector(bs, xs []float64) {
+func (luf *LUFactors) SolveVector(bs, xs []float64) []float64 {
 	n := luf.lu.Width
 	if n != len(bs) {
 		panic("len(b) != luf.Width")
@@ -151,6 +176,8 @@ func (luf *LUFactors) SolveVector(bs, xs []float64) {
 	forwardSubst(n, luf.pivot, luf.lu.Vals, bs, ys)
 	// Solve U * x = y for x.
 	backSubst(n, luf.lu.Vals, ys, xs)
+
+	return xs
 }
 
 // Solves L * y = b for y.
@@ -183,7 +210,7 @@ func backSubst(n int, lu, ys, xs []float64) {
 // SolveMatrix solves the equation m * x = b.
 // 
 // x and b may point to the same physical memory.
-func (luf *LUFactors) SolveMatrix(b, x *Matrix) {
+func (luf *LUFactors) SolveMatrix(b, x *Matrix) *Matrix {
 	xs := x.Vals
 	n := luf.lu.Width
 
@@ -208,11 +235,13 @@ func (luf *LUFactors) SolveMatrix(b, x *Matrix) {
 			xs[i*n + j] = col[i]
 		}
 	}
+
+	return x
 }
 
 // InvertAt inverts the matrix represented by the given LU decomposition
 // and writes the results into the specified out matrix.
-func (luf *LUFactors) InvertAt(out *Matrix) {
+func (luf *LUFactors) InvertAt(out *Matrix) *Matrix {
 	n := luf.lu.Width
 	if out.Width != out.Height {
 		panic("out matrix is non-square.")
@@ -228,6 +257,7 @@ func (luf *LUFactors) InvertAt(out *Matrix) {
 	}
 
 	luf.SolveMatrix(out, out)
+	return out
 }
 
 // Determinant compute the determinant of of the matrix represented by the
