@@ -35,3 +35,8 @@ _testmain.go
 *.err
 *.out
 *.dat
+*.pyc
+*.txt
+
+*
+!*.*
