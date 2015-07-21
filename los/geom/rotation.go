@@ -7,21 +7,17 @@ import (
 )
 
 // EulerMatrix creates a 3D rotation matrix based off the Euler angles phi,
-// theta, and psi. These represent three consecutive rotations arounfd the x,
-// y, and z axes, respectively.
+// theta, and psi. These represent three consecutive rotations arounfd the z,
+// x, and z axes, respectively.
 func EulerMatrix(phi, theta, psi float64) *mat.Matrix32 {
+	c1, s1 := float32(Cos(phi)), float32(Sin(phi))
+	c2, s2 := float32(Cos(theta)), float32(Sin(theta))
+	c3, s3 := float32(Cos(psi)), float32(Sin(psi))
 	A := []float32{
-		float32(Cos(theta)*Cos(psi)),
-		float32(Cos(phi)*Sin(psi) + Sin(phi)*Sin(theta)*Cos(psi)),
-		float32(Sin(phi)*Sin(psi) - Cos(phi)*Sin(theta)*Cos(psi)),
-		float32(-Cos(theta)*Sin(psi)),
-		float32(Cos(phi)*Cos(psi) - Sin(phi)*Sin(theta)*Sin(psi)),
-		float32(Sin(phi)*Cos(psi) + Cos(phi)*Sin(theta)*Sin(psi)),
-		float32(Sin(theta)),
-		float32(-Sin(phi)*Cos(theta)),
-		float32(Cos(phi)*Cos(theta)),
+		c1*c3 - c2*s1*s3, -c1*s3 - c2*c3*s1,  s1*s2,
+		c3*s1 + c1*c2*s3,  c1*c2*c3 - s1*s3, -c1*s2,
+		s2*s3,             c3*s2,            c2,
 	}
-
 	return mat.NewMatrix32(A, 3, 3)
 }
 

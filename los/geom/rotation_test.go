@@ -22,10 +22,10 @@ func TestRotate(t *testing.T) {
 		start, end Vec
 	} {
 		{0, 0, 0, Vec{1, 2, 3}, Vec{1, 2, 3}},
-		{math.Pi/2, 0, 0, Vec{1, 0, 0}, Vec{1, 0, 0}},
-		{0, math.Pi/2, 0, Vec{1, 0, 0}, Vec{0, 0, 1}},
+		{math.Pi/2, 0, 0, Vec{1, 0, 0}, Vec{0, 1, 0}},
+		{0, math.Pi/2, 0, Vec{1, 0, 0}, Vec{1, 0, 0}},
 		{0, 0, math.Pi/2, Vec{1, 0, 0}, Vec{0, 1, 0}},
-		{math.Pi, math.Pi/2, math.Pi, Vec{0, 1, 1}, Vec{0, 1, 1}},
+		{math.Pi, math.Pi/2, math.Pi, Vec{0, 1, 1}, Vec{0, 1, -1}},
 	}
 
 	for i, test := range table {
@@ -33,7 +33,6 @@ func TestRotate(t *testing.T) {
 		v := test.start
 		v.Rotate(m)
 		if !vecEpsEq(&v, &test.end, eps) {
-			t.Error(m)
 			t.Errorf(
 				"%d) %v.Rotate(%.4g %.4g %.4g) -> %v instead of %v",
 				i+1, test.start, test.phi, test.theta, test.psi, v, test.end,
