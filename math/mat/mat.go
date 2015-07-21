@@ -40,6 +40,36 @@ func NewMatrix(vals []float64, width, height int) *Matrix {
 	return &Matrix{Vals: vals, Width: width, Height: height}
 }
 
+// Mult multiplies two matrices together.
+func (m1 *Matrix) Mult(m2 *Matrix) *Matrix {
+	h, w := m1.Height, m2.Width
+	out := NewMatrix(make([]float64, h*w), w, h)
+	return m1.MultAt(m2, out)
+}
+
+// Mult multiplies to matrices together and writes the result to the 
+// specified matrix.
+func (m1 *Matrix) MultAt(m2, out *Matrix) *Matrix {
+	if m1.Width != m2.Height {
+		panic("Multiplication of incompatible matrix sizes.")
+	}
+
+	for i := range out.Vals { out.Vals[i] = 0 }
+	for i := 0; i < m1.Height; i++ {
+		off := i*m1.Width
+		for j := 0; j < m2.Width; j++ {
+			outIdx := off + j
+			for k := 0; k < m1.Width; k++ {
+				m1Idx := off + k
+				m2Idx := k*m2.Width + j
+				out.Vals[outIdx] += m1.Vals[m1Idx] * m2.Vals[m2Idx]
+			}
+		}
+	}
+
+	return out
+}
+
 // Invert computes the inverse of a matrix.
 func (m *Matrix) Invert() *Matrix {
 	lu := m.LU()
