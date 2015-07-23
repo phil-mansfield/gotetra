@@ -1,5 +1,9 @@
 package geom
 
+import (
+	"math"
+)
+
 // IntersectionWorkspace contains various fields useful for speeding up 
 // ray-tetrahedron intersection checks.
 //
@@ -28,7 +32,7 @@ func (w *IntersectionWorkspace) IntersectionBary(
 
 		i0, flip0 := pt.EdgeIdx(face, 0)
 		i1, flip1 := pt.EdgeIdx(face, 1)
-		i2, flip2 := pt.EdgeIdx(face, 2)
+		i2, flip2 := pt.EdgeIdx(face, 2)		
 
 		p0, p1, p2 := &pt[i0], &pt[i1], &pt[i2]
 		d0, s0 := p.SignDot(p0, flip0)
@@ -66,5 +70,118 @@ func (w *IntersectionWorkspace) IntersectionDistance(
 ) (lEnter, lLeave float32, ok bool) {
 	bEnter, bLeave, ok := w.IntersectionBary(pt, &ap.PluckerVec)
 	if !ok { return 0, 0, false }
-	return t.Distance(ap, bEnter), t.Distance(ap, bLeave), true
+	enter := t.Distance(ap, bEnter)
+	exit := t.Distance(ap, bLeave)
+	return enter, exit, true
+}
+
+type TriQuadPolygon struct {
+	Xs, Ys, Phis [4]float32
+	Next, edges [4]int
+
+	Points int
+}
+
+func (t *Tetra) crossesZPlane(idx1, idx2 int, z float32) bool {
+	sign1, sign2 := t[idx1][2] < z, t[idx2][2] < z
+	return sign1 != sign2
+}
+
+// crossZ0Plane computes the x and y coordinates of the point where a ray
+// crosses the z = 0 plane. The ray is prepresented by a point, P, and a unit 
+// direction vector, L.
+func intersectZPlane(P, L *Vec, z float32) (x, y float32, ok bool) {
+	if L[2] == 0 { return 0, 0, false }
+	t := (z - P[2]) / L[2]
+	return P[0] + L[0]*t, P[1] + L[1]*t, true
+}
+
+func (poly *TriQuadPolygon) validNeighbor(i, j int) bool {
+	edgei, edgej := poly.edges[i], poly.edges[j]
+	return pluckerTetraFaceShare[edgei][edgej] && poly.Next[j] != i
+}
+
+func (t *Tetra) ZPlaneSlice(
+	pt *PluckerTetra, z float32, poly *TriQuadPolygon,
+) (ok bool) {
+	// Find all interseciton points.
+	poly.Points = 0
+
+	for i := 0; i < 6; i++ {
+		start, end := pt.TetraVertices(i)
+		if t.crossesZPlane(start, end, z) {
+			x, y, _ := intersectZPlane(&t[start], &pt[i].U, z)
+			// Half the time is spent in this function call:
+			phi := PolarAngle(x, y)
+			if phi < 0 { phi += 2*math.Pi }
+
+			poly.Xs[poly.Points] = x
+			poly.Ys[poly.Points] = y
+			poly.Phis[poly.Points] = phi
+			poly.Next[poly.Points] = -1
+			poly.edges[poly.Points] = i
+			poly.Points++
+		}
+	}
+
+	if poly.Points < 3 { return false }
+
+	// Build the linked list. I have no idea how to do this fast.
+	for i := 0; i < poly.Points; i++ {
+		for j := 0; j < poly.Points; j++ {
+			if poly.validNeighbor(i, j) {
+				poly.Next[i] = j
+				break
+			}
+		}
+	}
+
+	return true
+}
+
+func abs32(x float32) float32 {
+	if x < 0 { return -x }
+	return x
+}
+
+func angularWidth(low, high float32) float32 {
+	if low < high {
+		return high - low
+	} else {
+		return 2*math.Pi + high - low
+	}
+}
+
+func (poly *TriQuadPolygon) AngleRange() (start, width float32) {
+	lowPhi := poly.Phis[0]
+	highPhi := poly.Phis[1]
+	if angularWidth(lowPhi, highPhi) > angularWidth(highPhi, lowPhi) {
+		lowPhi, highPhi = highPhi, lowPhi
+	}
+	phiWidth := angularWidth(lowPhi, highPhi)
+
+	// Iteratively expand the angular range of the tetrahedron.
+	for i := 2; i < poly.Points; i++ {
+		phi := poly.Phis[i]
+		lowWidth := angularWidth(phi, highPhi)
+		highWidth := angularWidth(lowPhi, phi)
+
+		if highWidth < lowWidth {
+			if highWidth > phiWidth {
+				highPhi = phi
+				phiWidth = highWidth
+			}
+		} else {
+			if lowWidth > phiWidth {
+				lowPhi = phi
+				phiWidth = lowWidth
+			}
+		}
+	}
+
+	if phiWidth > math.Pi {
+		return 0, 2*math.Pi
+	} else {
+		return lowPhi, phiWidth
+	}
 }

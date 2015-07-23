@@ -2,6 +2,10 @@
 
 Contains implementations of algorithms described in Platis & Theoharis, 2015
 as well as Schneider & Eberly.
+
+The calling signatures might be more convoluted than they have to be because
+I was too worried about memory consumption when I started it. I should include
+examples.
 */
 package geom
 
@@ -30,7 +34,7 @@ type AnchoredPluckerVec struct {
 // direction vector, L.
 func (p *PluckerVec) Init(P, L *Vec) {
 	p.U = *L
-
+	
 	p.V[0] = -P[1]*L[2] + P[2]*L[1]
     p.V[1] = -P[2]*L[0] + P[0]*L[2]
     p.V[2] = -P[0]*L[1] + P[1]*L[0]
@@ -45,25 +49,17 @@ func (p *PluckerVec) InitFromSegment(P1, P2 *Vec) {
 		sum += p.U[i]*p.U[i]
 	}
 	sum = float32(math.Sqrt(float64(sum)))
-	for i := 0; i < 3; i++ { p.U[i] /= sum }
+	//for i := 0; i < 3; i++ { p.U[i] /= sum }
 
 	p.V[0] = -P1[1]*p.U[2] + P1[2]*p.U[1]
     p.V[1] = -P1[2]*p.U[0] + P1[0]*p.U[2]
     p.V[2] = -P1[0]*p.U[1] + P1[1]*p.U[0]
 }
 
-// Init initializes an anchored Plucker vector given a ray origin, P, and a
-// unit direction vector, L.
-func (ap *AnchoredPluckerVec) Init(P, L *Vec) {
-	ap.PluckerVec.Init(P, L)
-	ap.P = *P
-}
-
-// InitFromSegment initialized a Plucker vector which corresponds to a ray
-// pointing from the position vector P1 to the position vector P2.
-func (ap *AnchoredPluckerVec) InitFromSegment(P1, P2 *Vec) {
-	ap.PluckerVec.InitFromSegment(P1, P2)
-	ap.P = *P1
+func (p *PluckerVec) Translate(dx *Vec) {
+	p.V[0] += -dx[1]*p.U[2] + dx[2]*p.U[1]
+    p.V[1] += -dx[2]*p.U[0] + dx[0]*p.U[2]
+    p.V[2] += -dx[0]*p.U[1] + dx[1]*p.U[0]
 }
 
 // Dot computes the permuted inner product of p1 and p2, i.e.
@@ -92,6 +88,26 @@ func (p1 *PluckerVec) SignDot(p2 *PluckerVec, flip bool) (float32, int) {
 	} else {
 		return dot, -1
 	}
+}
+
+// Init initializes an anchored Plucker vector given a ray origin, P, and a
+// unit direction vector, L.
+func (ap *AnchoredPluckerVec) Init(P, L *Vec) {
+	ap.PluckerVec.Init(P, L)
+	ap.P = *P
+}
+
+// InitFromSegment initialized a Plucker vector which corresponds to a ray
+// pointing from the position vector P1 to the position vector P2.
+func (ap *AnchoredPluckerVec) InitFromSegment(P1, P2 *Vec) {
+	ap.PluckerVec.InitFromSegment(P1, P2)
+	ap.P = *P1
+}
+
+// Translate translates a Plucker vector along the given vector.
+func (ap *AnchoredPluckerVec) Translate(dx *Vec) {
+	ap.PluckerVec.Translate(dx)
+	for i := 0; i < 3; i++ { ap.P[i] += dx[i] }
 }
 
 // Tetra is a tetrahedron. (Duh!)
@@ -138,6 +154,15 @@ func (t *Tetra) Orient(dir int) {
 	}
 }
 
+// Translate translates a tetrahedron by the given vector.
+func (t *Tetra) Translate(dx *Vec) {
+	for i := 0; i < 4; i++ {
+		for j := 0; j < 3; j++ {
+			t[i][j] += dx[j]
+		}
+	}
+}
+
 // TetraFaceBary contains information specifying the barycentric coordinates
 // of a point on a face of a tetrahedron.
 type TetraFaceBary struct {
@@ -155,14 +180,16 @@ func (t *Tetra) Distance(ap *AnchoredPluckerVec, bary *TetraFaceBary) float32 {
 	u0, u1, u2 := bary.w[0] / sum, bary.w[1] / sum, bary.w[2] / sum
 	var dim int
 	for dim = 0; dim < 3; dim++ {
-		if ap.U[dim] != 0 { break }
+		if ap.U[dim] > 1e-6 || ap.U[dim] < -1e-6 { break }
 	}
 
 	p0 := t[t.VertexIdx(bary.face, 0)][dim]
 	p1 := t[t.VertexIdx(bary.face, 1)][dim]
 	p2 := t[t.VertexIdx(bary.face, 2)][dim]
 
-	return ((u0*p0 + u1*p1 + u2*p2) - ap.P[dim]) / ap.U[dim]
+	d := ((u0*p0 + u1*p1 + u2*p2) - ap.P[dim]) / ap.U[dim]
+
+	return d
 }
 
 // PluckerTetra is a tetrahedron represented by the Plucker vectors that make
@@ -170,22 +197,38 @@ func (t *Tetra) Distance(ap *AnchoredPluckerVec, bary *TetraFaceBary) float32 {
 // algorithm.
 //
 // The raw ordering of edges is
+// F0(V3, V2, V1)
+// F1(V2, V3, V0)
+// F2(V1, V0, V3)
+// F3(V0, V1, V2)
 // {0-1, 0-2, 0-3, 1-2, 1-3, 2-3}
 type PluckerTetra [6]PluckerVec
 
 var pluckerTetraEdges = [4][3]int{
-	[3]int{ 5, 3, 4 }, // {3-2, 2-1, 1-3}
-	[3]int{ 5, 2, 1 }, // {2-3, 3-0, 0-2}
-	[3]int{ 0, 2, 4 }, // {1-0, 0-3, 3-1}
-	[3]int{ 0, 3, 1 }, // {0-1, 1-2, 2-0}
+	[3]int{ 3, 4, 5 }, // 2-1, 1-3, 3-2
+	[3]int{ 2, 1, 5 }, // 3-0, 0-2, 2-3
+	[3]int{ 2, 4, 0 }, // 0-3, 3-1, 1-0
+	[3]int{ 3, 1, 0 }, // 1-2, 2-0, 0-1
 }
 
 var pluckerTetraFlips = [4][3]bool{
-	[3]bool{ true,  true,  false }, // {3-2, 2-1, 1-3}
-	[3]bool{ false, true,  false }, // {2-3, 3-0, 0-2}
-	[3]bool{ true,  false, true  }, // {1-0, 0-3, 3-1}
-	[3]bool{ false, false, true  }, // {0-1, 1-2, 2-0}
+	[3]bool{true, false, true},
+	[3]bool{true, false, false},
+	[3]bool{false, true, true},
+	[3]bool{false, true, false},
 }
+
+var pluckerTetraFaceShare = [6][6]bool {
+	[6]bool{ false, true,  true,  true,  true,  false },
+	[6]bool{ true,  false, true,  true,  false, true  },
+	[6]bool{ true,  true,  false, false, true,  true  },
+	[6]bool{ true,  true,  false, false, true,  true  },
+	[6]bool{ true,  false, true,  true,  false, true  },
+	[6]bool{ false, true,  true,  true,  true,  false },
+}
+
+var tetraEdgeStarts = [6]int{ 0, 0, 0, 1, 1, 2 }
+var tetraEdgeEnds = [6]int{ 1, 2, 3, 2, 3, 3 }
 
 // Init initializes a Plucker Tetrahedron from a normal Tetrahedron.
 func (pt *PluckerTetra) Init(t *Tetra) {
@@ -197,6 +240,11 @@ func (pt *PluckerTetra) Init(t *Tetra) {
 	pt[5].InitFromSegment(&t[2], &t[3])
 }
 
+// Translate translates a Plucker tetrahedron along the given vector.
+func (pt *PluckerTetra) Translate(dx *Vec) {
+	for i := 0; i < 6; i++ { pt[i].Translate(dx) }
+}
+
 // EdgeIdx returns the index into pt which corresponds to the requested
 // face and edge. A flag is also returned indicating whether the vector stored
 // in pt needs to be flipped when doing operations on that face.
@@ -204,4 +252,10 @@ func (_ *PluckerTetra) EdgeIdx(face, edge int) (idx int, flip bool) {
 	idx = pluckerTetraEdges[face][edge]
 	flip = pluckerTetraFlips[face][edge]
 	return idx, flip
+}
+
+// TetraVertexIdx returns the indices of the vertices in a Tetra object which
+// correspond to end points of a given PluckerVector within a PluckerTetra.
+func (_ *PluckerTetra) TetraVertices(i int) (start, end int) {
+	return tetraEdgeStarts[i], tetraEdgeEnds[i]
 }
