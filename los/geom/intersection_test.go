@@ -174,6 +174,21 @@ func BenchmarkIntersectionIntersectOnly(b *testing.B) {
 	}
 }
 
+func BenchmarkSheetPreparation(b *testing.B) {
+	if mainSuccess == 1 { b.FailNow() }
+	hdr := &Vec{-hx, -hy, -hz}
+	vecs, phis := vectorRing(1000)
+	pts := make([]PluckerTetra, len(ts))
+	rot := EulerMatrix(0, 0, 0)
+
+	for idx := range ts {
+		ts[idx].Rotate(rot)
+		ts[idx].Translate(hdr)
+		ts[idx].Orient(+1)
+		pts[idx].Init(&ts[idx])
+	}
+}
+
 func BenchmarkIntersectionBary(b *testing.B) {
 	ts := make([]Tetra, 1<<10)
 	pts := make([]PluckerTetra, len(ts))
