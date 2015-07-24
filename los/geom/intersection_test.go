@@ -116,14 +116,6 @@ func BenchmarkPluckerTetraInit(b *testing.B) {
 	}
 }
 
-func BenchmarkPluckerTetraInitSheet(b *testing.B) {
-	if mainSuccess == 1 { b.FailNow() }
-	for i := 0; i < b.N; i++ {
-		for idx := range ts {
-			pts[idx].Init(&ts[idx])
-		}
-	}
-}
 
 func BenchmarkIntersectionSheet(b *testing.B) {
 	if mainSuccess == 1 { b.FailNow() }
@@ -176,16 +168,157 @@ func BenchmarkIntersectionIntersectOnly(b *testing.B) {
 
 func BenchmarkSheetPreparation(b *testing.B) {
 	if mainSuccess == 1 { b.FailNow() }
-	hdr := &Vec{-hx, -hy, -hz}
 	vecs, phis := vectorRing(1000)
-	pts := make([]PluckerTetra, len(ts))
+	t := new(Tetra)
 	rot := EulerMatrix(0, 0, 0)
 
 	for idx := range ts {
-		ts[idx].Rotate(rot)
-		ts[idx].Translate(hdr)
+		*t = ts[idx]
+		t.Rotate(rot)
+		t.Orient(+1)
+	}
+
+	_, _ = vecs, phis
+
+}
+
+func BenchmarkSheetHaloIntersect(b *testing.B) {
+	if mainSuccess == 1 { b.FailNow() }
+	for idx := range ts {
 		ts[idx].Orient(+1)
-		pts[idx].Init(&ts[idx])
+	}
+
+	b.ResetTimer()
+
+	var n int
+	for m := 0; m < b.N; m++ {
+		n = 0
+		rSqr := rMax*rMax
+		for i := range ts {
+			for j := 0; j < 4; j++ {
+				x, y, z := ts[i][j][0]-hx, ts[i][j][1]-hy, ts[i][j][2]-hz
+				if rSqr >= x*x + y*y + z*z {
+					n++
+					break
+				}
+			}
+		}
+	}
+}
+
+func BenchmarkSheetRingIntersectionDistance(b *testing.B) {
+	if mainSuccess == 1 { b.FailNow() }
+
+	valid := make([]bool, len(ts))
+	rMaxSqr, rMinSqr := rMax*rMax, rMin*rMin
+	_ = rMinSqr
+	for i := range ts {
+		for j := 0; j < 4; j++ {
+			x, y, z := ts[i][j][0]-hx, ts[i][j][1]-hy, ts[i][j][2]-hz
+			rSqr := x*x + y*y + z*z
+			if rSqr < rMaxSqr {
+				valid[i] = true
+				break
+			}
+		}
+	}
+
+	b.ResetTimer()
+
+	t := new(Tetra)
+	pt := new(PluckerTetra)
+	poly := new(TriQuadPolygon)
+	w := new(IntersectionWorkspace)
+
+	rot := EulerMatrix(0, 0, 0)
+	dr := &Vec{-hx, -hy, -hz}
+	vecs, _ := vectorRing(1000)
+
+	var m int
+	for n := 0; n < b.N; n++ {
+		m = 0
+		for i, ok := range valid {
+			if ok {
+				*t = ts[i]
+				t.Translate(dr)
+				t.Rotate(rot)
+				pt.Init(t)
+				ok := t.ZPlaneSlice(pt, 0, poly)
+				if ok {
+					lowPhi, phiWidth := poly.AngleRange()
+					                    
+					lowIdx, idxWidth := AngleRangeToIndices(
+						lowPhi, phiWidth, len(vecs),
+					)
+
+					for idx := lowIdx; idx < lowIdx + idxWidth; idx++ {
+						m++
+						j := idx
+						if j >= len(vecs) { j -= len(vecs) }
+						w.IntersectionDistance(pt, t, &vecs[j])
+					}
+				}
+			}
+		}
+	}
+	println(m)
+}
+
+func BenchmarkSheetRingLineSolve(b *testing.B) {
+	if mainSuccess == 1 { b.FailNow() }
+
+	y01, m1 := 2.0, -7.0
+	y02, m2 := 5.0, 1.0
+
+	valid := make([]bool, len(ts))
+	rMaxSqr, rMinSqr := rMax*rMax, rMin*rMin
+	_ = rMinSqr
+	for i := range ts {
+		for j := 0; j < 4; j++ {
+			x, y, z := ts[i][j][0]-hx, ts[i][j][1]-hy, ts[i][j][2]-hz
+			rSqr := x*x + y*y + z*z
+			if rSqr < rMaxSqr {
+				valid[i] = true
+				break
+			}
+		}
+	}
+
+	b.ResetTimer()
+
+	t := new(Tetra)
+	pt := new(PluckerTetra)
+	poly := new(TriQuadPolygon)
+
+	rot := EulerMatrix(0, 0, 0)
+	dr := &Vec{-hx, -hy, -hz}
+	vecs, _ := vectorRing(1000)
+
+	for n := 0; n < b.N; n++ {
+		for i, ok := range valid {
+			if ok {
+				*t = ts[i]
+				t.Translate(dr)
+				t.Rotate(rot)
+				pt.Init(t)
+				ok := t.ZPlaneSlice(pt, 0, poly)
+				if ok {
+					lowPhi, phiWidth := poly.AngleRange()
+					                    
+					lowIdx, idxWidth := AngleRangeToIndices(
+						lowPhi, phiWidth, len(vecs),
+					)
+
+					for idx := lowIdx; idx < lowIdx + idxWidth; idx++ {
+						j := idx
+						if j >= len(vecs) { j -= len(vecs) }
+						x := (y02 - y01) / (m2 - m1)
+						y := y01  + x * m1
+						math.Sqrt(x*x + y*y)
+					}
+				}
+			}
+		}
 	}
 }
 
