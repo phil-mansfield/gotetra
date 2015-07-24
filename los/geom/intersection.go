@@ -75,9 +75,10 @@ func (w *IntersectionWorkspace) IntersectionDistance(
 	return enter, exit, true
 }
 
-type TriQuadPolygon struct {
+type TetraSlice struct {
 	Xs, Ys, Phis [4]float32
-	Next, edges [4]int
+	edges, Next [4]int
+	Lines [4]Line
 
 	Points int
 }
@@ -96,13 +97,13 @@ func intersectZPlane(P, L *Vec, z float32) (x, y float32, ok bool) {
 	return P[0] + L[0]*t, P[1] + L[1]*t, true
 }
 
-func (poly *TriQuadPolygon) validNeighbor(i, j int) bool {
+func (poly *TetraSlice) validNeighbor(i, j int) bool {
 	edgei, edgej := poly.edges[i], poly.edges[j]
 	return pluckerTetraFaceShare[edgei][edgej] && poly.Next[j] != i
 }
 
 func (t *Tetra) ZPlaneSlice(
-	pt *PluckerTetra, z float32, poly *TriQuadPolygon,
+	pt *PluckerTetra, z float32, poly *TetraSlice,
 ) (ok bool) {
 	// Find all interseciton points.
 	poly.Points = 0
@@ -152,7 +153,7 @@ func angularWidth(low, high float32) float32 {
 	}
 }
 
-func (poly *TriQuadPolygon) AngleRange() (start, width float32) {
+func (poly *TetraSlice) AngleRange() (start, width float32) {
 	lowPhi := poly.Phis[0]
 	highPhi := poly.Phis[1]
 	if angularWidth(lowPhi, highPhi) > angularWidth(highPhi, lowPhi) {

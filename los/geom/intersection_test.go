@@ -38,7 +38,7 @@ func BenchmarkZPlaneSliceHit(b *testing.B) {
 	n := 1000
 	ts := make([]Tetra, n)
 	pts := make([]PluckerTetra, n)
-	poly := new(TriQuadPolygon)
+	poly := new(TetraSlice)
 	for i := range ts {
 		randomizeTetra(&ts[i], -1, +1)
 		ts[i].Orient(+1)
@@ -55,7 +55,7 @@ func BenchmarkZPlaneSliceMIss(b *testing.B) {
 	n := 1000
 	ts := make([]Tetra, n)
 	pts := make([]PluckerTetra, n)
-	poly := new(TriQuadPolygon)
+	poly := new(TetraSlice)
 	for i := range ts {
 		randomizeTetra(&ts[i], -1, +1)
 		ts[i].Orient(+1)
@@ -70,7 +70,7 @@ func BenchmarkZPlaneSliceMIss(b *testing.B) {
 
 func BenchmarkAngleRange(b *testing.B) {
 	n := 1000
-	polys := make([]TriQuadPolygon, 1)
+	polys := make([]TetraSlice, 1)
 	t, pt := new(Tetra), new(PluckerTetra)
 	for len(polys) <= n {
 		randomizeTetra(t, -1, +1)
@@ -78,7 +78,7 @@ func BenchmarkAngleRange(b *testing.B) {
 		pt.Init(t)
 
 		if t.ZPlaneSlice(pt, 0, &polys[len(polys) - 1]) {
-			polys = append(polys, TriQuadPolygon{})
+			polys = append(polys, TetraSlice{})
 		}
 	}
 
@@ -227,7 +227,7 @@ func BenchmarkSheetRingIntersectionDistance(b *testing.B) {
 
 	t := new(Tetra)
 	pt := new(PluckerTetra)
-	poly := new(TriQuadPolygon)
+	poly := new(TetraSlice)
 	w := new(IntersectionWorkspace)
 
 	rot := EulerMatrix(0, 0, 0)
@@ -288,7 +288,7 @@ func BenchmarkSheetRingLineSolve(b *testing.B) {
 
 	t := new(Tetra)
 	pt := new(PluckerTetra)
-	poly := new(TriQuadPolygon)
+	poly := new(TetraSlice)
 
 	rot := EulerMatrix(0, 0, 0)
 	dr := &Vec{-hx, -hy, -hz}
@@ -420,7 +420,7 @@ func almostContains(x, y float32, xs, ys []float32) bool {
 	return false
 }
 
-func almostEqPolygon(poly *TriQuadPolygon, xs, ys []float32) bool {
+func almostEqTetraSlice(poly *TetraSlice, xs, ys []float32) bool {
 	if len(xs) != poly.Points { return false }
 	for i := range xs {
 		if !almostContains(poly.Xs[i], poly.Ys[i], xs, ys) {
@@ -437,11 +437,11 @@ func TestZPlaneSlice(t *testing.T) {
 	tet.Orient(+1)
 	pt := new(PluckerTetra)
 	pt.Init(&tet)
-	poly := new(TriQuadPolygon)
+	poly := new(TetraSlice)
 
 	if !tet.ZPlaneSlice(pt, 0, poly) {
 		t.Errorf("z=0 did not slice a tetrahedron it intersected.")
-	} else if !almostEqPolygon(poly, xs, ys) {
+	} else if !almostEqTetraSlice(poly, xs, ys) {
 		t.Errorf(
 			"Expected xs = %v, ys = %v, but got xs = %v, ys = %v.",
 			xs, ys, poly.Xs, poly.Ys,
@@ -489,7 +489,7 @@ func TestAngleRange(t *testing.T) {
 	n, m := 100, 1000
 	vecs, phis := vectorRing(n)
 	tet := new(Tetra)
-	poly := new(TriQuadPolygon)
+	poly := new(TetraSlice)
 	pt := new(PluckerTetra)
 	w := new(IntersectionWorkspace)
 
