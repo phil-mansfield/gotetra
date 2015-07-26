@@ -1,5 +1,6 @@
 package geom
 
+// LineEps represents the 
 var LineEps float32 = 1e-5
 
 type Line struct {
