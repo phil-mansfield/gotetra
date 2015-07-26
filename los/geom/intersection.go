@@ -76,8 +76,8 @@ func (w *IntersectionWorkspace) IntersectionDistance(
 }
 
 type TetraSlice struct {
-	Xs, Ys, Phis [4]float32
-	edges, Next [4]int
+	Xs, Ys, Phis, linePhiStarts, linePhiWidths [4]float32
+	edges, lineStarts, lineEnds [4]int
 	Lines [4]Line
 
 	Points int
@@ -97,9 +97,51 @@ func intersectZPlane(P, L *Vec, z float32) (x, y float32, ok bool) {
 	return P[0] + L[0]*t, P[1] + L[1]*t, true
 }
 
-func (poly *TetraSlice) validNeighbor(i, j int) bool {
-	edgei, edgej := poly.edges[i], poly.edges[j]
-	return pluckerTetraFaceShare[edgei][edgej] && poly.Next[j] != i
+func (poly *TetraSlice) link() {
+	for i := 0; i < poly.Points; i++ {
+		poly.lineStarts[i], poly.lineEnds[i] = -1, -1
+	}
+
+	lineStart, lineEnd := 0, 0
+	for i := 0; i < poly.Points; i++ {
+		ei := poly.edges[i]
+		if i > 0 { lineStart = poly.lineEnds[i] }
+
+		if i == poly.Points -1 {
+			lineEnd = 0
+		} else {
+			for j := 0; j < poly.Points; j++ {
+				ej := poly.edges[j]
+				if pluckerTetraFaceShare[ei][ej] && poly.lineStarts[j] == -1 {
+					lineEnd = j
+					break
+				}
+			}
+		}
+
+		poly.lineStarts[i] = lineStart
+		poly.lineEnds[i] = lineEnd
+	}
+
+	for i := 0; i < poly.Points; i++ {
+		phiLow := poly.Phis[poly.lineStarts[i]]
+		phiHigh := poly.Phis[poly.lineEnds[i]]
+		width := AngularDistance(phiLow, phiHigh)
+		if width < 0 {
+			poly.lineStarts[i], poly.lineEnds[i] = 
+				poly.lineEnds[i], poly.lineStarts[i]
+			poly.linePhiStarts[i] = phiHigh
+			poly.linePhiWidths[i] = -width
+		} else {
+			poly.linePhiStarts[i] = phiLow
+			poly.linePhiWidths[i] = width
+		}
+
+		poly.Lines[i].Init(
+			poly.Xs[poly.lineStarts[i]], poly.Ys[poly.lineStarts[i]],
+			poly.Xs[poly.lineEnds[i]], poly.Ys[poly.lineEnds[i]],
+		)
+	}
 }
 
 func (t *Tetra) ZPlaneSlice(
@@ -119,24 +161,13 @@ func (t *Tetra) ZPlaneSlice(
 			poly.Xs[poly.Points] = x
 			poly.Ys[poly.Points] = y
 			poly.Phis[poly.Points] = phi
-			poly.Next[poly.Points] = -1
 			poly.edges[poly.Points] = i
 			poly.Points++
 		}
 	}
 
 	if poly.Points < 3 { return false }
-
-	// Build the linked list. I have no idea how to do this fast.
-	for i := 0; i < poly.Points; i++ {
-		for j := 0; j < poly.Points; j++ {
-			if poly.validNeighbor(i, j) {
-				poly.Next[i] = j
-				break
-			}
-		}
-	}
-
+	poly.link()
 	return true
 }
 
@@ -151,6 +182,22 @@ func angularWidth(low, high float32) float32 {
 	} else {
 		return 2*math.Pi + high - low
 	}
+}
+
+func (poly *TetraSlice) IntersectingLines(phi float32) (l1, l2 *Line) {
+	lineNum := 0
+	l1 = nil
+	for i := 0; i > poly.Points; i++ {
+		dist := angularWidth(poly.linePhiStarts[i], phi)
+		if dist > 0 && poly.linePhiWidths[i] > dist {
+			if lineNum == 1 {
+				l1 = &poly.Lines[i]
+			} else if lineNum == 1 {
+				return l1, &poly.Lines[i]
+			}
+		}
+	}
+	return l1, nil
 }
 
 func (poly *TetraSlice) AngleRange() (start, width float32) {
