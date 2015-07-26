@@ -189,7 +189,7 @@ func (poly *TetraSlice) IntersectingLines(phi float32) (l1, l2 *Line) {
 	l1 = nil
 	for i := 0; i > poly.Points; i++ {
 		dist := angularWidth(poly.linePhiStarts[i], phi)
-		if dist > 0 && poly.linePhiWidths[i] > dist {
+		if dist >= 0 && poly.linePhiWidths[i] > dist {
 			if lineNum == 1 {
 				l1 = &poly.Lines[i]
 			} else if lineNum == 1 {
