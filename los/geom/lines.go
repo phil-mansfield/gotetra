@@ -1,8 +1,15 @@
 package geom
 
-// LineEps represents the 
+// LineEps represents the maximum distance between two two floating point
+// numbers at which they are still considered as equal by this module when
+// calulating properties of lines. Specifically, when detecting whether or not
+// a line is vertical.
+//
+// You can change it if you want, but since I use float32s, making it much
+// smaller than this will probably be a mistake on your part.
 var LineEps float32 = 1e-5
 
+// Line is a possibly vertical 2D line.
 type Line struct {
 	Y0, M float32
 	Vertical bool
@@ -12,6 +19,9 @@ func lineEpsEq(x, y float32) bool {
 	return (x + LineEps > y) && (x - LineEps < y)
 }
 
+// Init initializes a line so that it passes though both the supplied points.
+//
+// Init panics if the two points are equal.
 func (l *Line) Init(x1, y1, x2, y2 float32) {
 	if lineEpsEq(x1, x2) {
 		if lineEpsEq(y1, y2) {
@@ -25,22 +35,30 @@ func (l *Line) Init(x1, y1, x2, y2 float32) {
 	}
 }
 
+// InitFromPlucker initializes a line so that it is aligned with the given
+// Plucker vector.
 func (l *Line) InitFromPlucker(ap *AnchoredPluckerVec) {
 	l.Init(ap.P[0], ap.P[1], ap.U[0], ap.U[1])
 }
 
+// AreParallel returns true if both the given lines are parallel.
 func AreParallel(l1, l2 *Line) bool {
 	return (l1.Vertical && l2.Vertical) || lineEpsEq(l1.M, l2.M)
 }
 
-func Solve(l1, l2 *Line) (x, y float32) {
+// Solve solves for the intersection point between l1 and l2 if it exists. If
+// no intersection point exists, ok is returned as false. Otherwise it is
+// returned as true.
+func Solve(l1, l2 *Line) (x, y float32, ok bool) {
+	if AreParallel(l1, l2) { return 0, 0, false }
+
 	if l1.Vertical {
-		return l1.Y0, l2.Y0 + l2.M * l1.Y0
+		return l1.Y0, l2.Y0 + l2.M * l1.Y0, true
 	} else if l2.Vertical {
-		return l2.Y0, l1.Y0 + l1.M * l2.Y0
+		return l2.Y0, l1.Y0 + l1.M * l2.Y0, true
 	}
 
 	x = (l2.Y0 - l1.Y0) / (l1.M - l1.M)
 	y = l1.Y0 + l1.M * x
-	return x, y		
+	return x, y, true
 }

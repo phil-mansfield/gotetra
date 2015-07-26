@@ -97,7 +97,8 @@ func AngleInRange(phi, low, width float32) bool {
 	}
 }
 
-func AngleRangeToIndices(low, width float32, bins int) (lowIdx, idxWidth int) {
+// AngleBinRange returns the bin range of the given angle range.
+func AngleBinRange(low, width float32, bins int) (lowIdx, idxWidth int) {
 	dphi := math.Pi * 2 / float32(bins)
 	iLow := int(low / dphi) + 1
 	iHigh := int((low + width) /dphi) + 1

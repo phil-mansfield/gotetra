@@ -75,6 +75,10 @@ func (w *IntersectionWorkspace) IntersectionDistance(
 	return enter, exit, true
 }
 
+// TetraSlice is a triangle or a convex quadrilateral which is created by
+// slicing a tetrahedron by a z-aligned plane.
+//
+// By convention, the generic name for a TetraSlice variable is "poly".
 type TetraSlice struct {
 	Xs, Ys, Phis, linePhiStarts, linePhiWidths [4]float32
 	edges, lineStarts, lineEnds [4]int
@@ -144,6 +148,8 @@ func (poly *TetraSlice) link() {
 	}
 }
 
+// ZPlaneSlice slices a tetrahedron with a z-aligned plane. ok is returned as
+// true if the sline and the tetrahedron intersect and false otherwise.
 func (t *Tetra) ZPlaneSlice(
 	pt *PluckerTetra, z float32, poly *TetraSlice,
 ) (ok bool) {
@@ -184,6 +190,11 @@ func angularWidth(low, high float32) float32 {
 	}
 }
 
+// IntersectingLines returns the lines in the given tetrahedron slice which
+// overlap with the given angle.
+// 
+// It's possible that only only line will be intersected (if the polygon
+// encloses the origin), in which case l2 will be returned as nil.
 func (poly *TetraSlice) IntersectingLines(phi float32) (l1, l2 *Line) {
 	lineNum := 0
 	l1 = nil
@@ -200,6 +211,7 @@ func (poly *TetraSlice) IntersectingLines(phi float32) (l1, l2 *Line) {
 	return l1, nil
 }
 
+// AngleRange returns the angular range subtended by a polygon.
 func (poly *TetraSlice) AngleRange() (start, width float32) {
 	lowPhi := poly.Phis[0]
 	highPhi := poly.Phis[1]

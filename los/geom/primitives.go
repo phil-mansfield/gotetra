@@ -56,6 +56,7 @@ func (p *PluckerVec) InitFromSegment(P1, P2 *Vec) {
     p.V[2] = -P1[0]*p.U[1] + P1[1]*p.U[0]
 }
 
+// Translate translates a Plucker vector along the given vector.
 func (p *PluckerVec) Translate(dx *Vec) {
 	p.V[0] += -dx[1]*p.U[2] + dx[2]*p.U[1]
     p.V[1] += -dx[2]*p.U[0] + dx[0]*p.U[2]
