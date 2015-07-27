@@ -58,7 +58,7 @@ func Solve(l1, l2 *Line) (x, y float32, ok bool) {
 		return l2.Y0, l1.Y0 + l1.M * l2.Y0, true
 	}
 
-	x = (l2.Y0 - l1.Y0) / (l1.M - l1.M)
+	x = (l2.Y0 - l1.Y0) / (l1.M - l2.M)
 	y = l1.Y0 + l1.M * x
 	return x, y, true
 }
