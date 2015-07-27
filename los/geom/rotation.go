@@ -7,11 +7,23 @@ import (
 )
 
 // EulerMatrix creates a 3D rotation matrix based off the Euler angles phi,
-// theta, and psi. These represent three consecutive rotations arounfd the z,
+// theta, and psi. These represent three consecutive rotations around the z,
 // x, and z axes, respectively.
 //
-// This is really slow right now, but I'm seriously confused by Euler angles :(
+// This is really slow right now.
 func EulerMatrix(phi, theta, psi float32) *mat.Matrix32 {
+	rot := mat.NewMatrix32(make([]float32, 9), 3, 3)
+	EulerMatrixAt(phi, theta, psi, rot)
+	return rot
+}
+
+// EulerMatrixAt writes an Euler rotation matrix to the specified loaction. An
+// Euler matrix is matrix based off the Euler angles phi, theta, and psi. These
+// represent three consecutive rotations around the z, x, and z axes,
+// respectively.
+//
+// This is really slow right now.
+func EulerMatrixAt(phi, theta, psi float32, out *mat.Matrix32) {
 	c1, s1 := float32(math.Cos(float64(phi))), float32(math.Sin(float64(phi)))
 	c2, s2:=float32(math.Cos(float64(theta))),float32(math.Sin(float64(theta)))
 	c3, s3 := float32(math.Cos(float64(psi))), float32(math.Sin(float64(psi)))
@@ -22,17 +34,25 @@ func EulerMatrix(phi, theta, psi float32) *mat.Matrix32 {
 	m1 := mat.NewMatrix32(R1, 3, 3)
 	m2 := mat.NewMatrix32(R2, 3, 3)
 	m3 := mat.NewMatrix32(R3, 3, 3)
-	return m3.Mult(m2.Mult(m1))
+	m3.MultAt(m2.Mult(m1), out)
 }
+
 
 // EulerMatrixBetween creates a 3D rotation matrix which such that M * v1 = v2.
 func EulerMatrixBetween(v1, v2 *Vec) *mat.Matrix32 {
+	rot := mat.NewMatrix32(make([]float32, 9), 3, 3)
+	EulerMatrixBetweenAt(v1, v2, rot)
+	return rot
+}
+
+func EulerMatrixBetweenAt(v1, v2 *Vec, out *mat.Matrix32) *mat.Matrix32 {
 	x1, y1, z1 := v1[0], v1[1], v1[2]
 	phi1, theta1 := SphericalAngles(x1, y1, z1)
 	x2, y2, z2 := v2[0], v2[1], v2[2]
 	phi2, theta2 := SphericalAngles(x2, y2, z2)
 	pi2 := float32(math.Pi / 2)
-	return EulerMatrix(pi2 - phi1, theta1 - theta2, phi2 - pi2)
+	EulerMatrixAt(pi2 - phi1, theta1 - theta2, phi2 - pi2, out)
+	return out
 }
 
 // Rotate rotates a vector by the given rotation matrix.
