@@ -18,6 +18,13 @@ type LUFactors32 struct {
 
 // NewMatrix32 creates a matrix with the specified values and dimensions.
 func NewMatrix32(vals []float32, width, height int) *Matrix32 {
+	m := &Matrix32{}
+	m.Init(vals, width, height)
+	return m
+}
+
+// Init initializes a matrix with the specified values and dimensions.
+func (m *Matrix32) Init(vals []float32, width, height int) {
 	if width <= 0 {
 		panic("width must be positive.")
 	} else if height <= 0 {
@@ -26,7 +33,8 @@ func NewMatrix32(vals []float32, width, height int) *Matrix32 {
 		panic("height * width must equal len(vals).")
 	}
 
-	return &Matrix32{Vals: vals, Width: width, Height: height}
+	m.Vals = vals
+	m.Width, m.Height = width, height
 }
 
 // Mult multiplies two matrices together.
