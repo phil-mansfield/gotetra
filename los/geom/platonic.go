@@ -13,7 +13,7 @@ const (
 	PlatonicHexahedron
 	PlatonicOctahedron
 	PlatonicDodecahedron
-	PlatnoicIcosahedron
+	PlatonicIcosahedron
 )
 
 // Sides returns the number of sides contianed by a Platonic solide.
@@ -22,8 +22,8 @@ func (solid PlatonicSolid) Sides() int {
 	case PlatonicTetrahedron:  return 4
 	case PlatonicHexahedron:   return 6
 	case PlatonicOctahedron:   return 8
-	case PlatnoicIcosahedron:  return 12
-	case PlatonicDodecahedron: return 20
+	case PlatonicDodecahedron: return 12
+	case PlatonicIcosahedron:  return 20
 	default: panic(":3")
 	}
 }
@@ -38,8 +38,18 @@ func NewPlatonicSolid(sides int) (solid PlatonicSolid, ok bool) {
 	case 4:  return PlatonicTetrahedron,  true
 	case 6:  return PlatonicHexahedron,   true
 	case 8:  return PlatonicOctahedron,   true
-	case 12: return PlatnoicIcosahedron,  true
+	case 12: return PlatonicIcosahedron,  true
 	case 20: return PlatonicDodecahedron, true
+	default: return 0, false
+	}
+}
+
+func NewUniquePlatonicSolid(sides int) (solid PlatonicSolid, ok bool) {
+	switch sides {
+	case 3:  return PlatonicHexahedron,    true
+	case 4:  return PlatonicTetrahedron,  true
+	case 6:  return PlatonicOctahedron,   true
+	case 10: return PlatonicDodecahedron, true
 	default: return 0, false
 	}
 }
@@ -65,10 +75,11 @@ func init() {
 	platonicHexahedronVertices = [][]Vec{
 		{{-1, -1, -1}, { 1, -1, -1}, { 1, -1,  1}, {-1, -1,  1}},
 		{{-1, -1, -1}, {-1, -1,  1}, {-1,  1,  1}, {-1,  1, -1}},
-		{{-1, -1,  1}, { 1, -1,  1}, { 1,  1,  1}, {-1,  1,  1}},
+		{{-1, -1, -1}, {-1,  1, -1}, { 1,  1, -1}, { 1, -1, -1}},
+
 		{{-1,  1, -1}, {-1,  1,  1}, { 1,  1,  1}, { 1,  1, -1}},
 		{{ 1, -1, -1}, { 1,  1, -1}, { 1,  1,  1}, { 1, -1,  1}},
-		{{-1, -1, -1}, {-1,  1, -1}, { 1,  1, -1}, { 1, -1, -1}},
+		{{-1, -1,  1}, { 1, -1,  1}, { 1,  1,  1}, {-1,  1,  1}},
 	}
 
 	a, b := 1 / (2 * float32(math.Sqrt(2))), float32(0.5)
@@ -77,10 +88,11 @@ func init() {
 		{{-a, 0, -a}, { a, 0, -a}, {0,  b, 0}},
 		{{ a, 0, -a}, { a, 0,  a}, {0,  b, 0}},
 		{{ a, 0,  a}, {-a, 0,  a}, {0,  b, 0}},
-		{{ a, 0, -a}, {-a, 0, -a}, {0, -b, 0}},
-		{{-a, 0, -a}, {-a, 0,  a}, {0, -b, 0}},
+
 		{{ a, 0,  a}, { a, 0, -a}, {0, -b, 0}},
 		{{-a, 0,  a}, { a, 0,  a}, {0, -b, 0}},
+		{{-a, 0, -a}, {-a, 0,  a}, {0, -b, 0}},
+		{{ a, 0, -a}, {-a, 0, -a}, {0, -b, 0}},
 	}
 
 	b = 1 / phi
@@ -88,40 +100,43 @@ func init() {
 	platonicDodecahedronVertices = [][]Vec{
 		{{ c,  0,  1}, {-c,  0,  1}, {-b,  b,  b}, { 0,  1,  c}, { b,  b,  b}},
 		{{-c,  0,  1}, { c,  0,  1}, { b, -b,  b}, { 0, -1,  c}, {-b, -b,  b}},
+		{{ 0, -1, -c}, { 0, -1,  c}, {-b, -b,  b}, {-1, -c,  0}, {-b, -b, -b}},
+		{{ 0, -1,  c}, { 0, -1, -c}, { b, -b, -b}, { 1, -c,  0}, { b, -b,  b}},
+		{{ 1,  c,  0}, { 1, -c,  0}, { b, -b,  b}, { c,  0,  1}, { b,  b,  b}},
+		{{-1, -c,  0}, {-1,  c,  0}, {-b,  b,  b}, {-c,  0,  1}, {-b, -b,  b}},
+
 		{{ c,  0, -1}, {-c,  0, -1}, {-b, -b, -b}, { 0, -1, -c}, { b, -b, -b}},
 		{{-c,  0, -1}, { c,  0, -1}, { b,  b, -b}, { 0,  1, -c}, {-b,  b, -b}},
 		{{ 0,  1, -c}, { 0,  1,  c}, { b,  b,  b}, { 1,  c,  0}, { b,  b, -b}},
 		{{ 0,  1,  c}, { 0,  1, -c}, {-b,  b, -b}, {-1,  c,  0}, {-b,  b,  b}},
-		{{ 0, -1, -c}, { 0, -1,  c}, {-b, -b,  b}, {-1, -c,  0}, {-b, -b, -b}},
-		{{ 0, -1,  c}, { 0, -1, -c}, { b, -b, -b}, { 1, -c,  0}, { b, -b,  b}},
-		{{ 1,  c,  0}, { 1, -c,  0}, { b, -b,  b}, { c,  0,  1}, { b,  b,  b}},
-		{{ 1, -c,  0}, { 1,  c,  0}, { b,  b, -b}, { c,  0, -1}, { b, -b, -b}},
 		{{-1,  c,  0}, {-1, -c,  0}, {-b, -b, -b}, {-c,  0, -1}, {-b,  b, -b}},
-		{{-1, -c,  0}, {-1,  c,  0}, {-b,  b,  b}, {-c,  0,  1}, {-b, -b,  b}},
+		{{ 1, -c,  0}, { 1,  c,  0}, { b,  b, -b}, { c,  0, -1}, { b, -b, -b}},
 	}
 
 	a, b = float32(0.5), 1 / (2 * phi)
 	platonicIcosahedronVertices = [][]Vec{
-		{{ 0,  b, -a}, { b,  a,  0}, {-b,  a,  0}},
 		{{ 0,  b,  a}, {-b,  a,  0}, { b,  a,  0}},
+		{{ 0,  b, -a}, { b,  a,  0}, {-b,  a,  0}},
 		{{ 0,  b,  a}, { 0, -b,  a}, {-a,  0,  b}},
 		{{ 0,  b,  a}, { a,  0,  b}, { 0, -b,  a}},
+		{{ 0,  b,  a}, {-a,  0,  b}, {-b,  a,  0}},
+		{{ 0, -b, -a}, {-a,  0, -b}, {-b, -a,  0}},
+		{{ 0,  b,  a}, { b,  a,  0}, { a,  0,  b}},
+		{{ b,  a,  0}, { a,  0, -b}, { a,  0,  b}},
+		{{ 0, -b,  a}, { a,  0,  b}, { b, -a,  0}},
+		{{-b,  a,  0}, {-a,  0,  b}, {-a,  0, -b}},
+
+
+		{{ 0, -b, -a}, {-b, -a,  0}, { b, -a,  0}},
+		{{ 0, -b,  a}, { b, -a,  0}, {-b, -a,  0}},
 		{{ 0,  b, -a}, { 0, -b, -a}, { a,  0, -b}},
 		{{ 0,  b, -a}, {-a,  0, -b}, { 0, -b, -a}},
-		{{ 0, -b,  a}, { b, -a,  0}, {-b, -a,  0}},
-		{{ 0, -b, -a}, {-b, -a,  0}, { b, -a,  0}},
-		{{-b,  a,  0}, {-a,  0,  b}, {-a,  0, -b}},
-		{{-b, -a,  0}, {-a,  0, -b}, {-a,  0,  b}},
-		{{ b,  a,  0}, { a,  0, -b}, { a,  0,  b}},
-		{{ b, -a,  0}, { a,  0,  b}, { a,  0, -b}},
-		{{ 0,  b,  a}, {-a,  0,  b}, {-b,  a,  0}},
-		{{ 0,  b,  a}, { b,  a,  0}, { a,  0,  b}},
-		{{ 0,  b, -a}, {-b,  a,  0}, {-a,  0, -b}},
-		{{ 0,  b, -a}, { a,  0, -b}, { b,  a,  0}},
-		{{ 0, -b, -a}, {-a,  0, -b}, {-b, -a,  0}},
 		{{ 0, -b, -a}, { b, -a,  0}, { a,  0, -b}},
+		{{ 0,  b, -a}, { a,  0, -b}, { b,  a,  0}},
+		{{ 0,  b, -a}, {-b,  a,  0}, {-a,  0, -b}},
+		{{-b, -a,  0}, {-a,  0, -b}, {-a,  0,  b}},
 		{{ 0, -b,  a}, {-b, -a,  0}, {-a,  0,  b}},
-		{{ 0, -b,  a}, { a,  0,  b}, { b, -a,  0}},
+		{{ b, -a,  0}, { a,  0,  b}, { a,  0, -b}},
 	}
 }
 
@@ -143,7 +158,7 @@ func (solid PlatonicSolid) FaceVertices(i int) []Vec {
 		return platonicOctahedronVertices[i]
 	case PlatonicDodecahedron:
 		return platonicDodecahedronVertices[i]
-	case PlatnoicIcosahedron: 
+	case PlatonicIcosahedron: 
 		return platonicIcosahedronVertices[i]
 	default:
 		panic(":3")
@@ -175,4 +190,16 @@ func (solid PlatonicSolid) Normals() []Vec {
 	}
 
 	return vs
+}
+
+// UniqueNormals returns all the face-centered normal vectors which specify
+// unique origin-centered planes.
+func (solid PlatonicSolid) UniqueNormals() []Vec {
+	vs := solid.Normals()
+	switch solid {
+	case PlatonicTetrahedron:
+		return vs
+	default:
+		return vs[:len(vs)/2]
+	}
 }
