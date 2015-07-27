@@ -2,7 +2,6 @@ package geom
 
 import (
 	"testing"
-	"math/rand"
 )
 
 func TestSolve(t *testing.T) {
@@ -32,20 +31,13 @@ func TestSolve(t *testing.T) {
 }
 
 func BenchmarkSolve(b *testing.B) {
-	lines := make([]Line, 1000)
-	for i := range lines {
-		lines[i].Init(
-			rand.Float32(), rand.Float32(),
-			rand.Float32(), rand.Float32(),
-		)
-	}
-
-	j1, j2 := 0, 1
+	l1 := new(Line)
+	l1.Init(5, 10, -1, 4)
+	l2 := new(Line)
+	l2.Init(-6, -5, 2, 2)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		Solve(&lines[j1], &lines[j2])
-		if j2 + 1 == len(lines){ j2 -= len(lines) }
-		if j1 + 1 == len(lines){ j1 -= len(lines) }
+		Solve(l1, l2)
 	}
 }
