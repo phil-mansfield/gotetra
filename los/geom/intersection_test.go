@@ -247,7 +247,7 @@ func BenchmarkSheetRingIntersectionDistance(b *testing.B) {
 				if ok {
 					lowPhi, phiWidth := poly.AngleRange()
 					                    
-					lowIdx, idxWidth := AngleRangeToIndices(
+					lowIdx, idxWidth := AngleBinRange(
 						lowPhi, phiWidth, len(vecs),
 					)
 
@@ -305,7 +305,7 @@ func BenchmarkSheetRingLineSolve(b *testing.B) {
 				if ok {
 					lowPhi, phiWidth := poly.AngleRange()
 					                    
-					lowIdx, idxWidth := AngleRangeToIndices(
+					lowIdx, idxWidth := AngleBinRange(
 						lowPhi, phiWidth, len(vecs),
 					)
 

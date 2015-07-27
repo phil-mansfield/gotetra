@@ -106,10 +106,34 @@ func (poly *TetraSlice) link() {
 		poly.lineStarts[i], poly.lineEnds[i] = -1, -1
 	}
 
+	lineStart, lineEnd, ei := 0, -1, poly.edges[0]
+	for i := 0; i < poly.Points; i++ {
+		if i > 0 {
+			lineStart = poly.lineEnds[i-1]
+		}
+
+		if i == poly.Points - 1 {
+			lineEnd = 0
+		} else {
+			for j := 0; j < poly.Points; j++ {
+				ej := poly.edges[j]
+				if pluckerTetraFaceShare[ei][ej] && poly.lineStarts[j] == -1 {
+					lineEnd = j
+					ei = ej
+					break
+				}
+			}
+		}
+
+		poly.lineStarts[i] = lineStart
+		poly.lineEnds[i] = lineEnd
+	}
+
+	/*
 	lineStart, lineEnd := 0, 0
 	for i := 0; i < poly.Points; i++ {
 		ei := poly.edges[i]
-		if i > 0 { lineStart = poly.lineEnds[i] }
+		if i > 0 { lineStart = poly.lineEnds[i-1] }
 
 		if i == poly.Points -1 {
 			lineEnd = 0
@@ -126,6 +150,7 @@ func (poly *TetraSlice) link() {
 		poly.lineStarts[i] = lineStart
 		poly.lineEnds[i] = lineEnd
 	}
+	*/
 
 	for i := 0; i < poly.Points; i++ {
 		phiLow := poly.Phis[poly.lineStarts[i]]
