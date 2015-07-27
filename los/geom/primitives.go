@@ -164,6 +164,35 @@ func (t *Tetra) Translate(dx *Vec) {
 	}
 }
 
+// Sphere is exactly what you think it is.
+type Sphere struct {
+	X, Y, Z, R float32
+}
+
+// Intersect returns true if the two spheres intersect and false otherwise.
+func (s1 *Sphere) Intersect(s2 *Sphere) bool {
+	dx, dy, dz, dr := s1.X - s2.X, s1.Y - s2.Y, s1.Z - s2.Z, s1.R - s2.R
+	return dr*dr > dx*dx + dy*dy + dz*dz
+}
+
+// BoundingSphere draws a bounding sphere aorund the given tetrahedron.
+func (t *Tetra) BoundingSphere(sph *Sphere) {
+	bx := (t[0][0] + t[1][0] + t[2][0] + t[3][0]) / 4
+	by := (t[0][1] + t[1][1] + t[2][1] + t[3][1]) / 4
+	bz := (t[0][2] + t[1][2] + t[2][2] + t[3][2]) / 4
+
+	dx, dy, dz := bx-t[0][0], by-t[0][1], bz-t[0][2]
+	maxRSqr := dx*dx + dy*dy + dz*dz
+	for i := 1; i < 4; i++ {
+		dx, dy, dz = bx-t[i][0], by-t[i][1], bz-t[i][2]
+		rSqr := dx*dx + dy*dy + dz*dz
+		if rSqr > maxRSqr { maxRSqr = rSqr }
+	}
+
+	sph.X, sph.Y, sph.Z = bx, by, bz
+	sph.R = float32(math.Sqrt(float64(maxRSqr)))
+}
+
 // TetraFaceBary contains information specifying the barycentric coordinates
 // of a point on a face of a tetrahedron.
 type TetraFaceBary struct {

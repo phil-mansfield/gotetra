@@ -78,3 +78,52 @@ func BenchmarkPluckerTetraTranslate(b *testing.B) {
 	for i := 0; i < b.N; i++ { pt.Translate(&dxs[i % n])}
 }
 
+func BenchmarkSphereIntersect(b *testing.B) {
+	n := 1000
+	ts := make([]Tetra, n)
+	for i := range ts {
+		for j := 0; j < 4; j++ {
+			for k := 0; k < 3; k++ {
+				ts[i][j][k] = rand.Float32()
+			}
+		}
+	}
+
+	ss := make([]Sphere, n)
+	for i := range ss {
+		ts[i].BoundingSphere(&ss[i])
+	}
+
+	b.ResetTimer()
+	s := ss[0]
+	idx := 0
+	for i := 0; i < b.N; i++ {
+		s.Intersect(&ss[idx])
+
+		idx++
+		if idx == n { idx = 0 }
+	}
+}
+
+func BenchmarkTetraBoundingSphere(b *testing.B) {
+	n := 1000
+	ts := make([]Tetra, n)
+	for i := range ts {
+		for j := 0; j < 4; j++ {
+			for k := 0; k < 3; k++ {
+				ts[i][j][k] = rand.Float32()
+			}
+		}
+	}
+
+	ss := make([]Sphere, n)
+
+	b.ResetTimer()
+	idx := 0
+	for i := 0; i < b.N; i++ {
+		ts[idx].BoundingSphere(&ss[idx])
+
+		idx++
+		if idx == n { idx = 0 }
+	} 
+}
