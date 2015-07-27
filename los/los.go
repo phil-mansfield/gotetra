@@ -55,9 +55,9 @@ func (p *ProfileRing) Insert(start, end rho float64, i int) {
 
 	if end < p.highR {
 		idx, rem := Math.Modf((end - p.lowR) / dr)
-		p.derivs[i*p.n + idx] -= rho * rem
+		p.derivs[i*p.n + idx] -= rho * (1 - rem)
 		if idx < p.depth - 1 {
-			p.derivs[idx*p.n + idx+1] -= rho * (1 - rem)
+			p.derivs[idx*p.n + idx+1] -= rho * rem
 		}
 	}
 }
