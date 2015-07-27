@@ -29,6 +29,7 @@ func (p *ProfileRing) Init(lowR, highR float64, bins, n int) {
 	p.n = n
 	p.lowR = lowR
 	p.highR = highR
+	p.dr = (highR - lowR) / float64(bins)
 	
 	p.Lines = make([]geom.Line, n)
 	for i := 0; i < n; i++ {
@@ -40,21 +41,20 @@ func (p *ProfileRing) Init(lowR, highR float64, bins, n int) {
 // Insert inserts a plateau with the given radial extent and density to the
 // profile.
 func (p *ProfileRing) Insert(start, end, rho float64, i int) {
-	if end < p.lowR || start > p.highR {
+	if end <= p.lowR || start > p.highR {
 		return
 	}
-
 
 	// You could be a bit more careful with floating point ops here.
 	if start > p.lowR {
 		fidx, rem := math.Modf((start - p.lowR) / p.dr)
 		idx := int(fidx)
-		p.derivs[i*p.n + idx] += rho * rem
+		p.derivs[i*p.n + idx] += rho * (1 - rem)
 		if idx < p.bins - 1 {
-			p.derivs[idx*p.n + idx+1] += rho * (1 - rem)
+			p.derivs[i*p.n + idx+1] += rho * rem
 		}
 	} else {
-		p.derivs[0] += rho
+		p.derivs[i*p.n] += rho
 	}
 
 	if end < p.highR {
@@ -62,7 +62,7 @@ func (p *ProfileRing) Insert(start, end, rho float64, i int) {
 		idx := int(fidx)
 		p.derivs[i*p.n + idx] -= rho * (1 - rem)
 		if idx < p.bins - 1 {
-			p.derivs[idx*p.n + idx+1] -= rho * rem
+			p.derivs[i*p.n + idx+1] -= rho * rem
 		}
 	}
 }

@@ -16,7 +16,7 @@ func sliceAlmostEq(xs, ys []float64) bool {
 	if len(xs) != len(ys) { return false }
 	eps := 1e-5
 	for i := range xs {
-		if xs[i] + eps > ys[i] || xs[i] - eps < ys[i] { return false }
+		if xs[i] + eps < ys[i] || xs[i] - eps > ys[i] { return false }
 	}
 	return true
 }
@@ -39,9 +39,9 @@ func TestProfileRingInsert(t *testing.T) {
 		{1.2, 3, 1, []float64{0, 0, 1, 0, 0, 0, 0, 0, 0, 0}},
 		{1.25, 3, 2, []float64{0, 0, 1, 1, 0, 0, 0, 0, 0, 0}},
 		{1.36, 3, 1, []float64{0, 0, 0, 0.4, 0.6, 0, 0, 0, 0, 0}},
-		{0, 1.2, 1, []float64{0, 0, -1, 0, 0, 0, 0, 0, 0, 0}},
-		{0, 1.25, 1, []float64{0, 0, -0.5, -0.5, 0, 0, 0, 0, 0, 0}},
-		{0, 1.27, 1, []float64{0, 0, -0.3, -0.7, 0, 0, 0, 0, 0, 0}},
+		{0, 1.2, 1, []float64{1, 0, -1, 0, 0, 0, 0, 0, 0, 0}},
+		{0, 1.25, 1, []float64{1, 0, -0.5, -0.5, 0, 0, 0, 0, 0, 0}},
+		{0, 1.27, 1, []float64{1, 0, -0.3, -0.7, 0, 0, 0, 0, 0, 0}},
 		{1.2, 1.3, 1, []float64{0, 0, 1, -1, 0, 0, 0, 0, 0, 0}},
 		{1.24, 1.26, 1, []float64{0, 0, 0.2, -0.2, 0, 0, 0, 0, 0, 0}},
 	}
@@ -54,7 +54,10 @@ func TestProfileRingInsert(t *testing.T) {
 		p.Insert(line.start, line.end, line.rho, i%n)
 		res := readDerivs(p, i%n)
 		if !sliceAlmostEq(res, line.out) {
-			t.Errorf("%d) Expected out = %v. Got out = %v.", i, line.out, res)
+			t.Errorf(
+				"%d) Expected out = %v from start = %g end = %g. Got out = %v.",
+				i, line.out, line.start, line.end, res,
+			)
 		}
 	}
 }
