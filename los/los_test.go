@@ -61,3 +61,26 @@ func TestProfileRingInsert(t *testing.T) {
 		}
 	}
 }
+
+func BenchmarkProfileRingInsert(b *testing.B) {
+	n := 1000
+	bins := 300
+	minR, maxR := 0.05, 0.75
+
+	p := new(ProfileRing)
+	p.Init(minR, maxR, bins, n)
+
+	m := 2089
+	starts := make([]float64, m)
+	ends := make([]float64, m)
+
+	idx := 0
+	pIdx := 0
+	for i := 0; i < b.N; i++ {
+		p.Insert(starts[idx], ends[idx], 1, pIdx)
+		idx++
+		pIdx++
+		if idx == m { idx = 0 }
+		if pIdx == n { pIdx = 0 }
+	}
+}
