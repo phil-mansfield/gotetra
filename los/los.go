@@ -51,6 +51,8 @@ func (p *ProfileRing) Insert(start, end rho float64, i int) {
 		if idx < p.depth - 1 {
 			p.derivs[idx*p.n + idx+1] += rho * (1 - rem)
 		}
+	} else {
+		p.derivs[0] += rho
 	}
 
 	if end < p.highR {
