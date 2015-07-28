@@ -88,7 +88,7 @@ func (hp *HaloProfiles) Init(
 	id, rings int, origin *geom.Vec, rMin, rMax float64,
 	bins, n int,
 ) *HaloProfiles {
-	
+	// We might be able to do better than this.
 	solid, ok := geom.NewUniquePlatonicSolid(rings)
 	if !ok {
 		panic(fmt.Sprintf("Cannot uniformly space %d rings.", rings))
