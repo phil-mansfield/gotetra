@@ -171,7 +171,7 @@ type Sphere struct {
 
 // Intersect returns true if the two spheres intersect and false otherwise.
 func (s1 *Sphere) Intersect(s2 *Sphere) bool {
-	dx, dy, dz, dr := s1.X - s2.X, s1.Y - s2.Y, s1.Z - s2.Z, s1.R - s2.R
+	dx, dy, dz, dr := s1.X - s2.X, s1.Y - s2.Y, s1.Z - s2.Z, s1.R + s2.R
 	return dr*dr > dx*dx + dy*dy + dz*dz
 }
 
