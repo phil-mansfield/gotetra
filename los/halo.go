@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/phil-mansfield/gotetra/render/io"
 	"github.com/phil-mansfield/gotetra/los/geom"
 	"github.com/phil-mansfield/gotetra/math/mat"
 )
@@ -115,4 +116,28 @@ func (hp *HaloProfiles) Count(t *geom.Tetra) {
 
 func (hp *HaloProfiles) SphereIntersect(sph *geom.Sphere) bool {
 	return hp.sph.Intersect(sph)
+}
+
+func wrapDist(x1, x2, width float32) float32 {
+	dist := x1 - x2
+	if dist > width / 2 {
+		return dist - width
+	} else if dist < width / -2 {
+		return dist + width
+	} else {
+		return dist
+	}
+}
+
+func inRange(x, r, low, width, tw float32) bool {
+	return wrapDist(x, low, tw) > -r && wrapDist(x, low + width, tw) < r
+}
+
+func (hp *HaloProfiles) SheetIntersect(hd *io.SheetHeader) bool {
+	s := &hp.sph
+	x, y, z := s.X, s.Y, s.Z
+	tw := float32(hd.TotalWidth)
+	return inRange(x, s.R, hd.Origin[0], hd.Width[0], tw) &&
+		inRange(y, s.R, hd.Origin[1], hd.Width[1], tw) &&
+		inRange(z, s.R, hd.Origin[2], hd.Width[2], tw)
 }
