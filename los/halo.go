@@ -80,6 +80,7 @@ func (hr *haloRing) Count(t *geom.Tetra) {
 }
 
 type HaloProfiles struct {
+	Origin geom.Vec
 	rs []haloRing
 	sph geom.Sphere
 	rMin, rMax float64
@@ -97,6 +98,7 @@ func (hp *HaloProfiles) Init(
 	}
 
 	hp.rs = make([]haloRing, rings)
+	hp.Origin = *origin
 	hp.sph.X, hp.sph.Y = origin[0], origin[1]
 	hp.sph.Z, hp.sph.R = origin[2], float32(rMax)
 	hp.rMin, hp.rMax = rMin, rMax
