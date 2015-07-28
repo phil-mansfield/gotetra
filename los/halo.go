@@ -25,8 +25,10 @@ func (hr *haloRing) Init(
 	norm, origin *geom.Vec, rMin, rMax float64, bins, n int,
 ) {
 	hr.ProfileRing.Init(rMin, rMax, bins, n)
-	
 	zAxis := &geom.Vec{0, 0, 1}
+	
+	hr.rot.Init(make([]float32, 9), 3, 3)
+	hr.irot.Init(make([]float32, 9), 3, 3)
 	geom.EulerMatrixBetweenAt(norm, zAxis, &hr.rot)
 	geom.EulerMatrixBetweenAt(zAxis, norm, &hr.irot)
 	hr.phis = make([]float32, n)
