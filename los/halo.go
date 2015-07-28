@@ -107,6 +107,12 @@ func (hp *HaloProfiles) Init(
 	return hp
 }
 
+func (hp *HaloProfiles) Count(t *geom.Tetra) {
+	for i := range hp.rs {
+		hp.rs[i].Count(t)
+	}
+}
+
 func (hp *HaloProfiles) SphereIntersect(sph *geom.Sphere) bool {
 	return hp.sph.Intersect(sph)
 }
