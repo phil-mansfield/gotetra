@@ -164,6 +164,20 @@ func (t *Tetra) Translate(dx *Vec) {
 	}
 }
 
+// Volume computes the volume of a tetrahedron.
+func (t *Tetra) Volume() float64 {
+	leg10, leg11, leg12 := t[1][0]-t[0][0], t[1][1]-t[0][1], t[1][2]-t[0][2]
+	leg20, leg21, leg22 := t[2][0]-t[0][0], t[2][1]-t[0][1], t[2][2]-t[0][2]
+	leg30, leg31, leg32 := t[3][0]-t[0][0], t[3][1]-t[0][1], t[3][2]-t[0][2]
+
+	n0 := leg10*(leg21*leg32 - leg22*leg31)
+    n1 := leg11*(leg22*leg30 - leg20*leg32)
+    n2 := leg12*(leg20*leg31 - leg21*leg30)
+	vol := float64((n0 + n1 + n2) / 6)
+	if vol < 0 { return -vol }
+	return vol
+}
+
 // Sphere is exactly what you think it is.
 type Sphere struct {
 	C Vec

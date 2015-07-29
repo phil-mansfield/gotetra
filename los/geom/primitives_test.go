@@ -48,6 +48,25 @@ func TestPluckerTranslate(t *testing.T) {
 	}
 }
 
+func almostEq64(x, y float64) bool { return x - 1e-4 < y && x + 1e-4 > y }
+
+func TestTetraVolume(t *testing.T) {
+	table := []struct {
+		t Tetra
+		vol float64
+	} {
+		{Tetra{{0, 2, 0}, {3, 0, 0}, {0, 0, 1}, {0, 0, 0}}, 1},
+	}
+
+	for i, test := range table {
+		vol := test.t.Volume()
+		if !almostEq64(vol, test.vol) {
+			t.Errorf("%d) Expected %v.Volume() = %g, got %g.",
+				i+1, test.t, test.vol, vol)
+		}
+	}
+}
+
 func BenchmarkVecTranslate(b *testing.B) {
 	n := 1000
 	dxs := randomTranslations(n)
@@ -98,8 +117,7 @@ func BenchmarkSphereIntersect(b *testing.B) {
 	s := ss[0]
 	idx := 0
 	for i := 0; i < b.N; i++ {
-		s.Intersect(&ss[idx])
-
+		s.SphereIntersect(&ss[idx])
 		idx++
 		if idx == n { idx = 0 }
 	}
@@ -126,4 +144,15 @@ func BenchmarkTetraBoundingSphere(b *testing.B) {
 		idx++
 		if idx == n { idx = 0 }
 	} 
+}
+
+func BenchmarkTetraVolume(b *testing.B) {
+	t := new(Tetra)
+	for i := 0; i < 4; i++ {
+		for j := 0; j < 3; j++ {
+			t[i][j] = rand.Float32()
+		}
+	}
+
+	for i := 0; i < b.N; i++ { t.Volume() }
 }
