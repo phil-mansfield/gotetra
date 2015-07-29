@@ -1,7 +1,6 @@
 package los
 
 import (
-
 	"github.com/phil-mansfield/gotetra/render/io"
 	rGeom "github.com/phil-mansfield/gotetra/render/geom"
 	"github.com/phil-mansfield/gotetra/los/geom"
@@ -54,6 +53,7 @@ func UnpackTetrahedra(
 	for writeIdx := int64(0); writeIdx < n; writeIdx++ {
 		x, y, z := coords(writeIdx, hd.SegmentWidth)
 		readIdx := index(x, y, z, hd.SegmentWidth)
+
 		for dir := int64(0); dir < 6; dir++ {
 			tIdx := 6 * writeIdx + dir
 			idxBuf.Init(readIdx, hd.GridWidth + 1, 1, int(dir))
@@ -67,10 +67,10 @@ func UnpackTetrahedra(
 func WrapHalo(hps []HaloProfiles, hd *io.SheetHeader) {
 	tw := float32(hd.TotalWidth)
 	for i := range hps {
-		s := &hps[i].sph
-		if (s.X + s.R) < hd.Origin[0] { s.X += tw }
-		if (s.Y + s.R) < hd.Origin[1] { s.Y += tw }
-		if (s.Z + s.R) < hd.Origin[2] { s.Z += tw }
+		h := &hps[i]
+		for j := 0; j < 3; j++ {
+			if h.C[j] + h.R < hd.Origin[j] { h.C[j] += tw }
+		}
 	}
 }
 
