@@ -9,16 +9,17 @@ import (
 
 // CountAll computes profiles for all the given halos which count the number
 // of tetrahedra overlapping points at a given radius.
-func CountAll(hs []HaloProfiles, ts []geom.Tetra, hd *io.CatalogHeader) {
-	ss := make([]geom.Sphere, len(ts))
-
-	for i := range ts { ts[i].BoundingSphere(&ss[i]) }
+func CountAll(
+	hs []HaloProfiles, ts[]geom.Tetra,
+	hd *io.CatalogHeader, ssBuf []geom.Sphere,
+) {
+	for i := range ts { ts[i].BoundingSphere(&ssBuf[i]) }
 
 	for hi := range hs {
 		h := &hs[hi]
 		for ti := range ts {
 			t := &ts[ti]
-			s := &ss[ti]
+			s := &ssBuf[ti]
 
 			// This can be sped up significantly, if need be.
 			if h.SphereIntersect(s) { h.Count(t) }
@@ -45,10 +46,10 @@ func unpackTetra(idxs *rGeom.TetraIdxs, xs []rGeom.Vec, t *geom.Tetra) {
 
 // UnpackTetrahedra converts the raw position data in a sheet segment into
 // tetrahedra.
-func UnpackTetrahedra(xs []rGeom.Vec, hd *io.SheetHeader) []geom.Tetra {
+func UnpackTetrahedra(
+	xs []rGeom.Vec, hd *io.SheetHeader, tsBuf []geom.Tetra,
+) {
 	n := hd.SegmentWidth*hd.SegmentWidth*hd.SegmentWidth
-	ts := make([]geom.Tetra, n)
-	
 	idxBuf := new(rGeom.TetraIdxs)
 	for writeIdx := int64(0); writeIdx < n; writeIdx++ {
 		x, y, z := coords(writeIdx, hd.SegmentWidth)
@@ -56,12 +57,11 @@ func UnpackTetrahedra(xs []rGeom.Vec, hd *io.SheetHeader) []geom.Tetra {
 		for dir := int64(0); dir < 6; dir++ {
 			tIdx := 6 * writeIdx + dir
 			idxBuf.Init(readIdx, hd.GridWidth + 1, 1, int(dir))
-			unpackTetra(idxBuf, xs, &ts[tIdx])
-			ts[tIdx].Orient(+1)
+			unpackTetra(idxBuf, xs, &tsBuf[tIdx])
+			tsBuf[tIdx].Orient(+1)
 		}
 	}
 
-	return ts
 }
 
 func WrapHalo(hps []HaloProfiles, hd *io.SheetHeader) {
