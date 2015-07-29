@@ -7,20 +7,25 @@ import (
 	"os"
 	"path"
 	"sort"
+//	"time"
 
 	"github.com/phil-mansfield/table"
 	"github.com/phil-mansfield/gotetra/render/io"	
 	"github.com/phil-mansfield/gotetra/render/halo"
+	rGeom "github.com/phil-mansfield/gotetra/render/geom"
 
-//	"github.com/phil-mansfield/gotetra/los"
+	"github.com/phil-mansfield/gotetra/los"
+	"github.com/phil-mansfield/gotetra/los/geom"
 )
 
 const (
 	rType = halo.R200m
+	rMult = 1.0
 )
 
 func main() {
-	if len(os.Args) != 2 {
+	fmt.Println("Running")
+	if len(os.Args) != 3 {
 		log.Fatalf("Usage: $ %s input_dir halo_file", os.Args[0])
 	}
 
@@ -31,21 +36,48 @@ func main() {
 	if err != nil { log.Fatal(err.Error()) }
 	hds := make([]io.SheetHeader, len(files))
 	for i := range files {
+		if i % 50 == 0 { fmt.Println(i) }
 		err = io.ReadSheetHeaderAt(files[i], &hds[i])
 		if err != nil { log.Fatal(err.Error()) }
 	}
 
 	xs, ys, zs, ms, rs, err := readHalos(haloFileName, &hds[0].Cosmo)
 	if err != nil { log.Fatal(err.Error()) }
-	
-	fmt.Println("xs", xs[:5])
-	fmt.Println("ys", ys[:5])
-	fmt.Println("zs", zs[:5])
-	fmt.Println("ms", ms[:5])
-	fmt.Println("rs", rs[:5])
-	fmt.Println("# of headers:", len(hds))
+
+	xsBuf, tsBuf, ssBuf := createBuffers(&hds[0])
+	h := new(los.HaloProfiles)
+	for _, i := range []int{0, 1, 100, 101, 1000, 1001, 5000, 5001} {
+		hdIntrs, fileIntrs := intersectingSheets(h, hds, files)
+
+		fmt.Printf(
+			"Halo mass is: %.3g, intersects are: %d\n", ms[i], len(hdIntrs),
+		)
+
+		origin := &geom.Vec{float32(xs[i]), float32(ys[i]), float32(zs[i])}
+		h.Init(i, 3, origin, 0, rs[i] * rMult, 200, 1000)
+		normal, sphere := intersectionTest(
+			h, hdIntrs, fileIntrs, xsBuf, tsBuf, ssBuf,
+		)
+		fmt.Printf(
+			"Rough enclosed mass is normal: %.3g sphere %.3g\n",
+			1.7e7/0.7/6 * float64(normal), 1.7e7/0.7/6 * float64(sphere),
+		)
+	}
+}
+// createBuffers allocates all the buffers needed for repeated calls to the
+// various sheet transformation functions.
+func createBuffers(
+	hd *io.SheetHeader,
+) ([]rGeom.Vec, []geom.Tetra, []geom.Sphere) {
+
+	xsBuf := make([]rGeom.Vec, hd.GridCount)
+	sw := hd.SegmentWidth
+	tsBuf := make([]geom.Tetra, 6*sw*sw*sw)
+	ssBuf := make([]geom.Sphere, 6*sw*sw*sw)
+	return xsBuf, tsBuf, ssBuf
 }
 
+// fileNames returns the names of all the files ina  directory.
 func fileNames(dirName string) ([]string, error) {
 	infos, err := ioutil.ReadDir(dirName)
 	if err != nil { return nil, err }
@@ -57,6 +89,7 @@ func fileNames(dirName string) ([]string, error) {
 	return files, nil
 }
 
+// halos allows for arrays of halo properties to be sorted simultaneously.
 type halos struct {
 	xs, ys, zs, ms, rs []float64
 }
@@ -71,6 +104,7 @@ func (hs *halos) Swap(i, j int) {
 	hs.zs[i], hs.zs[j] = hs.zs[j], hs.zs[i]
 }
 
+// readHalos reads halo information from the given Rockstar catalog.
 func readHalos(
 	file string, cosmo *io.CosmologyHeader,
 ) (xs, ys, zs, ms, rs []float64, err error) {
@@ -95,4 +129,55 @@ func readHalos(
 
 	sort.Sort(sort.Reverse(&halos{ xs, ys, zs, ms, rs }))
 	return xs, ys, zs, ms, rs, nil
+}
+
+// intersectingSheets returns all the SheetHeaders and file names that intersect
+// with a given halo.
+func intersectingSheets(
+	h *los.HaloProfiles, hds []io.SheetHeader, files []string,
+) ([]io.SheetHeader, []string) {
+	hdOuts, fileOuts := []io.SheetHeader{}, []string{}
+	for i := range hds {
+		if h.SheetIntersect(&hds[i]) {
+			hdOuts = append(hdOuts, hds[i])
+			fileOuts = append(fileOuts, files[i])
+		}
+	}
+	return hdOuts, fileOuts
+}
+
+// intersectionTest counts how many candidate intersections we have by:
+// (a). Only considering tetrahedra with points insde the halo.
+// (b). Conisdering tetrahedra whose bounding sphere intersects the halo.
+func intersectionTest(
+	h *los.HaloProfiles, hds []io.SheetHeader, files []string,
+	xsBuf []rGeom.Vec, tsBuf []geom.Tetra, ssBuf []geom.Sphere,
+) (normal, sphere int) {
+	hs := []los.HaloProfiles{*h}
+	h = &hs[0]
+
+	cCopy := h.C
+	for i, file := range files {
+		hd := &hds[i]
+		fmt.Printf("    Reading %s -> ", path.Base(file))
+		h.C = cCopy
+
+		io.ReadSheetPositionsAt(file, xsBuf)
+		los.WrapHalo(hs, hd)
+		los.WrapXs(xsBuf, hd)
+		los.UnpackTetrahedra(xsBuf, hd, tsBuf)
+		for j := range tsBuf { tsBuf[j].BoundingSphere(&ssBuf[j]) }
+
+		for j := range tsBuf {
+			if h.SphereIntersect(&ssBuf[j]) { sphere++ }
+			for k := 0; k < 4; k++ {
+				if h.VecIntersect(&tsBuf[j][k]) {
+					normal++
+					break
+				}
+			}
+		}
+		fmt.Printf("Normal: %9d Sphere: %9d\n", normal, sphere)
+	}
+	return normal, sphere
 }
