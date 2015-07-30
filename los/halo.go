@@ -80,9 +80,9 @@ func (hr *haloRing) Count(t *geom.Tetra) {
 }
 
 type HaloProfiles struct {
-	Origin geom.Vec
+	geom.Sphere
+
 	rs []haloRing
-	sph geom.Sphere
 	rMin, rMax float64
 	id int
 }
@@ -98,9 +98,7 @@ func (hp *HaloProfiles) Init(
 	}
 
 	hp.rs = make([]haloRing, rings)
-	hp.Origin = *origin
-	hp.sph.X, hp.sph.Y = origin[0], origin[1]
-	hp.sph.Z, hp.sph.R = origin[2], float32(rMax)
+	hp.C, hp.R = *origin, float32(rMax)
 	hp.rMin, hp.rMax = rMin, rMax
 	hp.id = id
 
@@ -116,10 +114,6 @@ func (hp *HaloProfiles) Count(t *geom.Tetra) {
 	for i := range hp.rs {
 		hp.rs[i].Count(t)
 	}
-}
-
-func (hp *HaloProfiles) SphereIntersect(sph *geom.Sphere) bool {
-	return hp.sph.Intersect(sph)
 }
 
 func wrapDist(x1, x2, width float32) float32 {
@@ -138,10 +132,8 @@ func inRange(x, r, low, width, tw float32) bool {
 }
 
 func (hp *HaloProfiles) SheetIntersect(hd *io.SheetHeader) bool {
-	s := &hp.sph
-	x, y, z := s.X, s.Y, s.Z
 	tw := float32(hd.TotalWidth)
-	return inRange(x, s.R, hd.Origin[0], hd.Width[0], tw) &&
-		inRange(y, s.R, hd.Origin[1], hd.Width[1], tw) &&
-		inRange(z, s.R, hd.Origin[2], hd.Width[2], tw)
+	return inRange(hp.C[0], hp.R, hd.Origin[0], hd.Width[0], tw) &&
+		inRange(hp.C[1], hp.R, hd.Origin[1], hd.Width[1], tw) &&
+		inRange(hp.C[2], hp.R, hd.Origin[2], hd.Width[2], tw)
 }

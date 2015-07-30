@@ -166,13 +166,33 @@ func (t *Tetra) Translate(dx *Vec) {
 
 // Sphere is exactly what you think it is.
 type Sphere struct {
-	X, Y, Z, R float32
+	C Vec
+	R float32
 }
 
 // Intersect returns true if the two spheres intersect and false otherwise.
-func (s1 *Sphere) Intersect(s2 *Sphere) bool {
-	dx, dy, dz, dr := s1.X - s2.X, s1.Y - s2.Y, s1.Z - s2.Z, s1.R + s2.R
-	return dr*dr > dx*dx + dy*dy + dz*dz
+func (s1 *Sphere) SphereIntersect(s2 *Sphere) bool {
+	sum := float32(0)
+	dr := s1.R + s2.R
+	dr2 := dr*dr
+	for i := 0; i < 3; i++ {
+		dx := s1.C[0] - s2.C[0]
+		sum += dx*dx
+		if sum > dr2 { return false }
+	}
+	return true
+}
+
+func (s *Sphere) VecIntersect(v *Vec) bool {
+	sum := float32(0)
+	dr2 := s.R*s.R
+	for i := 0; i < 3; i++ {
+		dx := s.C[0] - v[0]
+		sum += dx*dx
+		if sum > dr2 { return false }
+	}
+	return true
+
 }
 
 // BoundingSphere draws a bounding sphere aorund the given tetrahedron.
@@ -189,7 +209,7 @@ func (t *Tetra) BoundingSphere(sph *Sphere) {
 		if rSqr > maxRSqr { maxRSqr = rSqr }
 	}
 
-	sph.X, sph.Y, sph.Z = bx, by, bz
+	sph.C[0], sph.C[1], sph.C[2] = bx, by, bz
 	sph.R = float32(math.Sqrt(float64(maxRSqr)))
 }
 
