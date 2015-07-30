@@ -32,7 +32,9 @@ func DensityAll(
 			t := &ts[ti]
 			s := &ss[ti]
 
-			if h.SphereIntersect(s) { h.Density(t, rhos[ti]) }
+			if h.SphereIntersect(s) {
+				h.Density(t, rhos[ti])
+			}
 		}
 	}
 }
@@ -77,19 +79,25 @@ func UnpackTetrahedra(
 
 func TetraDensity(hd *io.SheetHeader, ts []geom.Tetra, rhos []float64) {
 	tw := hd.TotalWidth
-	unitTetRho := tw*tw*tw / (6 * float64(hd.Count))
+	tCount := float64(hd.Count * 6)
 	for i := range ts {
-		rhos[i] = unitTetRho / ts[i].Volume()
+		rhos[i] = (tw * tw * tw) / (ts[i].Volume() * tCount)
 	}
 }
 
 func WrapHalo(hps []HaloProfiles, hd *io.SheetHeader) {
 	tw := float32(hd.TotalWidth)
+	newC := &geom.Vec{}
 	for i := range hps {
 		h := &hps[i]
 		for j := 0; j < 3; j++ {
-			if h.C[j] + h.R < hd.Origin[j] { h.C[j] += tw }
+			if h.C[j] + h.R < hd.Origin[j] {
+				newC[j] = h.C[j] + tw
+			} else {
+				newC[j] = h.C[j]
+			}
 		}
+		h.ChangeCenter(newC)
 	}
 }
 

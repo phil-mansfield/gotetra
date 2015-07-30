@@ -38,18 +38,18 @@ func NewPlatonicSolid(sides int) (solid PlatonicSolid, ok bool) {
 	case 4:  return PlatonicTetrahedron,  true
 	case 6:  return PlatonicHexahedron,   true
 	case 8:  return PlatonicOctahedron,   true
-	case 12: return PlatonicIcosahedron,  true
-	case 20: return PlatonicDodecahedron, true
+	case 12: return PlatonicDodecahedron, true
+	case 20: return PlatonicIcosahedron,  true
 	default: return 0, false
 	}
 }
 
 func NewUniquePlatonicSolid(sides int) (solid PlatonicSolid, ok bool) {
 	switch sides {
-	case 3:  return PlatonicHexahedron,    true
+	case 3:  return PlatonicHexahedron,   true
 	case 4:  return PlatonicTetrahedron,  true
-	case 6:  return PlatonicOctahedron,   true
-	case 10: return PlatonicDodecahedron, true
+	case 6:  return PlatonicDodecahedron, true
+	case 10: return PlatonicIcosahedron,  true
 	default: return 0, false
 	}
 }

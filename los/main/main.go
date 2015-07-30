@@ -7,7 +7,7 @@ import (
 	"os"
 	"path"
 	"sort"
-//	"time"
+	"time"
 
 	"github.com/phil-mansfield/table"
 	"github.com/phil-mansfield/gotetra/render/io"	
@@ -44,19 +44,18 @@ func main() {
 	xs, ys, zs, ms, rs, err := readHalos(haloFileName, &hds[0].Cosmo)
 	if err != nil { log.Fatal(err.Error()) }
 
-	xsBuf, tsBuf, ssBuf := createBuffers(&hds[0])
+	xsBuf, tsBuf, ssBuf, rhosBuf := createBuffers(&hds[0])
 	h := new(los.HaloProfiles)
-	for _, i := range []int{0, 1, 100, 101, 1000, 1001, 5000, 5001} {
+	for _, i := range []int{1000, 1001, 1002, 1003, 1004} {
+		origin := &geom.Vec{float32(xs[i]), float32(ys[i]), float32(zs[i])}
+		h.Init(i, 10, origin, 0, rs[i] * rMult, 200, 1000)
 		hdIntrs, fileIntrs := intersectingSheets(h, hds, files)
 
 		fmt.Printf(
 			"Halo mass is: %.3g, intersects are: %d\n", ms[i], len(hdIntrs),
 		)
-
-		origin := &geom.Vec{float32(xs[i]), float32(ys[i]), float32(zs[i])}
-		h.Init(i, 3, origin, 0, rs[i] * rMult, 200, 1000)
 		normal, sphere := intersectionTest(
-			h, hdIntrs, fileIntrs, xsBuf, tsBuf, ssBuf,
+			h, hdIntrs, fileIntrs, xsBuf, tsBuf, ssBuf, rhosBuf,
 		)
 		fmt.Printf(
 			"Rough enclosed mass is normal: %.3g sphere %.3g\n",
@@ -68,13 +67,14 @@ func main() {
 // various sheet transformation functions.
 func createBuffers(
 	hd *io.SheetHeader,
-) ([]rGeom.Vec, []geom.Tetra, []geom.Sphere) {
+) ([]rGeom.Vec, []geom.Tetra, []geom.Sphere, []float64) {
 
 	xsBuf := make([]rGeom.Vec, hd.GridCount)
 	sw := hd.SegmentWidth
 	tsBuf := make([]geom.Tetra, 6*sw*sw*sw)
 	ssBuf := make([]geom.Sphere, 6*sw*sw*sw)
-	return xsBuf, tsBuf, ssBuf
+	rhosBuf := make([]float64, 6*sw*sw*sw)
+	return xsBuf, tsBuf, ssBuf, rhosBuf
 }
 
 // fileNames returns the names of all the files ina  directory.
@@ -152,6 +152,7 @@ func intersectingSheets(
 func intersectionTest(
 	h *los.HaloProfiles, hds []io.SheetHeader, files []string,
 	xsBuf []rGeom.Vec, tsBuf []geom.Tetra, ssBuf []geom.Sphere,
+	rhosBuf []float64,
 ) (normal, sphere int) {
 	hs := []los.HaloProfiles{*h}
 	h = &hs[0]
@@ -162,14 +163,20 @@ func intersectionTest(
 		fmt.Printf("    Reading %s -> ", path.Base(file))
 		h.C = cCopy
 
+		t0 := float64(time.Now().UnixNano())
 		io.ReadSheetPositionsAt(file, xsBuf)
 		los.WrapHalo(hs, hd)
 		los.WrapXs(xsBuf, hd)
 		los.UnpackTetrahedra(xsBuf, hd, tsBuf)
+		los.TetraDensity(hd, tsBuf, rhosBuf)
 		for j := range tsBuf { tsBuf[j].BoundingSphere(&ssBuf[j]) }
+		t1 := float64(time.Now().UnixNano())
 
 		for j := range tsBuf {
 			if h.SphereIntersect(&ssBuf[j]) { sphere++ }
+		}
+
+		for j := range tsBuf {
 			for k := 0; k < 4; k++ {
 				if h.VecIntersect(&tsBuf[j][k]) {
 					normal++
@@ -177,7 +184,16 @@ func intersectionTest(
 				}
 			}
 		}
+
+		t2 := float64(time.Now().UnixNano())
+		los.DensityAll(hs, tsBuf, ssBuf, rhosBuf)
+		//los.CountAll(hs, tsBuf, ssBuf)
+		t3 := float64(time.Now().UnixNano())
+
 		fmt.Printf("Normal: %9d Sphere: %9d\n", normal, sphere)
+		fmt.Printf("%27s Setup: %.3g s  Density: %.3g s\n", "",
+			(t1 - t0) / 1e9, (t3 - t2) / 1e9)
 	}
+	fmt.Printf("    Rho: %.3g\n", h.Rho())
 	return normal, sphere
 }

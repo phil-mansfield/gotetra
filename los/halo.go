@@ -46,15 +46,20 @@ func (hr *haloRing) insert(t *geom.Tetra, rho float64) {
 	hr.t.Rotate(&hr.rot)
 	hr.pt.Init(&hr.t) // This is slower than it has to be by a lot!
 	
-	if t.ZPlaneSlice(&hr.pt, 0, &hr.poly) {
+	if hr.t.ZPlaneSlice(&hr.pt, 0, &hr.poly) {
 		lowPhi, phiWidth := hr.poly.AngleRange()
 		lowIdx, idxWidth := geom.AngleBinRange(lowPhi, phiWidth, hr.n)
 		
 		idx := lowIdx
 		var rEnter, rExit float64
 		for i := 0; i < idxWidth; i++ {
+			if idx >= hr.n { idx -= hr.n }
 			l := &hr.Lines[idx]
 			l1, l2 := hr.poly.IntersectingLines(hr.phis[idx])
+
+
+			if l1 == nil { continue }
+
 			if l2 != nil {
 				enterX, enterY, _ := geom.Solve(l, l1)
 				exitX, exitY, _ := geom.Solve(l, l2)
@@ -64,6 +69,7 @@ func (hr *haloRing) insert(t *geom.Tetra, rho float64) {
 				
 				rEnter = math.Sqrt(float64(rEnterSqr))
 				rExit = math.Sqrt(float64(rExitSqr))
+				if rExit < rEnter { rEnter, rExit = rExit, rEnter }
 			} else {
 				exitX, exitY, _ := geom.Solve(l, l1)
 				rExitSqr := exitX*exitX + exitY*exitY
@@ -74,7 +80,6 @@ func (hr *haloRing) insert(t *geom.Tetra, rho float64) {
 			hr.Insert(rEnter, rExit, rho, idx)
 
 			idx++
-			if idx == hr.n { idx = 0 }
 		}
 	}
 }
@@ -87,7 +92,7 @@ type HaloProfiles struct {
 
 	rs []haloRing
 	rMin, rMax float64
-	id int
+	id, bins, n int
 }
 
 func (hp *HaloProfiles) Init(
@@ -103,9 +108,10 @@ func (hp *HaloProfiles) Init(
 	hp.rs = make([]haloRing, rings)
 	hp.C, hp.R = *origin, float32(rMax)
 	hp.rMin, hp.rMax = rMin, rMax
-	hp.id = id
+	hp.id, hp.bins, hp.n = id, bins, n
 
 	norms := solid.UniqueNormals()
+	println(rings, len(norms))
 	for i := 0; i < rings; i++ {
 		hp.rs[i].Init(&norms[i], origin, rMin, rMax, bins, n)
 	}
@@ -141,4 +147,46 @@ func (hp *HaloProfiles) SheetIntersect(hd *io.SheetHeader) bool {
 	return inRange(hp.C[0], hp.R, hd.Origin[0], hd.Width[0], tw) &&
 		inRange(hp.C[1], hp.R, hd.Origin[1], hd.Width[1], tw) &&
 		inRange(hp.C[2], hp.R, hd.Origin[2], hd.Width[2], tw)
+}
+
+func (hp *HaloProfiles) ChangeCenter(v *geom.Vec) {
+	for i := 0; i < 3; i++ {
+		hp.C[i] = v[i]
+		for r := range hp.rs {
+			hp.rs[r].dr[i] = -v[i]
+		}
+	}
+}
+
+func (hp *HaloProfiles) Mass(rhoM float64) float64 {
+	vol := (4 * math.Pi / 3) * hp.R*hp.R*hp.R
+	return float64(vol) * hp.Rho() * rhoM
+}
+
+func (hp *HaloProfiles) Rho() float64 {
+	rBuf, rSum := make([]float64, hp.bins), make([]float64, hp.bins)
+	profs := hp.n * len(hp.rs)
+
+	// Find the spherically averaged rho profile
+	for r := 0; r < len(hp.rs); r++ {
+		for i := 0; i < hp.n; i++ {
+			hp.rs[r].Retrieve(i, rBuf)
+			for j := range rBuf { rSum[j] += rBuf[j] }
+		}
+	}
+	for j := range rSum { rSum[j] /= float64(profs) }
+
+	// Integrate
+	dr := (hp.rMax - hp.rMin) / float64(len(rSum))
+	sum := 0.0
+	rs := make([]float64, len(rSum))
+	for i, rho := range rSum {
+		r := (float64(i) + 0.5)*dr + hp.rMin
+		rs[i] = r
+		sum += r*r*dr*rho
+	}
+
+	sum *= 4*math.Pi	
+	vol := (4 * math.Pi / 3) * hp.R*hp.R*hp.R
+	return sum / float64(vol)
 }

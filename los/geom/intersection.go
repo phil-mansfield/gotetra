@@ -204,6 +204,7 @@ func angularWidth(low, high float32) float32 {
 func (poly *TetraSlice) IntersectingLines(phi float32) (l1, l2 *Line) {
 	lineNum := 0
 	l1 = nil
+
 	for i := 0; i < poly.Points; i++ {
 		dist := angularWidth(poly.linePhiStarts[i], phi)
 		if dist >= 0 && poly.linePhiWidths[i] > dist {

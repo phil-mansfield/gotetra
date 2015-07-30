@@ -32,6 +32,7 @@ func (l *Line) Init(x1, y1, x2, y2 float32) (ok bool) {
 	} else {
 		l.M = (y1 - y2) / (x1 - x2)
 		l.Y0 = y1 - l.M * x1
+		l.Vertical = false
 	}
 	return true
 }
