@@ -337,6 +337,7 @@ func writeGrids(outDir string, hd *io.CatalogHeader,
 	shd := &io.SheetHeader{}
 	shd.Cosmo = hd.Cosmo
 	shd.CountWidth = hd.CountWidth
+	shd.Count = hd.Count
 	shd.Mass = hd.Mass
 	shd.TotalWidth = hd.TotalWidth
 
