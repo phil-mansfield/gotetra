@@ -101,7 +101,7 @@ func intersectZPlane(P, L *Vec, z float32) (x, y float32, ok bool) {
 	return P[0] + L[0]*t, P[1] + L[1]*t, true
 }
 
-func (poly *TetraSlice) link() {
+func (poly *TetraSlice) link() (ok bool) {
 	for i := 0; i < poly.Points; i++ {
 		poly.lineStarts[i], poly.lineEnds[i] = -1, -1
 	}
@@ -143,11 +143,15 @@ func (poly *TetraSlice) link() {
 			poly.linePhiWidths[i] = width
 		}
 
-		poly.Lines[i].Init(
+		
+		if !poly.Lines[i].Init(
 			poly.Xs[poly.lineStarts[i]], poly.Ys[poly.lineStarts[i]],
 			poly.Xs[poly.lineEnds[i]], poly.Ys[poly.lineEnds[i]],
-		)
+		) {
+			return false
+		}
 	}
+	return true
 }
 
 // ZPlaneSlice slices a tetrahedron with a z-aligned plane. ok is returned as
@@ -175,7 +179,7 @@ func (t *Tetra) ZPlaneSlice(
 	}
 
 	if poly.Points < 3 { return false }
-	poly.link()
+	if !poly.link() { return false }
 	return true
 }
 
@@ -200,14 +204,15 @@ func angularWidth(low, high float32) float32 {
 func (poly *TetraSlice) IntersectingLines(phi float32) (l1, l2 *Line) {
 	lineNum := 0
 	l1 = nil
-	for i := 0; i > poly.Points; i++ {
+	for i := 0; i < poly.Points; i++ {
 		dist := angularWidth(poly.linePhiStarts[i], phi)
 		if dist >= 0 && poly.linePhiWidths[i] > dist {
-			if lineNum == 1 {
+			if lineNum == 0 {
 				l1 = &poly.Lines[i]
-			} else if lineNum == 1 {
+			} else {
 				return l1, &poly.Lines[i]
 			}
+			lineNum++
 		}
 	}
 	return l1, nil

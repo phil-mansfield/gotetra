@@ -20,12 +20,12 @@ func lineEpsEq(x, y float32) bool {
 }
 
 // Init initializes a line so that it passes though both the supplied points.
-//
-// Init panics if the two points are equal.
-func (l *Line) Init(x1, y1, x2, y2 float32) {
+// Init returns false if a line cannot be unambiguously drawn between the given
+// points, false is returned. Otherwise true is returned.
+func (l *Line) Init(x1, y1, x2, y2 float32) (ok bool) {
 	if lineEpsEq(x1, x2) {
 		if lineEpsEq(y1, y2) {
-			panic("Cannot make line between a point and itself.")
+			return false
 		}
 		l.Y0 = x1
 		l.Vertical = true
@@ -33,6 +33,7 @@ func (l *Line) Init(x1, y1, x2, y2 float32) {
 		l.M = (y1 - y2) / (x1 - x2)
 		l.Y0 = y1 - l.M * x1
 	}
+	return true
 }
 
 // InitFromPlucker initializes a line so that it is aligned with the given
