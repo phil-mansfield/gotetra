@@ -40,7 +40,7 @@ func (hr *haloRing) Init(
 	for i := 0; i < 3; i++ { hr.dr[i] *= -1 }
 }
 
-func (hr *haloRing) Count(t *geom.Tetra) {
+func (hr *haloRing) insert(t *geom.Tetra, rho float64) {
 	hr.t = *t
 	hr.t.Translate(&hr.dr)
 	hr.t.Rotate(&hr.rot)
@@ -58,7 +58,7 @@ func (hr *haloRing) Count(t *geom.Tetra) {
 			if l2 != nil {
 				enterX, enterY, _ := geom.Solve(l, l1)
 				exitX, exitY, _ := geom.Solve(l, l2)
-
+				
 				rEnterSqr := enterX*enterX + enterY*enterY
 				rExitSqr := exitX*exitX + exitY*exitY
 				
@@ -71,13 +71,16 @@ func (hr *haloRing) Count(t *geom.Tetra) {
 				rEnter = 0.0
 			}
 
-			hr.Insert(rEnter, rExit, 1, idx)
+			hr.Insert(rEnter, rExit, rho, idx)
 
 			idx++
 			if idx == hr.n { idx = 0 }
 		}
 	}
 }
+
+func (hr *haloRing) Count(t *geom.Tetra) { hr.insert(t, 1) }
+func (hr *haloRing) Density(t *geom.Tetra, rho float64) { hr.insert(t, rho) }
 
 type HaloProfiles struct {
 	geom.Sphere
@@ -111,9 +114,11 @@ func (hp *HaloProfiles) Init(
 }
 
 func (hp *HaloProfiles) Count(t *geom.Tetra) {
-	for i := range hp.rs {
-		hp.rs[i].Count(t)
-	}
+	for i := range hp.rs { hp.rs[i].Count(t) }
+}
+
+func (hp *HaloProfiles) Density(t *geom.Tetra, rho float64) {
+	for i := range hp.rs { hp.rs[i].Density(t, rho) }
 }
 
 func wrapDist(x1, x2, width float32) float32 {
