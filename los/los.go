@@ -9,19 +9,30 @@ import (
 // CountAll computes profiles for all the given halos which count the number
 // of tetrahedra overlapping points at a given radius.
 func CountAll(
-	hs []HaloProfiles, ts[]geom.Tetra,
-	hd *io.CatalogHeader, ssBuf []geom.Sphere,
+	hs []HaloProfiles, ts []geom.Tetra, ss []geom.Sphere,
 ) {
-	for i := range ts { ts[i].BoundingSphere(&ssBuf[i]) }
-
 	for hi := range hs {
 		h := &hs[hi]
 		for ti := range ts {
 			t := &ts[ti]
-			s := &ssBuf[ti]
+			s := &ss[ti]
 
 			// This can be sped up significantly, if need be.
 			if h.SphereIntersect(s) { h.Count(t) }
+		}
+	}
+}
+
+func DensityAll(
+	hs []HaloProfiles, ts []geom.Tetra, ss []geom.Sphere, rhos []float64,
+) {
+	for hi := range hs {
+		h := &hs[hi]
+		for ti := range ts {
+			t := &ts[ti]
+			s := &ss[ti]
+
+			if h.SphereIntersect(s) { h.Density(t, rhos[ti]) }
 		}
 	}
 }
@@ -62,6 +73,14 @@ func UnpackTetrahedra(
 		}
 	}
 
+}
+
+func TetraDensity(hd *io.SheetHeader, ts []geom.Tetra, rhos []float64) {
+	tw := hd.TotalWidth
+	unitTetRho := tw*tw*tw / (6 * float64(hd.Count))
+	for i := range ts {
+		rhos[i] = unitTetRho / ts[i].Volume()
+	}
 }
 
 func WrapHalo(hps []HaloProfiles, hd *io.SheetHeader) {
