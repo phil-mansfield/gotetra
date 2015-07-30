@@ -263,6 +263,7 @@ func readSheetHeaderAt(
 	err = binary.Read(f, order, hdBuf)
 	if err != nil { return nil, binary.LittleEndian, err }
 
+	hdBuf.Count = hdBuf.CountWidth*hdBuf.CountWidth*hdBuf.CountWidth
 	return f, order, nil
 }
 
