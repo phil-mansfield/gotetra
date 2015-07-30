@@ -4,6 +4,7 @@ package los
 
 import (
 	"math"
+
 	"github.com/phil-mansfield/gotetra/los/geom"
 )
 
@@ -41,7 +42,7 @@ func (p *ProfileRing) Init(lowR, highR float64, bins, n int) {
 // Insert inserts a plateau with the given radial extent and density to the
 // profile.
 func (p *ProfileRing) Insert(start, end, rho float64, i int) {
-	if end <= p.lowR || start > p.highR {
+	if end <= p.lowR || start >= p.highR {
 		return
 	}
 
@@ -49,20 +50,20 @@ func (p *ProfileRing) Insert(start, end, rho float64, i int) {
 	if start > p.lowR {
 		fidx, rem := math.Modf((start - p.lowR) / p.dr)
 		idx := int(fidx)
-		p.derivs[i*p.n + idx] += rho * (1 - rem)
+		p.derivs[i*p.bins + idx] += rho * (1 - rem)
 		if idx < p.bins - 1 {
-			p.derivs[i*p.n + idx+1] += rho * rem
+			p.derivs[i*p.bins + idx+1] += rho * rem
 		}
 	} else {
-		p.derivs[i*p.n] += rho
+		p.derivs[i*p.bins] += rho
 	}
 
 	if end < p.highR {
 		fidx, rem := math.Modf((end - p.lowR) / p.dr)
 		idx := int(fidx)
-		p.derivs[i*p.n + idx] -= rho * (1 - rem)
+		p.derivs[i*p.bins + idx] -= rho * (1 - rem)
 		if idx < p.bins - 1 {
-			p.derivs[i*p.n + idx+1] -= rho * rem
+			p.derivs[i*p.bins + idx+1] -= rho * rem
 		}
 	}
 }
@@ -72,7 +73,7 @@ func (p *ProfileRing) Insert(start, end, rho float64, i int) {
 func (p *ProfileRing) Retrieve(i int, out []float64) {
 	sum := float64(0)
 	for j := 0; j < p.bins; j++ {
-		sum += p.derivs[i + p.n*j]
+		sum += p.derivs[j + p.bins*i]
 		out[j] = sum
 	}
 }
