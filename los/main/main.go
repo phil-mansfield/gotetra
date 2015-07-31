@@ -21,7 +21,8 @@ import (
 
 const (
 	rType = halo.R200m
-	rMult = 3.0
+	rMaxMult = 3.0
+	rMinMult = 1.0
 )
 
 func main() {
@@ -53,7 +54,7 @@ func main() {
 	defer pprof.StopCPUProfile()
 	for _, i := range []int{1000, 1001, 1002, 1003, 1004} {
 		origin := &geom.Vec{float32(xs[i]), float32(ys[i]), float32(zs[i])}
-		h.Init(i, 1, origin, 0, rs[i] * rMult, 200, 1000)
+		h.Init(i, 10, origin, rs[i] * rMinMult, rs[i] * rMaxMult, 200, 1000)
 		hdIntrs, fileIntrs := intersectingSheets(h, hds, files)
 
 		fmt.Printf(
@@ -177,7 +178,7 @@ func intersectionTest(
 		los.DensityAll(hs, tsBuf, ssBuf, rhosBuf)
 		t3 := float64(time.Now().UnixNano())
 
-		fmt.Printf("%27s Setup: %.3g s  Density: %.3g s\n", "",
+		fmt.Printf("Setup: %.3g s  Density: %.3g s\n",
 			(t2 - t1) / 1e9, (t3 - t2) / 1e9)
 	}
 	fmt.Printf("    Rho: %.3g\n", h.Rho())
