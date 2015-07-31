@@ -122,6 +122,22 @@ func compressCoordsCheck(x, y, z, dx, dy, dz, countWidth int64) (idx int64, ok b
 	return newX + newY*countWidth + newZ*countWidth*countWidth, true
 }
 
+func (idxs *TetraIdxs) InitCartesian(
+	x, y, z, countWidth int64, dir int,
+) *TetraIdxs {
+	countArea := countWidth * countWidth
+	idxs[0] = compressCoords(
+		x, y, z, dirs[dir][0][0], dirs[dir][0][1], dirs[dir][0][2], countWidth,
+	)
+	idxs[1] = compressCoords(
+		x, y, z, dirs[dir][1][0], dirs[dir][1][1], dirs[dir][1][2], countWidth,
+	)
+	idxs[2] = compressCoords(x, y, z, 1, 1, 1, countWidth)
+	idxs[3] = x + y*countWidth + z*countArea
+
+	return idxs
+}
+
 // Init initializes a TetraIdxs collection using the same rules as NewTetraIdxs.
 func (idxs *TetraIdxs) Init(idx, countWidth, skip int64, dir int) *TetraIdxs {
 	if dir < 0 || dir >= 6 {
