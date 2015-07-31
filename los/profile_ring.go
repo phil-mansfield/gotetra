@@ -42,9 +42,7 @@ func (p *ProfileRing) Init(lowR, highR float64, bins, n int) {
 // Insert inserts a plateau with the given radial extent and density to the
 // profile.
 func (p *ProfileRing) Insert(start, end, rho float64, i int) {
-	if end <= p.lowR || start >= p.highR {
-		return
-	}
+	if end <= p.lowR || start >= p.highR { return }
 
 	// You could be a bit more careful with floating point ops here.
 	if start > p.lowR {

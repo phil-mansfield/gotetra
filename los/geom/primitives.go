@@ -197,6 +197,7 @@ func (s1 *Sphere) SphereIntersect(s2 *Sphere) bool {
 	return true
 }
 
+// VecIntersect returns true if a vector is contained inside a sphere.
 func (s *Sphere) VecIntersect(v *Vec) bool {
 	sum := float32(0)
 	dr2 := s.R*s.R
@@ -209,6 +210,7 @@ func (s *Sphere) VecIntersect(v *Vec) bool {
 
 }
 
+// TetraIntersect returns true if a tetrahedron and a sphere overlap.
 func (s *Sphere) TetraIntersect(t *Tetra) bool {
 	for i := 0; i < 4; i++ {
 		if s.VecIntersect(&t[i]) { return true }
@@ -216,6 +218,7 @@ func (s *Sphere) TetraIntersect(t *Tetra) bool {
 	return false
 }
 
+// SphereContain returns true if s1 is completely contained in s2.
 func (s1 *Sphere) SphereContain(s2 *Sphere) bool {
 	sum := float32(0)
 	if s1.R <= s2.R { return false }
@@ -229,6 +232,8 @@ func (s1 *Sphere) SphereContain(s2 *Sphere) bool {
 	return true
 }
 
+// TetraContain returns true if a tetrahedron is completely contained in a
+// sphere.
 func (s *Sphere) TetraContain(t *Tetra) bool {
 	for i := 0; i < 4; i++ {
 		if !s.VecIntersect(&t[i]) { return false }

@@ -254,6 +254,8 @@ func (poly *TetraSlice) AngleRange() (start, width float32) {
 	}
 }
 
+// RSqrMinMax returns the square of the radii of the closest and furthest
+// points in a TetraSlice.
 func (poly *TetraSlice) RSqrMinMax() (rSqrMin, rSqrMax float32) {
 	rSqr := poly.Xs[0]*poly.Xs[0] + poly.Ys[0]*poly.Ys[0]
 	rSqrMin, rSqrMax = rSqr, rSqr

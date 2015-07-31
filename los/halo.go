@@ -22,6 +22,7 @@ type haloRing struct {
 	poly geom.TetraSlice
 }
 
+// Init initialized a haloRing.
 func (hr *haloRing) Init(
 	norm, origin *geom.Vec, rMin, rMax float64, bins, n int,
 ) {
@@ -97,17 +98,26 @@ func (hr *haloRing) insert(t *geom.Tetra, rho float64) {
 	}
 }
 
+// Count inserts a tetrahedron into the haloRing so that its profiles represent
+// overlap counts.
 func (hr *haloRing) Count(t *geom.Tetra) { hr.insert(t, 1) }
+
+// Density inserts a tetrahedorn into the haloRing so that its profiles
+// represent densties.
 func (hr *haloRing) Density(t *geom.Tetra, rho float64) { hr.insert(t, rho) }
 
+// HaloProfiles is a terribly-named struct which represents a halo and all its
+// LoS profiles.
 type HaloProfiles struct {
 	geom.Sphere
+	minSphere geom.Sphere
 
 	rs []haloRing
 	rMin, rMax float64
 	id, bins, n int
 }
 
+// Init initializes a HaloProfiles struct with the given parameters.
 func (hp *HaloProfiles) Init(
 	id, rings int, origin *geom.Vec, rMin, rMax float64,
 	bins, n int,
@@ -128,10 +138,10 @@ func (hp *HaloProfiles) Init(
 
 	hp.rs = make([]haloRing, rings)
 	hp.C, hp.R = *origin, float32(rMax)
+	hp.minSphere.C, hp.minSphere.R = *origin, float32(rMin)
 	hp.rMin, hp.rMax = rMin, rMax
 	hp.id, hp.bins, hp.n = id, bins, n
 
-	println(rings, len(norms))
 	for i := 0; i < rings; i++ {
 		hp.rs[i].Init(&norms[i], origin, rMin, rMax, bins, n)
 	}
@@ -139,10 +149,14 @@ func (hp *HaloProfiles) Init(
 	return hp
 }
 
+// Count inserts the given tetrahedron such that the resulting profiles give
+// tetrahedron overlap counts.
 func (hp *HaloProfiles) Count(t *geom.Tetra) {
 	for i := range hp.rs { hp.rs[i].Count(t) }
 }
 
+// Density inserts a tetrahedron such that the resulting profiles give
+// densities.
 func (hp *HaloProfiles) Density(t *geom.Tetra, rho float64) {
 	for i := range hp.rs { hp.rs[i].Density(t, rho) }
 }
@@ -162,6 +176,8 @@ func inRange(x, r, low, width, tw float32) bool {
 	return wrapDist(x, low, tw) > -r && wrapDist(x, low + width, tw) < r
 }
 
+// SheetIntersect returns true if the given halo and sheet intersect one another
+// and false otherwise.
 func (hp *HaloProfiles) SheetIntersect(hd *io.SheetHeader) bool {
 	tw := float32(hd.TotalWidth)
 	return inRange(hp.C[0], hp.R, hd.Origin[0], hd.Width[0], tw) &&
@@ -169,20 +185,44 @@ func (hp *HaloProfiles) SheetIntersect(hd *io.SheetHeader) bool {
 		inRange(hp.C[2], hp.R, hd.Origin[2], hd.Width[2], tw)
 }
 
+// SphereIntersect returns true if the given halo and sphere intersect and false
+// otherwise.
+func (hp *HaloProfiles) SphereIntersect(s *geom.Sphere) bool {
+	return hp.Sphere.SphereIntersect(s) && !hp.minSphere.SphereContain(s)
+}
+
+// VecIntersect returns true if the given vector is contained in the given halo
+// and false otherwise.
+func (hp *HaloProfiles) VecIntersect(v *geom.Vec) bool {
+	return hp.Sphere.VecIntersect(v) && !hp.minSphere.VecIntersect(v)
+}
+
+// TetraIntersect returns true if the given vector and tetrahedron overlap.
+func (hp *HaloProfiles) TetraIntersect(t *geom.Tetra) bool {
+	return hp.Sphere.TetraIntersect(t) && !hp.minSphere.TetraContain(t)
+}
+
+// ChangeCenter updates the center of the halo to a new position. This includes
+// updating several pieces of internal state.
 func (hp *HaloProfiles) ChangeCenter(v *geom.Vec) {
 	for i := 0; i < 3; i++ {
 		hp.C[i] = v[i]
+		hp.minSphere.C[i] = v[i]
 		for r := range hp.rs {
 			hp.rs[r].dr[i] = -v[i]
 		}
 	}
 }
 
+// Mass returns the mass of the halo as estimated by averaging the halo's
+// profiles.
 func (hp *HaloProfiles) Mass(rhoM float64) float64 {
 	vol := (4 * math.Pi / 3) * hp.R*hp.R*hp.R
 	return float64(vol) * hp.Rho() * rhoM
 }
 
+// rho returns the total enclosed density of the halo as estimate by averaging
+// the halo's profiles.
 func (hp *HaloProfiles) Rho() float64 {
 	rBuf, rSum := make([]float64, hp.bins), make([]float64, hp.bins)
 	profs := hp.n * len(hp.rs)
@@ -197,12 +237,10 @@ func (hp *HaloProfiles) Rho() float64 {
 	for j := range rSum { rSum[j] /= float64(profs) }
 
 	// Integrate
-	dr := (hp.rMax - hp.rMin) / float64(len(rSum))
+	dr := float64(hp.R - hp.minSphere.R) / float64(len(rSum))
 	sum := 0.0
-	rs := make([]float64, len(rSum))
 	for i, rho := range rSum {
-		r := (float64(i) + 0.5)*dr + hp.rMin
-		rs[i] = r
+		r := (float64(i) + 0.5)*dr + float64(hp.minSphere.R)
 		sum += r*r*dr*rho
 	}
 

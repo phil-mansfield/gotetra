@@ -17,12 +17,16 @@ func CountAll(
 			t := &ts[ti]
 			s := &ss[ti]
 
-			// This can be sped up significantly, if need be.
-			if h.SphereIntersect(s) { h.Count(t) }
+			if h.Sphere.SphereIntersect(s) &&  
+				!h.minSphere.TetraContain(t) {
+				h.Count(t) 
+			}
 		}
 	}
 }
 
+// DensityAll computes profiles for all the given halos which give the density
+// of points at a given radius.
 func DensityAll(
 	hs []HaloProfiles, ts []geom.Tetra, ss []geom.Sphere, rhos []float64,
 ) {
@@ -31,9 +35,9 @@ func DensityAll(
 		for ti := range ts {
 			t := &ts[ti]
 			s := &ss[ti]
-
-			if h.SphereIntersect(s) {
-				h.Density(t, rhos[ti])
+			if h.Sphere.SphereIntersect(s) &&  
+				!h.minSphere.TetraContain(t) {
+				h.Density(t, rhos[ti]) 
 			}
 		}
 	}
@@ -77,6 +81,8 @@ func UnpackTetrahedra(
 
 }
 
+// TetraDensity writes the density of a slice of tetrahedra to a slice of
+// floats.
 func TetraDensity(hd *io.SheetHeader, ts []geom.Tetra, rhos []float64) {
 	tw := hd.TotalWidth
 	tCount := float64(hd.Count * 6)
@@ -85,6 +91,8 @@ func TetraDensity(hd *io.SheetHeader, ts []geom.Tetra, rhos []float64) {
 	}
 }
 
+// WrapHalo updates the coordinates of a slice of HaloProfiles so that they
+// as close to the given sheet as periodic boundary conditions will allow.
 func WrapHalo(hps []HaloProfiles, hd *io.SheetHeader) {
 	tw := float32(hd.TotalWidth)
 	newC := &geom.Vec{}
@@ -101,6 +109,8 @@ func WrapHalo(hps []HaloProfiles, hd *io.SheetHeader) {
 	}
 }
 
+// WrapXs updates a slice of vectors so that they will be as close to thee given
+// sheet as periodic boundary conditions will allow.
 func WrapXs(xs []rGeom.Vec, hd *io.SheetHeader) {
 	tw := float32(hd.TotalWidth)
 	for i := range xs {
