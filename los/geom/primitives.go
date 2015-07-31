@@ -190,7 +190,7 @@ func (s1 *Sphere) SphereIntersect(s2 *Sphere) bool {
 	dr := s1.R + s2.R
 	dr2 := dr*dr
 	for i := 0; i < 3; i++ {
-		dx := s1.C[0] - s2.C[0]
+		dx := s1.C[i] - s2.C[i]
 		sum += dx*dx
 		if sum > dr2 { return false }
 	}
@@ -201,12 +201,19 @@ func (s *Sphere) VecIntersect(v *Vec) bool {
 	sum := float32(0)
 	dr2 := s.R*s.R
 	for i := 0; i < 3; i++ {
-		dx := s.C[0] - v[0]
+		dx := s.C[i] - v[i]
 		sum += dx*dx
 		if sum > dr2 { return false }
 	}
 	return true
 
+}
+
+func (s *Sphere) TetraIntersect(t *Tetra) bool {
+	for i := 0; i < 4; i++ {
+		if s.VecIntersect(&t[i]) { return true }
+	}
+	return false
 }
 
 // BoundingSphere draws a bounding sphere aorund the given tetrahedron.
