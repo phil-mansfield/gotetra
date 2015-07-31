@@ -224,7 +224,7 @@ func (s1 *Sphere) SphereContain(s2 *Sphere) bool {
 	for i := 0; i < 3; i++ {
 		dx := s1.C[i] - s2.C[i]
 		sum += dx*dx
-		if sum > dr2 { return true }
+		if sum > dr2 { return false }
 	}
 	return true
 }
