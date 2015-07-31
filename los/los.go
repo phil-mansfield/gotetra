@@ -69,11 +69,9 @@ func UnpackTetrahedra(
 	idxBuf := new(rGeom.TetraIdxs)
 	for writeIdx := int64(0); writeIdx < n; writeIdx++ {
 		x, y, z := coords(writeIdx, hd.SegmentWidth)
-		readIdx := index(x, y, z, hd.SegmentWidth)
-
 		for dir := int64(0); dir < 6; dir++ {
 			tIdx := 6 * writeIdx + dir
-			idxBuf.Init(readIdx, hd.GridWidth + 1, 1, int(dir))
+			idxBuf.InitCartesian(x, y, z, hd.GridWidth, int(dir))
 			unpackTetra(idxBuf, xs, &tsBuf[tIdx])
 			tsBuf[tIdx].Orient(+1)
 		}
