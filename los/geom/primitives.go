@@ -216,6 +216,26 @@ func (s *Sphere) TetraIntersect(t *Tetra) bool {
 	return false
 }
 
+func (s1 *Sphere) SphereContain(s2 *Sphere) bool {
+	sum := float32(0)
+	if s1.R <= s2.R { return false }
+	dr := s1.R - s2.R
+	dr2 := dr*dr
+	for i := 0; i < 3; i++ {
+		dx := s1.C[i] - s2.C[i]
+		sum += dx*dx
+		if sum > dr2 { return true }
+	}
+	return true
+}
+
+func (s *Sphere) TetraContain(t *Tetra) bool {
+	for i := 0; i < 4; i++ {
+		if !s.VecIntersect(&t[i]) { return false }
+	}
+	return true
+}
+
 // BoundingSphere draws a bounding sphere aorund the given tetrahedron.
 func (t *Tetra) BoundingSphere(sph *Sphere) {
 	bx := (t[0][0] + t[1][0] + t[2][0] + t[3][0]) / 4

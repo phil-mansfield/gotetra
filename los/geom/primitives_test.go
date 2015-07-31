@@ -67,6 +67,66 @@ func TestTetraVolume(t *testing.T) {
 	}
 }
 
+func TestSphereSphereIntersect(t *testing.T) {
+	table := []struct {
+		s1, s2 Sphere
+		res bool
+	} {
+		{Sphere{Vec{0, 0, 0}, 1}, Sphere{Vec{0, 0, 0}, 1}, true},
+		{Sphere{Vec{0, 0, 0}, 1}, Sphere{Vec{0, 0, 0}, 2}, true},
+		{Sphere{Vec{0, 0, 0}, 2}, Sphere{Vec{0, 0, 0}, 1}, true},
+		
+		{Sphere{Vec{0, 0, 0}, 1}, Sphere{Vec{0, 0, 1}, 1}, true},
+		{Sphere{Vec{0, 0, 0}, 1}, Sphere{Vec{0, 1, 0}, 1}, true},
+		{Sphere{Vec{0, 0, 0}, 1}, Sphere{Vec{1, 0, 0}, 1}, true},
+
+		{Sphere{Vec{0, 0, 0}, 3}, Sphere{Vec{0, 0, 1.5}, 1}, true},
+		{Sphere{Vec{0, 0, 0}, 3}, Sphere{Vec{0, 1.5, 0}, 1}, true},
+		{Sphere{Vec{0, 0, 0}, 3}, Sphere{Vec{1.5, 0, 0}, 1}, true},
+
+		{Sphere{Vec{0, 0, 0}, 1}, Sphere{Vec{0, 0, 3}, 1}, false},
+		{Sphere{Vec{0, 0, 0}, 1}, Sphere{Vec{0, 3, 0}, 1}, false},
+		{Sphere{Vec{0, 0, 0}, 1}, Sphere{Vec{3, 0, 0}, 1}, false},
+	}
+
+	for i, test := range table {
+		if test.s1.SphereIntersect(&test.s2) != test.res {
+			t.Errorf("%d) %v.SphereIntersect(%v) -> %v",
+				i+1, test.s1, test.s2, test.res)
+		}
+	}
+}
+
+func TestSphereSphereContain(t *testing.T) {
+	table := []struct {
+		s1, s2 Sphere
+		res bool
+	} {
+		{Sphere{Vec{0, 0, 0}, 1}, Sphere{Vec{0, 0, 0}, 1}, false},
+		{Sphere{Vec{0, 0, 0}, 1}, Sphere{Vec{0, 0, 0}, 2}, false},
+		{Sphere{Vec{0, 0, 0}, 2}, Sphere{Vec{0, 0, 0}, 1}, true},
+		
+		{Sphere{Vec{0, 0, 0}, 1}, Sphere{Vec{0, 0, 1}, 1}, false},
+		{Sphere{Vec{0, 0, 0}, 1}, Sphere{Vec{0, 1, 0}, 1}, false},
+		{Sphere{Vec{0, 0, 0}, 1}, Sphere{Vec{1, 0, 0}, 1}, false},
+
+		{Sphere{Vec{0, 0, 0}, 3}, Sphere{Vec{0, 0, 1.5}, 1}, true},
+		{Sphere{Vec{0, 0, 0}, 3}, Sphere{Vec{0, 1.5, 0}, 1}, true},
+		{Sphere{Vec{0, 0, 0}, 3}, Sphere{Vec{1.5, 0, 0}, 1}, true},
+
+		{Sphere{Vec{0, 0, 0}, 1}, Sphere{Vec{0, 0, 3}, 1}, false},
+		{Sphere{Vec{0, 0, 0}, 1}, Sphere{Vec{0, 3, 0}, 1}, false},
+		{Sphere{Vec{0, 0, 0}, 1}, Sphere{Vec{3, 0, 0}, 1}, false},
+	}
+
+	for i, test := range table {
+		if test.s1.SphereContain(&test.s2) != test.res {
+			t.Errorf("%d) %v.SphereContain(%v) -> %v",
+				i+1, test.s1, test.s2, test.res)
+		}
+	}
+}
+
 func BenchmarkVecTranslate(b *testing.B) {
 	n := 1000
 	dxs := randomTranslations(n)
