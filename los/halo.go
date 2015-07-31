@@ -13,6 +13,7 @@ type haloRing struct {
 	ProfileRing
 	phis []float32
 	rot, irot mat.Matrix32
+	rMax float64
 
 	// Workspace objects.
 	dr geom.Vec
@@ -36,9 +37,15 @@ func (hr *haloRing) Init(
 		hr.phis[i] = float32(i) / float32(n) * (2 * math.Pi)
 	}
 
+	hr.rMax = rMax
 	hr.dr = *origin
 	for i := 0; i < 3; i++ { hr.dr[i] *= -1 }
 }
+
+
+var (
+	InsideDist, OutsideDist = 0.0, 0.0
+)
 
 func (hr *haloRing) insert(t *geom.Tetra, rho float64) {
 	hr.t = *t
@@ -77,6 +84,10 @@ func (hr *haloRing) insert(t *geom.Tetra, rho float64) {
 				rEnter = 0.0
 			}
 
+			if rEnter < hr.rMax && rExit > hr.rMax {
+				InsideDist += hr.rMax - rEnter
+				OutsideDist += rExit -  hr.rMax
+			}
 			hr.Insert(rEnter, rExit, rho, idx)
 
 			idx++
@@ -100,9 +111,17 @@ func (hp *HaloProfiles) Init(
 	bins, n int,
 ) *HaloProfiles {
 	// We might be able to do better than this.
-	solid, ok := geom.NewUniquePlatonicSolid(rings)
-	if !ok {
-		panic(fmt.Sprintf("Cannot uniformly space %d rings.", rings))
+	var norms []geom.Vec
+	if rings >= 3 {
+		solid, ok := geom.NewUniquePlatonicSolid(rings)
+		norms = solid.UniqueNormals()
+		if !ok {
+			panic(fmt.Sprintf("Cannot uniformly space %d rings.", rings))
+		}
+	} else if rings == 1 {
+		norms = []geom.Vec{{0, 0, 1}}
+	} else if rings == 2 {
+		norms = []geom.Vec{{0, 0, 1}, {0, 1, 0}}
 	}
 
 	hp.rs = make([]haloRing, rings)
@@ -110,7 +129,6 @@ func (hp *HaloProfiles) Init(
 	hp.rMin, hp.rMax = rMin, rMax
 	hp.id, hp.bins, hp.n = id, bins, n
 
-	norms := solid.UniqueNormals()
 	println(rings, len(norms))
 	for i := 0; i < rings; i++ {
 		hp.rs[i].Init(&norms[i], origin, rMin, rMax, bins, n)
