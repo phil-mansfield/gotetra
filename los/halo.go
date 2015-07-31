@@ -42,52 +42,54 @@ func (hr *haloRing) Init(
 	for i := 0; i < 3; i++ { hr.dr[i] *= -1 }
 }
 
-
-var (
-	InsideDist, OutsideDist = 0.0, 0.0
-)
-
 func (hr *haloRing) insert(t *geom.Tetra, rho float64) {
 	hr.t = *t
 	hr.t.Translate(&hr.dr)
 	hr.t.Rotate(&hr.rot)
 	hr.pt.Init(&hr.t) // This is slower than it has to be by a lot!
 	
+	rSqrMin, rSqrMax := float32(hr.lowR*hr.lowR), float32(hr.highR*hr.highR)
 	if hr.t.ZPlaneSlice(&hr.pt, 0, &hr.poly) {
+		// Stop early if possible.
+		rSqrTMin, rSqrTMax := hr.poly.RSqrMinMax()
+		if rSqrTMin > rSqrMax || rSqrTMax < rSqrMin { return }
+
+		// Find the intersected LoS range and check each line in it for
+		// intersection distance.
 		lowPhi, phiWidth := hr.poly.AngleRange()
 		lowIdx, idxWidth := geom.AngleBinRange(lowPhi, phiWidth, hr.n)
 		
 		idx := lowIdx
-		var rEnter, rExit float64
+
 		for i := 0; i < idxWidth; i++ {
 			if idx >= hr.n { idx -= hr.n }
 			l := &hr.Lines[idx]
 			l1, l2 := hr.poly.IntersectingLines(hr.phis[idx])
 
-
+			// No intersections. Happens sometimes due to floating points
+			/// fuzziness.
 			if l1 == nil { continue }
 
+			var rEnter, rExit float64
 			if l2 != nil {
+				// The polygon does not enclose the origin.
 				enterX, enterY, _ := geom.Solve(l, l1)
 				exitX, exitY, _ := geom.Solve(l, l2)
 				
-				rEnterSqr := enterX*enterX + enterY*enterY
-				rExitSqr := exitX*exitX + exitY*exitY
+				rSqrEnter := enterX*enterX + enterY*enterY
+				rSqrExit := exitX*exitX + exitY*exitY
 				
-				rEnter = math.Sqrt(float64(rEnterSqr))
-				rExit = math.Sqrt(float64(rExitSqr))
+				rEnter = math.Sqrt(float64(rSqrEnter))
+				rExit = math.Sqrt(float64(rSqrExit))
 				if rExit < rEnter { rEnter, rExit = rExit, rEnter }
 			} else {
+				// The polygon encloses the origin.
 				exitX, exitY, _ := geom.Solve(l, l1)
-				rExitSqr := exitX*exitX + exitY*exitY
-				rExit = math.Sqrt(float64(rExitSqr))
+				rSqrExit := exitX*exitX + exitY*exitY
+				rExit = math.Sqrt(float64(rSqrExit))
 				rEnter = 0.0
 			}
 
-			if rEnter < hr.rMax && rExit > hr.rMax {
-				InsideDist += hr.rMax - rEnter
-				OutsideDist += rExit -  hr.rMax
-			}
 			hr.Insert(rEnter, rExit, rho, idx)
 
 			idx++
