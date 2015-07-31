@@ -253,3 +253,17 @@ func (poly *TetraSlice) AngleRange() (start, width float32) {
 		return lowPhi, phiWidth
 	}
 }
+
+func (poly *TetraSlice) RSqrMinMax() (rSqrMin, rSqrMax float32) {
+	rSqr := poly.Xs[0]*poly.Xs[0] + poly.Ys[0]*poly.Ys[0]
+	rSqrMin, rSqrMax = rSqr, rSqr
+	for i := 1; i < poly.Points; i++ {
+		rSqr = poly.Xs[i]*poly.Xs[i] + poly.Ys[i]*poly.Ys[i]
+		if rSqr > rSqrMax {
+			rSqrMax = rSqr
+		} else if rSqr < rSqrMin {
+			rSqrMin = rSqr
+		}
+	}
+	return rSqrMin, rSqrMax
+}
