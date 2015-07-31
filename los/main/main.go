@@ -21,8 +21,14 @@ import (
 
 const (
 	rType = halo.R200m
-	rMaxMult = 3.0
-	rMinMult = 1.0
+	rMaxMult = 1.0
+	rMinMult = 0.0
+	//rMinMult = 0.5
+
+	n = 1024
+	bins = 256
+
+	rings = 10
 )
 
 func main() {
@@ -54,7 +60,7 @@ func main() {
 	defer pprof.StopCPUProfile()
 	for _, i := range []int{1000, 1001, 1002, 1003, 1004} {
 		origin := &geom.Vec{float32(xs[i]), float32(ys[i]), float32(zs[i])}
-		h.Init(i, 10, origin, rs[i] * rMinMult, rs[i] * rMaxMult, 200, 1000)
+		h.Init(i, rings, origin, rs[i] * rMinMult, rs[i] * rMaxMult, bins, n)
 		hdIntrs, fileIntrs := intersectingSheets(h, hds, files)
 
 		fmt.Printf(
