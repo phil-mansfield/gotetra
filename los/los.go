@@ -1,6 +1,9 @@
 package los
 
 import (
+	"fmt"
+	"runtime"
+
 	"github.com/phil-mansfield/gotetra/render/io"
 	rGeom "github.com/phil-mansfield/gotetra/render/geom"
 	"github.com/phil-mansfield/gotetra/los/geom"
@@ -39,12 +42,26 @@ func (buf *Buffers) Read(file string, hd *io.SheetHeader) {
 		}
 	}
 
+	workers := runtime.NumCPU()
+	runtime.GOMAXPROCS(workers)
+	fmt.Printf("%d workers\n", workers)
+	out := make(chan int, workers)
+	for offset := 0; offset < workers; offset++ {
+		go buf.process(hd, offset, workers)
+	}
+
+	for i := 0; i < workers - 1; i++ { <- out }
+}
+
+func (buf *Buffers) process(hd *io.SheetHeader, offset, jump int) {
 	// Remember: Grid -> All particles; Segment -> Particles that can be turned
 	// into tetrahedra.
-	n := hd.SegmentWidth*hd.SegmentWidth
-	tFactor := float64(tw*tw*tw) / float64(n * 6)
+	n := hd.SegmentWidth*hd.SegmentWidth*hd.SegmentWidth
+	tw := float32(hd.TotalWidth)
+	tFactor := float64(tw*tw*tw) / float64(hd.Count * 6)
 	idxBuf := new(rGeom.TetraIdxs)
-	for segIdx := int64(0); segIdx < n; segIdx++ {
+	jump64 := int64(jump)
+	for segIdx := int64(offset); segIdx < n; segIdx += jump64 {
 		x, y, z := coords(segIdx, hd.SegmentWidth)
 		for dir := int64(0); dir < 6; dir++ {
 			ti := 6 * segIdx + dir
@@ -109,35 +126,6 @@ func unpackTetra(idxs *rGeom.TetraIdxs, xs []rGeom.Vec, t *geom.Tetra) {
     }
 }
 
-// UnpackTetrahedra converts the raw position data in a sheet segment into
-// tetrahedra.
-func unpackTetrahedra(
-	xs []rGeom.Vec, hd *io.SheetHeader, tsBuf []geom.Tetra,
-) {
-	n := hd.SegmentWidth*hd.SegmentWidth*hd.SegmentWidth
-	idxBuf := new(rGeom.TetraIdxs)
-	for writeIdx := int64(0); writeIdx < n; writeIdx++ {
-		x, y, z := coords(writeIdx, hd.SegmentWidth)
-		for dir := int64(0); dir < 6; dir++ {
-			tIdx := 6 * writeIdx + dir
-			idxBuf.InitCartesian(x, y, z, hd.GridWidth, int(dir))
-			unpackTetra(idxBuf, xs, &tsBuf[tIdx])
-			tsBuf[tIdx].Orient(+1)
-		}
-	}
-
-}
-
-// TetraDensity writes the density of a slice of tetrahedra to a slice of
-// floats.
-func tetrahedraDensity(hd *io.SheetHeader, ts []geom.Tetra, rhos []float64) {
-	tw := hd.TotalWidth
-	tCount := float64(hd.Count * 6)
-	for i := range ts {
-		rhos[i] = (tw * tw * tw) / (ts[i].Volume() * tCount)
-	}
-}
-
 // WrapHalo updates the coordinates of a slice of HaloProfiles so that they
 // as close to the given sheet as periodic boundary conditions will allow.
 func WrapHalo(hps []HaloProfiles, hd *io.SheetHeader) {
@@ -153,16 +141,5 @@ func WrapHalo(hps []HaloProfiles, hd *io.SheetHeader) {
 			}
 		}
 		h.ChangeCenter(newC)
-	}
-}
-
-// WrapXs updates a slice of vectors so that they will be as close to thee given
-// sheet as periodic boundary conditions will allow.
-func wrapXs(xs []rGeom.Vec, hd *io.SheetHeader) {
-	tw := float32(hd.TotalWidth)
-	for i := range xs {
-		for j := 0; j < 3; j++ {
-			if xs[i][j] < hd.Origin[j] { xs[i][j] += tw }
-		}
 	}
 }
