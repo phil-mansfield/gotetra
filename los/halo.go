@@ -106,6 +106,26 @@ func (hr *haloRing) Count(t *geom.Tetra) { hr.insert(t, 1) }
 // represent densties.
 func (hr *haloRing) Density(t *geom.Tetra, rho float64) { hr.insert(t, rho) }
 
+// Add adds the contents of hr2 to hr 1.
+func (hr1 *haloRing) Add(hr2 *haloRing) {
+	for i, x := range hr2.derivs { hr1.derivs[i] += x }
+}
+
+// Clear resets the contents of the haloRing.
+func (hr *haloRing) Clear() {
+	for i := range hr.derivs { hr.derivs[i] = 0 }
+}
+
+// Add adds the contents of hp2 to hp1.
+func (hp1 *HaloProfiles) Add(hp2 *HaloProfiles) {
+	for i := range hp1.rs { hp1.rs[i].Add(&hp2.rs[i]) }
+}
+
+// Clear resets the conents of the HaloProfiles.
+func (hp *HaloProfiles) Clear() {
+	for i := range hp.rs { hp.rs[i].Clear() }
+}
+
 // HaloProfiles is a terribly-named struct which represents a halo and all its
 // LoS profiles.
 type HaloProfiles struct {

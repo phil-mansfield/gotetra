@@ -2,6 +2,8 @@ package los
 
 import (
 	"testing"
+
+	"github.com/phil-mansfield/gotetra/los/geom"
 )
 
 func TestInRange(t *testing.T) {
@@ -31,4 +33,17 @@ func TestInRange(t *testing.T) {
 			)
 		}
 	}
+}
+
+func BenchmarkHaloProfilesClear(b *testing.B) {
+	hp := new(HaloProfiles)
+	hp.Init(0, 10, &geom.Vec{0, 0, 0}, 0, 1, 200, 1000)
+	for i := 0; i < b.N; i++ { hp.Clear() }
+}
+
+func BenchmarkHaloProfilesAdd(b *testing.B) {
+	hp1, hp2 := new(HaloProfiles), new(HaloProfiles)
+	hp1.Init(0, 10, &geom.Vec{0, 0, 0}, 0, 1, 200, 1000)
+	hp2.Init(0, 10, &geom.Vec{0, 0, 0}, 0, 1, 200, 1000)
+	for i := 0; i < b.N; i++ { hp1.Add(hp2) }
 }
