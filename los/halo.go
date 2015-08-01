@@ -110,6 +110,7 @@ func (hr *haloRing) Density(t *geom.Tetra, rho float64) { hr.insert(t, rho) }
 // LoS profiles.
 type HaloProfiles struct {
 	geom.Sphere
+	cCopy geom.Vec
 	minSphere geom.Sphere
 
 	rs []haloRing
@@ -138,6 +139,7 @@ func (hp *HaloProfiles) Init(
 
 	hp.rs = make([]haloRing, rings)
 	hp.C, hp.R = *origin, float32(rMax)
+	hp.cCopy = hp.C
 	hp.minSphere.C, hp.minSphere.R = *origin, float32(rMin)
 	hp.rMin, hp.rMax = rMin, rMax
 	hp.id, hp.bins, hp.n = id, bins, n

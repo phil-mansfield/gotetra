@@ -6,16 +6,42 @@ import (
 	"github.com/phil-mansfield/gotetra/los/geom"
 )
 
+type Buffers struct {
+	xs []rGeom.Vec
+	ts []geom.Tetra
+	ss []geom.Sphere
+	rhos []float64
+}
+
+func NewBuffers(file string, hd *io.SheetHeader) *Buffers {
+	buf := new(Buffers)
+
+    sw := hd.SegmentWidth
+    buf.xs = make([]rGeom.Vec, hd.GridCount)
+    buf.ts = make([]geom.Tetra, 6*sw*sw*sw)
+    buf.ss = make([]geom.Sphere, 6*sw*sw*sw)
+    buf.rhos = make([]float64, 6*sw*sw*sw)
+
+	buf.Read(file, hd)
+	return buf
+}
+
+func (buf *Buffers) Read(file string, hd *io.SheetHeader) {
+	io.ReadSheetPositionsAt(file, buf.xs)
+	wrapXs(buf.xs, hd)
+	unpackTetrahedra(buf.xs, hd, buf.ts)
+	tetrahedraDensity(hd, buf.ts, buf.rhos)
+	for i := range buf.ts { buf.ts[i].BoundingSphere(&buf.ss[i]) }
+}
+
 // CountAll computes profiles for all the given halos which count the number
 // of tetrahedra overlapping points at a given radius.
-func CountAll(
-	hs []HaloProfiles, ts []geom.Tetra, ss []geom.Sphere,
-) {
+func (buf *Buffers) CountAll(hs []HaloProfiles) {
 	for hi := range hs {
 		h := &hs[hi]
-		for ti := range ts {
-			t := &ts[ti]
-			s := &ss[ti]
+		for ti := range buf.ts {
+			t := &buf.ts[ti]
+			s := &buf.ss[ti]
 
 			if h.Sphere.SphereIntersect(s) &&  
 				!h.minSphere.TetraContain(t) {
@@ -27,17 +53,15 @@ func CountAll(
 
 // DensityAll computes profiles for all the given halos which give the density
 // of points at a given radius.
-func DensityAll(
-	hs []HaloProfiles, ts []geom.Tetra, ss []geom.Sphere, rhos []float64,
-) {
+func (buf *Buffers) DensityAll(hs []HaloProfiles) {
 	for hi := range hs {
 		h := &hs[hi]
-		for ti := range ts {
-			t := &ts[ti]
-			s := &ss[ti]
+		for ti := range buf.ts {
+			t := &buf.ts[ti]
+			s := &buf.ss[ti]
 			if h.Sphere.SphereIntersect(s) &&  
 				!h.minSphere.TetraContain(t) {
-				h.Density(t, rhos[ti]) 
+				h.Density(t, buf.rhos[ti]) 
 			}
 		}
 	}
@@ -62,7 +86,7 @@ func unpackTetra(idxs *rGeom.TetraIdxs, xs []rGeom.Vec, t *geom.Tetra) {
 
 // UnpackTetrahedra converts the raw position data in a sheet segment into
 // tetrahedra.
-func UnpackTetrahedra(
+func unpackTetrahedra(
 	xs []rGeom.Vec, hd *io.SheetHeader, tsBuf []geom.Tetra,
 ) {
 	n := hd.SegmentWidth*hd.SegmentWidth*hd.SegmentWidth
@@ -81,7 +105,7 @@ func UnpackTetrahedra(
 
 // TetraDensity writes the density of a slice of tetrahedra to a slice of
 // floats.
-func TetraDensity(hd *io.SheetHeader, ts []geom.Tetra, rhos []float64) {
+func tetrahedraDensity(hd *io.SheetHeader, ts []geom.Tetra, rhos []float64) {
 	tw := hd.TotalWidth
 	tCount := float64(hd.Count * 6)
 	for i := range ts {
@@ -97,10 +121,10 @@ func WrapHalo(hps []HaloProfiles, hd *io.SheetHeader) {
 	for i := range hps {
 		h := &hps[i]
 		for j := 0; j < 3; j++ {
-			if h.C[j] + h.R < hd.Origin[j] {
-				newC[j] = h.C[j] + tw
+			if h.cCopy[j] + h.R < hd.Origin[j] {
+				newC[j] = h.cCopy[j] + tw
 			} else {
-				newC[j] = h.C[j]
+				newC[j] = h.cCopy[j]
 			}
 		}
 		h.ChangeCenter(newC)
@@ -109,7 +133,7 @@ func WrapHalo(hps []HaloProfiles, hd *io.SheetHeader) {
 
 // WrapXs updates a slice of vectors so that they will be as close to thee given
 // sheet as periodic boundary conditions will allow.
-func WrapXs(xs []rGeom.Vec, hd *io.SheetHeader) {
+func wrapXs(xs []rGeom.Vec, hd *io.SheetHeader) {
 	tw := float32(hd.TotalWidth)
 	for i := range xs {
 		for j := 0; j < 3; j++ {

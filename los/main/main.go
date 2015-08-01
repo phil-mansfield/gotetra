@@ -23,7 +23,6 @@ const (
 	rType = halo.R200m
 	rMaxMult = 1.0
 	rMinMult = 0.0
-	//rMinMult = 0.5
 
 	n = 1024
 	bins = 256
@@ -44,15 +43,16 @@ func main() {
 	if err != nil { log.Fatal(err.Error()) }
 	hds := make([]io.SheetHeader, len(files))
 	for i := range files {
-		if i % 50 == 0 { fmt.Println(i) }
+		if i % 50 == 0 { fmt.Print(i, " ") }
 		err = io.ReadSheetHeaderAt(files[i], &hds[i])
 		if err != nil { log.Fatal(err.Error()) }
 	}
+	fmt.Println()
 
 	xs, ys, zs, ms, rs, err := readHalos(haloFileName, &hds[0].Cosmo)
 	if err != nil { log.Fatal(err.Error()) }
 
-	xsBuf, tsBuf, ssBuf, rhosBuf := createBuffers(&hds[0])
+	buf := los.NewBuffers(files[0], &hds[0])
 	h := new(los.HaloProfiles)
 	f, err := os.Create("out.pprof")
 	if err != nil { log.Fatal(err.Error()) }
@@ -67,9 +67,7 @@ func main() {
 			"Halo mass is: %.3g, intersects are: %d\n", ms[i], len(hdIntrs),
 		)
 
-		intersectionTest(
-			h, hdIntrs, fileIntrs, xsBuf, tsBuf, ssBuf, rhosBuf,
-		)
+		intersectionTest(h, hdIntrs, fileIntrs, buf)
 	}
 }
 // createBuffers allocates all the buffers needed for repeated calls to the
@@ -159,29 +157,20 @@ func intersectingSheets(
 // (a). Only considering tetrahedra with points insde the halo.
 // (b). Conisdering tetrahedra whose bounding sphere intersects the halo.
 func intersectionTest(
-	h *los.HaloProfiles, hds []io.SheetHeader, files []string,
-	xsBuf []rGeom.Vec, tsBuf []geom.Tetra, ssBuf []geom.Sphere,
-	rhosBuf []float64,
+	h *los.HaloProfiles, hds []io.SheetHeader, files []string, buf *los.Buffers,
 ) {
 	hs := []los.HaloProfiles{*h}
 	h = &hs[0]
 
-	cCopy := h.C
 	for i, file := range files {
 		hd := &hds[i]
 		fmt.Printf("    Reading %s -> ", path.Base(file))
-		h.C = cCopy
+		los.WrapHalo(hs, hd)
 
 		t1 := float64(time.Now().UnixNano())
-		io.ReadSheetPositionsAt(file, xsBuf)
-		los.WrapHalo(hs, hd)
-		los.WrapXs(xsBuf, hd)
-		los.UnpackTetrahedra(xsBuf, hd, tsBuf)
-		los.TetraDensity(hd, tsBuf, rhosBuf)
-		for j := range tsBuf { tsBuf[j].BoundingSphere(&ssBuf[j]) }
-
+		buf.Read(file, hd)
 		t2 := float64(time.Now().UnixNano())
-		los.DensityAll(hs, tsBuf, ssBuf, rhosBuf)
+		buf.DensityAll(hs,)
 		t3 := float64(time.Now().UnixNano())
 
 		fmt.Printf("Setup: %.3g s  Density: %.3g s\n",
