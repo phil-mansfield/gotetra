@@ -1,7 +1,6 @@
 package los
 
 import (
-	"fmt"
 	"runtime"
 
 	"github.com/phil-mansfield/gotetra/render/io"
@@ -32,8 +31,8 @@ func NewBuffers(file string, hd *io.SheetHeader) *Buffers {
 func (buf *Buffers) Read(file string, hd *io.SheetHeader) {
 	io.ReadSheetPositionsAt(file, buf.xs)
 	tw := float32(hd.TotalWidth)
-	// This can only be parallelized if we sychronize afterwards. Might not be
-	// worth it.
+	// This can only be parallelized if we sychronize afterwards. This
+	// is insignificant compared to the serial I/O time.
 	for i := range buf.xs {
 		for j := 0; j < 3; j++ {
 			if buf.xs[i][j] < hd.Origin[j] {
@@ -44,24 +43,26 @@ func (buf *Buffers) Read(file string, hd *io.SheetHeader) {
 
 	workers := runtime.NumCPU()
 	runtime.GOMAXPROCS(workers)
-	fmt.Printf("%d workers\n", workers)
 	out := make(chan int, workers)
-	for offset := 0; offset < workers; offset++ {
-		go buf.process(hd, offset, workers)
+	for offset := 0; offset < workers - 1; offset++ {
+		go buf.process(hd, offset, workers, out)
 	}
+	buf.process(hd, workers - 1, workers, out)
 
-	for i := 0; i < workers - 1; i++ { <- out }
+	for i := 0; i < workers; i++ { <- out }
 }
 
-func (buf *Buffers) process(hd *io.SheetHeader, offset, jump int) {
+func (buf *Buffers) process(
+	hd *io.SheetHeader, offset, jump int, out chan<- int,
+) {
 	// Remember: Grid -> All particles; Segment -> Particles that can be turned
 	// into tetrahedra.
 	n := hd.SegmentWidth*hd.SegmentWidth*hd.SegmentWidth
-	tw := float32(hd.TotalWidth)
-	tFactor := float64(tw*tw*tw) / float64(hd.Count * 6)
+	tw := hd.TotalWidth
+	tFactor := tw*tw*tw / float64(hd.Count * 6)
 	idxBuf := new(rGeom.TetraIdxs)
 	jump64 := int64(jump)
-	for segIdx := int64(offset); segIdx < n; segIdx += jump64 {
+	for segIdx := int64(offset); segIdx < n; segIdx+=jump64 {
 		x, y, z := coords(segIdx, hd.SegmentWidth)
 		for dir := int64(0); dir < 6; dir++ {
 			ti := 6 * segIdx + dir
@@ -74,6 +75,8 @@ func (buf *Buffers) process(hd *io.SheetHeader, offset, jump int) {
 			buf.ts[ti].BoundingSphere(&buf.ss[ti])
 		}
 	}
+
+	out <- offset
 }
 
 // CountAll computes profiles for all the given halos which count the number
