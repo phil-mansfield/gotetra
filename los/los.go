@@ -28,10 +28,35 @@ func NewBuffers(file string, hd *io.SheetHeader) *Buffers {
 
 func (buf *Buffers) Read(file string, hd *io.SheetHeader) {
 	io.ReadSheetPositionsAt(file, buf.xs)
-	wrapXs(buf.xs, hd)
-	unpackTetrahedra(buf.xs, hd, buf.ts)
-	tetrahedraDensity(hd, buf.ts, buf.rhos)
-	for i := range buf.ts { buf.ts[i].BoundingSphere(&buf.ss[i]) }
+	tw := float32(hd.TotalWidth)
+	// This can only be parallelized if we sychronize afterwards. Might not be
+	// worth it.
+	for i := range buf.xs {
+		for j := 0; j < 3; j++ {
+			if buf.xs[i][j] < hd.Origin[j] {
+				buf.xs[i][j] += tw
+			}
+		}
+	}
+
+	// Remember: Grid -> All particles; Segment -> Particles that can be turned
+	// into tetrahedra.
+	n := hd.SegmentWidth*hd.SegmentWidth
+	tFactor := float64(tw*tw*tw) / float64(n * 6)
+	idxBuf := new(rGeom.TetraIdxs)
+	for segIdx := int64(0); segIdx < n; segIdx++ {
+		x, y, z := coords(segIdx, hd.SegmentWidth)
+		for dir := int64(0); dir < 6; dir++ {
+			ti := 6 * segIdx + dir
+			idxBuf.InitCartesian(x, y, z, hd.GridWidth, int(dir))
+			unpackTetra(idxBuf, buf.xs, &buf.ts[ti])
+			buf.ts[ti].Orient(+1)
+
+			buf.rhos[ti] = tFactor / buf.ts[ti].Volume()
+
+			buf.ts[ti].BoundingSphere(&buf.ss[ti])
+		}
+	}
 }
 
 // CountAll computes profiles for all the given halos which count the number
