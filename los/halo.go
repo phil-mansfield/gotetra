@@ -3,7 +3,6 @@ package los
 import (
 	"fmt"
 	"math"
-	"runtime"
 
 	"github.com/phil-mansfield/gotetra/render/io"
 	"github.com/phil-mansfield/gotetra/los/geom"
@@ -125,22 +124,6 @@ func (hp1 *HaloProfiles) Add(hp2 *HaloProfiles) {
 // Clear resets the conents of the HaloProfiles.
 func (hp *HaloProfiles) Clear() {
 	for i := range hp.rs { hp.rs[i].Clear() }
-}
-
-func ParallelClearHaloProfiles(hs []HaloProfiles) {	
-	workers := len(hs)
-	runtime.GOMAXPROCS(workers)
-
-	out := make(chan int, workers)
-	for i := 0; i < workers -1; i++ { go hs[i].chanClear(out) }
-	hs[workers - 1].chanClear(out)
-
-	for i := 0; i < workers; i++ { <-out }
-}
-
-func (hp *HaloProfiles) chanClear(out chan<- int) {
-	hp.Clear()
-	out <- 1
 }
 
 // HaloProfiles is a terribly-named struct which represents a halo and all its
