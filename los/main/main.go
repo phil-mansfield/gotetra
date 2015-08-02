@@ -168,7 +168,7 @@ func intersectionTest(
 		los.WrapHalo(hs, hd)
 
 		t1 := float64(time.Now().UnixNano())
-		buf.Read(file, hd)
+		buf.ParallelRead(file, hd)
 		t2 := float64(time.Now().UnixNano())
 		buf.DensityAll(hs,)
 		t3 := float64(time.Now().UnixNano())

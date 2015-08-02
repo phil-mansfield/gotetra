@@ -28,7 +28,17 @@ func NewBuffers(file string, hd *io.SheetHeader) *Buffers {
 	return buf
 }
 
+func (buf *Buffers) ParallelRead(file string, hd *io.SheetHeader) {
+	workers := runtime.NumCPU()
+	runtime.GOMAXPROCS(workers)
+	buf.read(file, hd, workers)
+}
+
 func (buf *Buffers) Read(file string, hd *io.SheetHeader) {
+	buf.read(file, hd, 1)
+}
+
+func (buf *Buffers) read(file string, hd *io.SheetHeader, workers int) {
 	io.ReadSheetPositionsAt(file, buf.xs)
 	tw := float32(hd.TotalWidth)
 	// This can only be parallelized if we sychronize afterwards. This
@@ -41,8 +51,6 @@ func (buf *Buffers) Read(file string, hd *io.SheetHeader) {
 		}
 	}
 
-	workers := runtime.NumCPU()
-	runtime.GOMAXPROCS(workers)
 	out := make(chan int, workers)
 	for offset := 0; offset < workers - 1; offset++ {
 		go buf.process(hd, offset, workers, out)
