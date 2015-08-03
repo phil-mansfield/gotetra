@@ -21,13 +21,13 @@ import (
 
 const (
 	rType = halo.R200m
-	rMaxMult = 1.0
-	rMinMult = 0.0
+	rMaxMult =3.0
+	rMinMult = 0.5
 
 	n = 1024
 	bins = 256
 
-	rings = 10
+	rings = 3
 )
 
 func main() {

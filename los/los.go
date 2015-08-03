@@ -1,8 +1,6 @@
 package los
 
 import (
-	"fmt"
-	"time"
 	"runtime"
 
 	"github.com/phil-mansfield/gotetra/render/io"
@@ -16,6 +14,7 @@ type Buffers struct {
 	ss []geom.Sphere
 	rhos []float64
 	intr []bool
+	bufHs []ProfileHalos
 }
 
 func NewBuffers(file string, hd *io.SheetHeader) *Buffers {
@@ -92,46 +91,35 @@ func (buf *Buffers) chanRead(
 	out <- id
 }
 
-// CountAll computes profiles for all the given halos which count the number
-// of tetrahedra overlapping points at a given radius.
-/*
-func (buf *Buffers) CountAll(hs []HaloProfiles) {
-	for hi := range hs {
-		h := &hs[hi]
-		for ti := range buf.ts {
-			t := &buf.ts[ti]
-			s := &buf.ss[ti]
-
-			if h.Sphere.SphereIntersect(s) &&  
-				!h.minSphere.TetraContain(t) {
-				h.Count(t) 
-			}
-		}
-	}
-}
-*/
-
-// DensityAll computes profiles for all the given halos which give the density
-// of points at a given radius.
 func (buf *Buffers) ParallelDensity(h *HaloProfiles) {
-	t0 := time.Now().UnixNano()
 	workers := runtime.NumCPU()
 	workers = 10
 	out := make(chan int, workers)
 
-	if workers > len(h.rs) { workers = len(h.rs) }
 	for id := 0; id < workers - 1; id++ {
 		go buf.chanIntersect(h, id, workers, out)
 	}
 	buf.chanIntersect(h, workers - 1, workers, out)
 	for i := 0; i < workers; i++ { <-out }
-	t1 := time.Now().UnixNano()
 
-	fmt.Printf("\n%.3g s to compute intersects.\n", float64(t1 - t0)/1e9)
-
-	for ti := range buf.ts {
-		if buf.intr[ti] { h.Density(&buf.ts[ti], buf.rhos[ti]) }
+	if workers > len(h.rs) { workers = len(h.rs) }
+	for id := 0; id < workers - 1; id++ {
+		go buf.chanDensity(h, id, workers, out)
 	}
+	buf.chanDensity(h, workers - 1, workers, out)
+	for i := 0; i < workers; i++ { <-out }
+}
+
+func (buf *Buffers) chanDensity(
+	h *HaloProfiles, id, workers int, out chan <- int,
+) {
+	for ri := id; ri < len(h.rs); ri += workers {
+		r := &h.rs[ri]
+		for ti := 0; ti < len(buf.ts); ti++ {
+			if buf.intr[ti] { r.Density(&buf.ts[ti], buf.rhos[ti]) }
+		}
+	}
+	out <- id
 }
 
 func (buf *Buffers) chanIntersect(
