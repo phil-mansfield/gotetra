@@ -22,6 +22,14 @@ type haloRing struct {
 	poly geom.TetraSlice
 }
 
+func (hr *haloRing) Reuse(origin *geom.Vec, rMin, rMax float64) {
+	hr.dr = *origin
+	for i := 0; i < 3; i++ { hr.dr[i] *= -1 }
+	hr.rMax = rMax
+	hr.ProfileRing.Reuse(rMin, rMax)
+	hr.Clear()
+}
+
 // Init initialized a haloRing.
 func (hr *haloRing) Init(
 	norm, origin *geom.Vec, rMin, rMax float64, bins, n int,
@@ -126,6 +134,30 @@ func (hp *HaloProfiles) Clear() {
 	for i := range hp.rs { hp.rs[i].Clear() }
 }
 
+func (hp *HaloProfiles) Reuse(id int, origin *geom.Vec, rMin, rMax float64) {
+	hp.C, hp.R = *origin, float32(rMax)
+	hp.cCopy = hp.C
+	hp.minSphere.C, hp.minSphere.R = *origin, float32(rMin)
+	hp.rMin, hp.rMax = rMin, rMax
+	hp.id = id
+	for i := range hp.rs { hp.rs[i].Reuse(origin, rMin, rMax) }
+}
+
+func ParallelClearHaloProfiles(hs []HaloProfiles) {	
+	workers := len(hs)
+	runtime.GOMAXPROCS(workers)
+
+	out := make(chan int, workers)
+	for i := 0; i < workers -1; i++ { go hs[i].chanClear(out) }
+	hs[workers - 1].chanClear(out)
+
+	for i := 0; i < workers; i++ { <-out }
+}
+
+func (hp *HaloProfiles) chanClear(out chan<- int) {
+	hp.Clear()
+	out <- 1
+}
 // HaloProfiles is a terribly-named struct which represents a halo and all its
 // LoS profiles.
 type HaloProfiles struct {
