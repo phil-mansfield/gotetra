@@ -38,14 +38,14 @@ func TestInRange(t *testing.T) {
 
 func BenchmarkHaloProfilesClear(b *testing.B) {
 	hp := new(HaloProfiles)
-	hp.Init(0, 10, &geom.Vec{0, 0, 0}, 0, 1, 200, 1000)
+	hp.Init(0, 1, &geom.Vec{0, 0, 0}, 0, 1, 200, 100000)
 	for i := 0; i < b.N; i++ { hp.Clear() }
 }
 
 func BenchmarkHaloProfilesParallelClear(b *testing.B) {
 	hs := make([]HaloProfiles, runtime.NumCPU())
 	for i := range hs { 
-		hs[i].Init(0, 10, &geom.Vec{0, 0, 0}, 0, 1, 200, 1000)
+		hs[i].Init(0, 1, &geom.Vec{0, 0, 0}, 0, 1, 200, 100000)
 	}
 	for i := 0; i < b.N/len(hs); i++ { ParallelClearHaloProfiles(hs) }
 }

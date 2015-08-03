@@ -170,7 +170,7 @@ func intersectionTest(
 		t1 := float64(time.Now().UnixNano())
 		buf.ParallelRead(file, hd)
 		t2 := float64(time.Now().UnixNano())
-		buf.DensityAll(hs,)
+		buf.ParallelDensity(h)
 		t3 := float64(time.Now().UnixNano())
 
 		fmt.Printf("Setup: %.3g s  Density: %.3g s\n",
