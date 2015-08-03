@@ -163,14 +163,18 @@ func NewTophatKernel(width int) *Kernel {
 }
 
 func NewSavGolKernel(order, width int) *Kernel {
-	if width % 2 != 1 { panic("Kernel width must be odd.") }
+	if width % 2 != 1 {
+		panic("Kernel width must be odd.")
+	} else if width <= order {
+		panic("Kernel width cannot be smaller than pOrder.")
+	}
 
 	k := new(Kernel)
 	k.cs = make([]float64, width)
 	k.center = width / 2
 
 	k.savgol(order, 0)
-	panic("NYI")
+	return k
 }
 
 func NewSavGolDerivKernel(dx float64, dOrder, pOrder, width int) *Kernel {
@@ -189,7 +193,11 @@ func NewSavGolDerivKernel(dx float64, dOrder, pOrder, width int) *Kernel {
 	k.center = width / 2
 
 	k.savgol(pOrder, dOrder)
-	panic("NYI")
+	fact := float64(factorial(dOrder))
+	for i := range k.cs {
+		k.cs[i] /= fact*dx
+	}
+	return k
 }
 
 func (k *Kernel) savgol(m, ld int) {
@@ -228,4 +236,10 @@ func (k *Kernel) savgol(m, ld int) {
 		}
 		k.cs[i + nl] = sum
 	}
+}
+
+func factorial(x int) int {
+	prod := 1
+	for i := 2; i <= x; i++ { prod *= i }
+	return prod
 }
