@@ -13,9 +13,11 @@ type Buffers struct {
 	ts []geom.Tetra
 	ss []geom.Sphere
 	rhos []float64
+	intr []bool
+	bufHs []HaloProfiles
 }
 
-func NewBuffers(file string, hd *io.SheetHeader) *Buffers {
+func NewBuffers(file string, hd *io.SheetHeader, rings int) *Buffers {
 	buf := new(Buffers)
 
     sw := hd.SegmentWidth
@@ -23,6 +25,7 @@ func NewBuffers(file string, hd *io.SheetHeader) *Buffers {
     buf.ts = make([]geom.Tetra, 6*sw*sw*sw)
     buf.ss = make([]geom.Sphere, 6*sw*sw*sw)
     buf.rhos = make([]float64, 6*sw*sw*sw)
+	buf.intr = make([]bool, 6*sw*sw*sw)
 
 	buf.Read(file, hd)
 	return buf
@@ -52,16 +55,16 @@ func (buf *Buffers) read(file string, hd *io.SheetHeader, workers int) {
 	}
 
 	out := make(chan int, workers)
-	for offset := 0; offset < workers - 1; offset++ {
-		go buf.process(hd, offset, workers, out)
+	for id := 0; id < workers - 1; id++ {
+		go buf.chanRead(hd, id, workers, out)
 	}
-	buf.process(hd, workers - 1, workers, out)
+	buf.chanRead(hd, workers - 1, workers, out)
 
 	for i := 0; i < workers; i++ { <- out }
 }
 
-func (buf *Buffers) process(
-	hd *io.SheetHeader, offset, jump int, out chan<- int,
+func (buf *Buffers) chanRead(
+	hd *io.SheetHeader, id, workers int, out chan<- int,
 ) {
 	// Remember: Grid -> All particles; Segment -> Particles that can be turned
 	// into tetrahedra.
@@ -69,8 +72,9 @@ func (buf *Buffers) process(
 	tw := hd.TotalWidth
 	tFactor := tw*tw*tw / float64(hd.Count * 6)
 	idxBuf := new(rGeom.TetraIdxs)
-	jump64 := int64(jump)
-	for segIdx := int64(offset); segIdx < n; segIdx+=jump64 {
+
+	jump := int64(workers)
+	for segIdx := int64(id); segIdx < n; segIdx += jump {
 		x, y, z := coords(segIdx, hd.SegmentWidth)
 		for dir := int64(0); dir < 6; dir++ {
 			ti := 6 * segIdx + dir
@@ -84,40 +88,51 @@ func (buf *Buffers) process(
 		}
 	}
 
-	out <- offset
+	out <- id
 }
 
-// CountAll computes profiles for all the given halos which count the number
-// of tetrahedra overlapping points at a given radius.
-func (buf *Buffers) CountAll(hs []HaloProfiles) {
-	for hi := range hs {
-		h := &hs[hi]
-		for ti := range buf.ts {
-			t := &buf.ts[ti]
-			s := &buf.ss[ti]
+func (buf *Buffers) ParallelDensity(h *HaloProfiles) {
+	workers := runtime.NumCPU()
+	workers = 10
+	out := make(chan int, workers)
 
-			if h.Sphere.SphereIntersect(s) &&  
-				!h.minSphere.TetraContain(t) {
-				h.Count(t) 
-			}
-		}
+	for id := 0; id < workers - 1; id++ {
+		go buf.chanIntersect(h, id, workers, out)
 	}
+	buf.chanIntersect(h, workers - 1, workers, out)
+	for i := 0; i < workers; i++ { <-out }
+
+	if workers > len(h.rs) { workers = len(h.rs) }
+	for id := 0; id < workers - 1; id++ {
+		go buf.chanDensity(h, id, workers, out)
+	}
+	buf.chanDensity(h, workers - 1, workers, out)
+	for i := 0; i < workers; i++ { <-out }
 }
 
-// DensityAll computes profiles for all the given halos which give the density
-// of points at a given radius.
-func (buf *Buffers) DensityAll(hs []HaloProfiles) {
-	for hi := range hs {
-		h := &hs[hi]
-		for ti := range buf.ts {
-			t := &buf.ts[ti]
-			s := &buf.ss[ti]
-			if h.Sphere.SphereIntersect(s) &&  
-				!h.minSphere.TetraContain(t) {
-				h.Density(t, buf.rhos[ti]) 
-			}
+func (buf *Buffers) chanDensity(
+	h *HaloProfiles, id, workers int, out chan <- int,
+) {
+	for ri := id; ri < len(h.rs); ri += workers {
+		r := &h.rs[ri]
+		for ti := 0; ti < len(buf.ts); ti++ {
+			if buf.intr[ti] { r.Density(&buf.ts[ti], buf.rhos[ti]) }
 		}
 	}
+	out <- id
+}
+
+func (buf *Buffers) chanIntersect(
+	h *HaloProfiles, id, workers int, out chan <- int,
+) {
+	bufLen := len(buf.ts) / workers
+	bufStart, bufEnd := id * bufLen, (id + 1) * bufLen
+	if id == workers - 1 { bufEnd = len(buf.ts) }
+	for i := bufStart; i < bufEnd; i++ {
+		buf.intr[i] = h.Sphere.SphereIntersect(&buf.ss[i]) &&
+			!h.minSphere.TetraContain(&buf.ts[i])
+	}
+	out <- id
 }
 
 func coords(idx, cells int64) (x, y, z int64) {
