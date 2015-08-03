@@ -17,8 +17,14 @@ type ProfileRing struct {
 	derivs []float64 // Contiguous block of pofile data. Column-major.
 	Lines []geom.Line
 	bins int // Length of an individual profile.
-	n int // Number of Profiles.
+	n int // Number of profiles.
 	lowR, highR, dr float64
+}
+
+func (p *ProfileRing) Reuse(lowR, highR float64) {
+	p.lowR = lowR
+	p.highR = highR
+	p.dr = (highR - lowR) / float64(p.bins)	
 }
 
 // Init initializes a profile ring made up of n profiles each of which consist

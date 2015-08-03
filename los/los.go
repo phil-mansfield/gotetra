@@ -14,7 +14,7 @@ type Buffers struct {
 	ss []geom.Sphere
 	rhos []float64
 	intr []bool
-	bufHs []ProfileHalos
+	bufHs []HaloProfiles
 }
 
 func NewBuffers(file string, hd *io.SheetHeader) *Buffers {
