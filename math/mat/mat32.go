@@ -1,5 +1,9 @@
 package mat
 
+import (
+	"math"
+)
+
 // Matrix32 represents a matrix of float32 values.
 type Matrix32 struct {
 	Vals []float32
@@ -120,65 +124,51 @@ func (m *Matrix32) LUFactorsAt(luf *LUFactors32) {
 	if luf.lu.Width != m.Width || luf.lu.Height != m.Height {
 		panic("luf has different dimenstions than m.")
 	}
+	copy(luf.lu.Vals, m.Vals)
+	luf.factorizeInPlace()
+}
 
-	n := m.Width
-	for i := 0; i < n; i++ { luf.pivot[i] = i }
-	lu := luf.lu.Vals
-	mat := m.Vals
-
-	// Maintained for determinant calculations.
-	luf.d = 1
-
-	// Crout's algorithm.
-	copy(lu, m.Vals)
-
-	// Swap rows.
-	for k := 0; k < n; k++ {
-		maxRow := findMaxRow32(n, mat, k)
-		luf.pivot[k], luf.pivot[maxRow] = luf.pivot[maxRow], luf.pivot[k]
-
-		if k != maxRow {
-			swapRows32(k, maxRow, n, lu)
-			luf.d = -luf.d
+func (lu *LUFactors32) factorizeInPlace() {
+	m, n := &lu.lu, lu.lu.Width
+	vv := make([]float32, n)
+	lu.d = 1
+	for i := 0; i < n; i++ {
+		big := float32(0.0)
+		for j := 0; j < n; j++ {
+			tmp := float32(math.Abs(float64(m.Vals[i*n + j])))
+			if tmp > big { big = tmp }
 		}
+		if big == 0 { panic("Singular Matrix.") }
+		vv[i] = 1 / big
 	}
 
-	// This nonsense.
+	var imax int
 	for k := 0; k < n; k++ {
-		kOffset := k*n
-		for i := k + 1; i < n; i++ {
-			iOffset := i*n
-			lu[iOffset + k] /= lu[kOffset + k]
-			tmp := lu[iOffset + k]
-			for j := k + 1; j < n; j++ {
-				lu[iOffset + j] -= tmp * lu[kOffset + j]
+		big := float32(0.0)
+		for i := k; i < n; i++ {
+			tmp := vv[i] * float32(math.Abs(float64(m.Vals[i*n + k])))
+			if tmp > big {
+				big = tmp
+				imax = i
 			}
 		}
-	}
-}
-
-// Finds the index of the row containing the maximum value in the column.
-// Ignores the values above the point m_col,col since those have already been
-// swapped.
-func findMaxRow32(n int, m []float32, col int) int {
-	max, maxRow := float32(-1.0), 0
-	
-	for i := col; i < n; i++ {
-		val := m[i*n + col]
-		if val < 0 { val *= -1 }
-		if val > max {
-			max = val
-			maxRow = i
+		if k != imax {
+			for j := 0; j < n; j++ {
+				m.Vals[imax*n + j], m.Vals[k*n + j] =
+					m.Vals[k*n + j], m.Vals[imax*n + j]
+			}
+			lu.d = -lu.d
+			vv[imax] = vv[k]
 		}
-	}
-	return maxRow
-}
-
-func swapRows32(i1, i2, n int, lu []float32) {
-	i1Offset, i2Offset := n*i1, n*i2
-	for j := 0; j < n; j++ {
-		idx1, idx2 := i1Offset + j, i2Offset + j
-		lu[idx1], lu[idx2] = lu[idx2], lu[idx1]
+		lu.pivot[k] = imax
+		if m.Vals[k*n + k] == 0 { m.Vals[k*n + k] = 1e-20 }
+		for i := k + 1; i < n; i++ {
+			m.Vals[i*n + k] /= m.Vals[k*n + k]
+			tmp := m.Vals[i*n + k]
+			for j := k + 1; j < n; j++ {
+				m.Vals[i*n + j] -= tmp*m.Vals[k*n + j]
+			}
+		}
 	}
 }
 
