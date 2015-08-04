@@ -201,40 +201,41 @@ func NewSavGolDerivKernel(dx float64, dOrder, pOrder, width int) *Kernel {
 }
 
 func (k *Kernel) savgol(m, ld int) {
-	np := len(k.cs)
-	nr, nl := np / 2, np / 2
+	n := len(k.cs) / 2
 
 	aBuf := make([]float64, (m + 1)*(m + 1))
 	a := mat.NewMatrix(aBuf, m + 1, m + 1)
-	
-	for ipj := 0; ipj < m / 2; ipj++ {
+
+	// "ipj" -> "i + j".
+	for ipj := 0; ipj <= m * 2; ipj++ {
 		ipj64 := float64(ipj)
 
 		sum := 0.0
 		if ipj == 0 { sum = 1.0 }
 
-		for k := 1; k <= nr; k++ { sum += math.Pow(float64(k), ipj64) }
-		for k := 1; k <= nl; k++ { sum += math.Pow(float64(-k), ipj64) }
+		for k := 1; k <= n; k++ { sum += math.Pow(float64(k), ipj64) }
+		for k := 1; k <= n; k++ { sum += math.Pow(float64(-k), ipj64) }
 		mm := 2*m - ipj
 		if mm > ipj { mm = ipj }
 		for imj := -mm; imj <= mm; imj += 2 {
-			x, y := (ipj+imj) / 2, (ipj-imj) / 2
-			a.Vals[y*a.Width + x] = sum
+			// (i+j) + (i-j) -> 2i, (i+j) - (i-j) -> 2j
+			i, j := (ipj+imj) / 2, (ipj-imj) / 2
+			a.Vals[j*a.Width + i] = sum
 		}
 	}
-
+	
 	lu := a.LU()
 	b := make([]float64, m + 1)
-	b[ld] = -1
+	b[ld] = 1
 	lu.SolveVector(b, b)
-	
-	for i := -nl; i <= nr; i++ {
+
+	for i := -n; i <= n; i++ {
 		sum, fac, i64 := b[0], 1.0, float64(i)
-		for mm := 1; mm <= m; mm++ {
+		for mm := 1; mm < m+1; mm++ {
 			fac *= i64
 			sum += b[mm]*fac
 		}
-		k.cs[i + nl] = sum
+		k.cs[i + n] = sum
 	}
 }
 
