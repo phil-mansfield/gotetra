@@ -121,12 +121,10 @@ func TestPyplotSavGol(t *testing.T) {
 	fig0 := pyplotFigString(0)
 	plot1 := pyplotPlotString(xs, rawYs, "m", "Underlying Function")
 	plot2 := pyplotPlotString(xs, noiseYs, "k", "Noisy Function")
-	plot3 := pyplotPlotString(xs, tk.Convolve(noiseYs, Extension),
-		"r", "Tophat")
-	plot4 := pyplotPlotString(xs, gk.Convolve(noiseYs, Extension),
-		"g", "Gaussian")
-	plot5 := pyplotPlotString(xs, sgk.Convolve(noiseYs, Extension),
-		"b", "Savitzky Golay")
+	b := Extension
+	plot3 := pyplotPlotString(xs, tk.Convolve(noiseYs, b), "r", "Tophat")
+	plot4 := pyplotPlotString(xs, gk.Convolve(noiseYs, b), "g", "Gaussian")
+	plot5 := pyplotPlotString(xs, sgk.Convolve(noiseYs, b),"b","Savitzky Golay")
 	loc := "lower left"
 	fileBody := fmt.Sprintf(`import numpy as np
 import matplotlib.pyplot as plt

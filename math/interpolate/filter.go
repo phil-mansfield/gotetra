@@ -24,16 +24,16 @@ func (b BoundaryCondition) Get(xs []float64, i int) float64 {
 	switch {
 	case i < 0:
 		switch b {
-		case Periodic: return xs[i - len(xs)]
-		case Reflection: return xs[len(xs) - 1 - i]
+		case Periodic: return xs[len(xs) - 1 + i]
+		case Reflection: return xs[-(i + 1)]
 		case ZeroPad: return 0
 		case Extension: return xs[0]
 		}
 		panic("Impossible")
 	case i >= len(xs):
 		switch b {
-		case Periodic: return xs[i + len(xs)]
-		case Reflection: return xs [-1 - i]
+		case Periodic: return xs[i - len(xs)]
+		case Reflection: return xs [(len(xs)-1) - (i - len(xs)-1)]
 		case ZeroPad: return 0
 		case Extension: return xs[len(xs) - 1]
 		}
@@ -83,8 +83,8 @@ func (k *Kernel) ConvolveAt(xs []float64, b BoundaryCondition, out []float64) {
 			idx := i + j - k.center
 			if idx < 0 {
 				switch b {
-				case Periodic: x = xs[idx - n]
-				case Reflection: x = xs[n - 1 - idx]
+				case Periodic: x = xs[(n - 1) + idx]
+				case Reflection: x = xs[-(idx - 1)]
 				case ZeroPad: x = 0
 				case Extension: x = xs[0]
 				}
@@ -109,8 +109,8 @@ func (k *Kernel) ConvolveAt(xs []float64, b BoundaryCondition, out []float64) {
 			idx := i + j - k.center
 			if idx >= n {
 				switch b {
-				case Periodic: x = xs[idx + n]
-				case Reflection: x = xs[-1 - idx]
+				case Periodic: x = xs[idx - n]
+				case Reflection: x = xs[2*(n-1) - idx]
 				case ZeroPad: x = 0
 				case Extension: x = xs[n - 1]
 				}
