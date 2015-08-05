@@ -4,10 +4,15 @@ import (
 	"log"
 )
 
+type splineCoeff struct {
+	a, b, c, d float64
+}
+
 // Spline represents a 1D cubic spline which can be used to interpolate between
 // points.
 type Spline struct {
 	xs, ys, y2s, sqrs []float64
+	coeffs []splineCoeff
 
 	incr bool
 
@@ -33,8 +38,10 @@ func NewSpline(xs, ys []float64) *Spline {
 	sp := new(Spline)
 
 	sp.xs, sp.ys = xs, ys
+	sp.xs = make([]float64, len(xs))
+	sp.ys = make([]float64, len(xs))
 	sp.y2s = make([]float64, len(xs))
-	sp.sqrs = make([]float64, len(xs)-1)
+	sp.coeffs = make([]splineCoeff, len(xs)-1)
 
 	if xs[0] < xs[1] {
 		sp.incr = true
@@ -54,81 +61,53 @@ func NewSpline(xs, ys []float64) *Spline {
 
 	sp.dx = (xs[len(xs)-1] - xs[0]) / float64(len(xs)-1)
 
-	sp.secondDerivative()
-	for i := range sp.sqrs {
-		sp.sqrs[i] = (xs[i+1] - xs[i]) * (xs[i+1] - xs[i])
-	}
-
+	copy(sp.xs, xs)
+	copy(sp.ys, ys)
+	sp.calcY2s()
+	sp.calcCoeffs()
 	return sp
 }
 
-// Interpolate computes the value of the spline at the given point.
+// Eval computes the value of the spline at the given point.
 //
 // x must be within the range of x values given to NewSpline().
-func (sp *Spline) Interpolate(x float64) float64 {
+func (sp *Spline) Eval(x float64) float64 {
 	if x < sp.xs[0] == sp.incr || x > sp.xs[len(sp.xs)-1] == sp.incr {
-		log.Fatalf("Point %g given to Spline.Interpolate() out of bounds.", x)
+		log.Fatalf("Point %g given to Spline.Eval() out of bounds [%g, %g].",
+			x, sp.xs[0], sp.xs[len(sp.xs) - 1])
 	}
 
-	lo := sp.bsearch(x)
-	if lo == -1 {
-		lo = 0
-	}
-	hi := lo + 1
-	if hi == len(sp.xs) {
-		hi = len(sp.xs) - 1
-	}
-
-	A := (sp.xs[hi] - x) / (sp.xs[hi] - sp.xs[lo])
-	B := 1 - A
-	C := (A*A*A - A) * sp.sqrs[lo] / 6
-	D := (B*B*B - B) * sp.sqrs[lo] / 6
-	return A*sp.ys[lo] + B*sp.ys[hi] + C*sp.y2s[lo] + D*sp.y2s[hi]
+	i := sp.bsearch(x)
+	dx := x - sp.xs[i]
+	a, b, c, d := sp.coeffs[i].a, sp.coeffs[i].b, sp.coeffs[i].c, sp.coeffs[i].d
+	return a*dx*dx*dx + b*dx*dx + c*dx + d
 }
 
-func (sp *Spline) Interp(x float64) float64 {
-	return sp.Interpolate(x)
-}
-
-// Differentiate computes the derivative of spline at the given point to the
+// Diff computes the derivative of spline at the given point to the
 // specified order.
 //
 // x must be within the range of x values given to NewSpline().
-func (sp *Spline) Differentiate(x float64, order int) float64 {
+func (sp *Spline) Diff(x float64, order int) float64 {
 	if x < sp.xs[0] == sp.incr || x > sp.xs[len(sp.xs)-1] == sp.incr {
 		log.Fatalf("Point %g given to Spline.Differentiate() out of bounds.", x)
 	}
 
-	lo := sp.bsearch(x)
-	if lo == -1 {
-		lo = 0
-	}
-	hi := lo + 1
-	if hi == len(sp.xs) {
-		hi = len(sp.xs) - 1
-	}
-
-	A := (sp.xs[hi] - x) / (sp.xs[hi] - sp.xs[lo])
-	B := 1 - A
-	if order == 1 {
-		y1 := (sp.ys[hi] - sp.ys[0]) / (sp.xs[hi] - sp.ys[lo])
-		C := (3*A*A - 1) / 6 * (sp.xs[hi] - sp.xs[lo])
-		D := (3*B*B - 1) / 6 * (sp.xs[hi] - sp.xs[lo])
-		return y1 - C*sp.y2s[lo] + D*sp.y2s[hi]
-	} else if order == 2 {
-		return A*sp.y2s[lo] + B*sp.y2s[hi]
-	} else if order > 2 {
+	i := sp.bsearch(x)
+	dx := x - sp.xs[i]
+	a, b, c, d := sp.coeffs[i].a, sp.coeffs[i].b, sp.coeffs[i].c, sp.coeffs[i].d
+	switch order {
+	case 0:
+		return a*dx*dx*dx + b*dx*dx + c*dx + d
+	case 1:
+		return 3*a*dx*dx + 2*b*dx + c
+	case 2:
+		return 6*a*dx + 2*b
+	case 3:
+		return 6*a
+	default:
 		return 0
-	} else {
-		log.Fatal("Order given to Spline.Differentiate() must be non-negative.")
 	}
-	return 0
 }
-
-func (sp *Spline) Diff(x float64, order int) float64 {
-	return sp.Differentiate(x, order)
-}
-
 
 
 // bsearch returns the the index of the largest element in xs which is smaller
@@ -153,12 +132,17 @@ func (sp *Spline) bsearch(x float64) int {
 			hi = mid
 		}
 	}
+
+	if lo == len(sp.xs) - 1 { 
+		log.Fatalf("Point %g out of Spline bounds [%g, %g].",
+			x, sp.xs[0], sp.xs[len(sp.xs) - 1])
+	}
 	return lo
 }
 
 // secondDerivative computes the second derivative at every point in the table
 // given in NewSpline.
-func (sp *Spline) secondDerivative() {
+func (sp *Spline) calcY2s() {
 	// These arrays do not escape to the heap.
 	n := len(sp.xs)
 	as, bs := make([]float64, n-2), make([]float64, n-2)
@@ -184,54 +168,13 @@ func (sp *Spline) secondDerivative() {
 	TriDiagAt(as, bs, cs, rs, sp.y2s[1: n-1])
 }
 
-// TriTiagAt solves the system of equations
-//
-// | b0 c0 ..    |   | out0 |   | r0 |
-// | a1 a2 c2 .. |   | out1 |   | r1 |
-// | ..          | * | ..   | = | .. |
-// | ..    an bn |   | outn |   | rn |
-//
-// For out0 .. outn in place in the given slice.
-func TriDiagAt(as, bs, cs, rs, out []float64) {
-	if len(as) != len(bs) || len(as) != len(cs) ||
-		len(as) != len(out) || len(as) != len(rs) {
-
-		log.Fatal("Length of arugments to TriDiagAt are unequal.")
+func (sp *Spline) calcCoeffs() {
+	coeffs, xs, ys, y2s := sp.coeffs, sp.xs, sp.ys, sp.y2s
+	for i := range sp.coeffs {
+		coeffs[i].a = (y2s[i+1] - y2s[i]) / (xs[i+1] - xs[i])
+		coeffs[i].b = y2s[i] / 2
+		coeffs[i].c = (ys[i+1] - ys[i]) / (xs[i+1] - xs[i]) -
+			(xs[i+1] - xs[i])*(y2s[i]/3 + y2s[i+1]/5)
+		coeffs[i].d = ys[i]
 	}
-
-	tmp := make([]float64, len(as))
-
-	beta := bs[0]
-	if beta == 0 {
-		log.Fatal("TriDiagAt cannot solve given system.")
-	}
-	out[0] = rs[0] / beta
-
-	for i := 1; i < len(out); i++ {
-		tmp[i] = cs[i-1] / beta
-		beta = bs[i] - as[i]*tmp[i]
-		if beta == 0 {
-			log.Fatal("TriDiagAt cannot solve given system")
-		}
-		out[i] = (rs[i] - as[i]*out[i-1]) / beta
-
-	}
-
-	for i := len(out) - 2; i >= 0; i-- {
-		out[i] -= tmp[i+1] * out[i+1]
-	}
-}
-
-// TriTiagAt solves the system of equations
-//
-// | b0 c0 ..    |   | u0 |   | r0 |
-// | a1 a2 c2 .. |   | u1 |   | r1 |
-// | ..          | * | .. | = | .. |
-// | ..    an bn |   | un |   | rn |
-//
-// For u0 .. un.
-func TriDiag(as, bs, cs, rs []float64) []float64 {
-	us := make([]float64, len(as))
-	TriDiagAt(as, bs, cs, rs, us)
-	return us
 }
