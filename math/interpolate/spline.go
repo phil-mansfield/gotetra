@@ -5,7 +5,7 @@ import (
 )
 
 // Spline represents a 1D cubic spline which can be used to interpolate between
-// points
+// points.
 type Spline struct {
 	xs, ys, y2s, sqrs []float64
 
