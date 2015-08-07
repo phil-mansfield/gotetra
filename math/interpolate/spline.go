@@ -71,7 +71,10 @@ func NewSpline(xs, ys []float64) *Spline {
 //
 // x must be within the range of x values given to NewSpline().
 func (sp *Spline) Eval(x float64) float64 {
-	if x < sp.xs[0] == sp.incr || x > sp.xs[len(sp.xs)-1] == sp.incr {
+	if x <= sp.xs[0] == sp.incr || x >= sp.xs[len(sp.xs)-1] == sp.incr {
+		if x == sp.xs[0] { return sp.ys[0] }
+		if x == sp.xs[len(sp.xs) - 1] { return sp.ys[len(sp.ys) - 1] }
+
 		log.Fatalf("Point %g given to Spline.Eval() out of bounds [%g, %g].",
 			x, sp.xs[0], sp.xs[len(sp.xs) - 1])
 	}
@@ -82,11 +85,11 @@ func (sp *Spline) Eval(x float64) float64 {
 	return a*dx*dx*dx + b*dx*dx + c*dx + d
 }
 
-// Diff computes the derivative of spline at the given point to the
+// Deriv computes the derivative of spline at the given point to the
 // specified order.
 //
 // x must be within the range of x values given to NewSpline().
-func (sp *Spline) Diff(x float64, order int) float64 {
+func (sp *Spline) Deriv(x float64, order int) float64 {
 	if x < sp.xs[0] == sp.incr || x > sp.xs[len(sp.xs)-1] == sp.incr {
 		log.Fatalf("Point %g given to Spline.Differentiate() out of bounds.", x)
 	}
@@ -196,10 +199,10 @@ func (sp *Spline) calcY2s() {
 func (sp *Spline) calcCoeffs() {
 	coeffs, xs, ys, y2s := sp.coeffs, sp.xs, sp.ys, sp.y2s
 	for i := range sp.coeffs {
-		coeffs[i].a = (y2s[i+1] - y2s[i]) / (xs[i+1] - xs[i])
+		dx := xs[i+1] - xs[i]
+		coeffs[i].a = (-y2s[i]/6 + y2s[i+1]/6) / dx
 		coeffs[i].b = y2s[i] / 2
-		coeffs[i].c = (ys[i+1] - ys[i]) / (xs[i+1] - xs[i]) -
-			(xs[i+1] - xs[i])*(y2s[i]/3 + y2s[i+1]/5)
+		coeffs[i].c = (ys[i+1] - ys[i])/dx + dx*(-y2s[i]/3 - y2s[i+1]/6)
 		coeffs[i].d = ys[i]
 	}
 }
