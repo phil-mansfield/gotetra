@@ -15,7 +15,6 @@ type Spline struct {
 	coeffs []splineCoeff
 
 	incr bool
-
 	// Usually the input data is uniform. This is our estimate of the point
 	// spacing.
 	dx float64
@@ -109,6 +108,32 @@ func (sp *Spline) Diff(x float64, order int) float64 {
 	}
 }
 
+func (sp *Spline) Integrate(lo, hi float64) float64 {
+	if lo > hi { return -sp.Integrate(hi, lo) }
+	if lo < sp.xs[0] == sp.incr || lo > sp.xs[len(sp.xs)-1] == sp.incr {
+		log.Fatalf("Low bound %g in Spline.Integrate() out of bounds.", lo)
+	} else if hi < sp.xs[0] == sp.incr || hi > sp.xs[len(sp.xs)-1] == sp.incr {
+		log.Fatalf("High bound %g in Spline.Integrate() out of bounds.", hi)
+	}
+
+	iLo, iHi := sp.bsearch(lo), sp.bsearch(hi)
+	if iLo == iHi {
+		return integTerm(&sp.coeffs[iLo], lo, hi)
+	}
+	sum := integTerm(&sp.coeffs[iLo], lo, sp.xs[iLo+1]) +
+		integTerm(&sp.coeffs[iHi], sp.xs[iHi], hi)
+
+	for i := iLo + 1; i < iHi; i++ {
+		sum += integTerm(&sp.coeffs[i], sp.xs[i], sp.xs[i + 1])
+	}
+	return sum
+}
+
+func integTerm(coeff *splineCoeff, lo, hi float64) float64 {
+	a, b, c, d := coeff.a, coeff.b, coeff.c, coeff.d
+	dx := hi - lo
+	return a*dx*dx*dx*dx/4 + b*dx*dx*dx/3 + c*dx*dx/2 + d*dx
+}
 
 // bsearch returns the the index of the largest element in xs which is smaller
 // than x.
