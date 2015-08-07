@@ -206,3 +206,55 @@ func (sp *Spline) calcCoeffs() {
 		coeffs[i].d = ys[i]
 	}
 }
+
+// TriTiagAt solves the system of equations
+//
+// | b0 c0 ..    |   | out0 |   | r0 |
+// | a1 a2 c2 .. |   | out1 |   | r1 |
+// | ..          | * | ..   | = | .. |
+// | ..    an bn |   | outn |   | rn |
+//
+// For out0 .. outn in place in the given slice.
+func TriDiagAt(as, bs, cs, rs, out []float64) {
+	if len(as) != len(bs) || len(as) != len(cs) ||
+		len(as) != len(out) || len(as) != len(rs) {
+
+		log.Fatal("Length of arugments to TriDiagAt are unequal.")
+	}
+
+	tmp := make([]float64, len(as))
+
+	beta := bs[0]
+	if beta == 0 {
+		log.Fatal("TriDiagAt cannot solve given system.")
+	}
+	out[0] = rs[0] / beta
+
+	for i := 1; i < len(out); i++ {
+		tmp[i] = cs[i-1] / beta
+		beta = bs[i] - as[i]*tmp[i]
+		if beta == 0 {
+			log.Fatal("TriDiagAt cannot solve given system")
+		}
+		out[i] = (rs[i] - as[i]*out[i-1]) / beta
+
+	}
+
+	for i := len(out) - 2; i >= 0; i-- {
+		out[i] -= tmp[i+1] * out[i+1]
+	}
+}
+
+// TriTiagAt solves the system of equations
+//
+// | b0 c0 ..    |   | u0 |   | r0 |
+// | a1 a2 c2 .. |   | u1 |   | r1 |
+// | ..          | * | .. | = | .. |
+// | ..    an bn |   | un |   | rn |
+//
+// For u0 .. un.
+func TriDiag(as, bs, cs, rs []float64) []float64 {
+	us := make([]float64, len(as))
+	TriDiagAt(as, bs, cs, rs, us)
+	return us
+}
