@@ -66,10 +66,17 @@ func pythonArray(xs []float64) string {
 }
 
 func pyplotPlotString(xs, ys []float64, format, label string) string {
-	return fmt.Sprintf(
-		"plt.plot(%s, %s, '%s', label='%s', lw=3)",
-		pythonArray(xs), pythonArray(ys), format, label,
-	)
+	if label == "" {
+		return fmt.Sprintf(
+			"plt.plot(%s, %s, '%s', lw=3)",
+			pythonArray(xs), pythonArray(ys), format,
+		)
+	} else {
+		return fmt.Sprintf(
+			"plt.plot(%s, %s, '%s', label='%s', lw=3)",
+			pythonArray(xs), pythonArray(ys), format, label,
+		)
+	}
 }
 
 func pyplotFigString(i int) string {
