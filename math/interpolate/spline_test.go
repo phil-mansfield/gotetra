@@ -41,21 +41,17 @@ func TestPyplotSpline(t *testing.T) {
 	fig0 := pyplotFigString(0)
 	plot1, plot2 := splinePlots(
 		[]float64{0, 1, 2, 3, 4},
-		[]float64{1, 1, 1, 1, 1},
+		[]float64{2, 3, 4, 5, 6},
 	)
 	fig1 := pyplotFigString(0)
 	plot3, plot4 := splinePlots(
-		[]float64{0, 1, 2, 3, 4},
-		[]float64{2, 3, 4, 5, 6},
+		[]float64{0, 0.5, 1, 1.5, 2},
+		[]float64{0, 0.25, 1, 2.25, 4},
 	)
 	fig2 := pyplotFigString(0)
 	plot5, plot6 := splinePlots(
-		//[]float64{0, 0.5, 1, 1.5, 2},
-		//[]float64{0, 0.25, 1, 2.25, 4},
-		[]float64{-2, -1, 0, +1, +2},
-		[]float64{4, 1, 0, 1, 4},
-		//[]float64{0, 0.25, 0.5,  0.75, 1,  1.25, 1.5, 1.75, 2},
-		//[]float64{0, 0.0625, 0.25, 0.5625, 1, 1.5625, 2.25, 3.0625, 4},
+		[]float64{0, 0.5, 1, 1.5, 2},
+		[]float64{0, 0.125, 1, 3.375, 8},
 	)
 
 	loc := "upper left"
@@ -87,3 +83,5 @@ plt.show()`, fig0, plot1, plot2, loc,
     err = c.Run()
     if err != nil { t.Fatal(err.Error()) }
 }
+
+
