@@ -3,6 +3,7 @@ package los
 import (
 	"fmt"
 	"math"
+	"runtime"
 
 	"github.com/phil-mansfield/gotetra/render/io"
 	"github.com/phil-mansfield/gotetra/los/geom"
@@ -14,6 +15,9 @@ type haloRing struct {
 	phis []float32
 	rot, irot mat.Matrix32
 	rMax float64
+
+	// Options
+	log bool
 
 	// Workspace objects.
 	dr geom.Vec
@@ -30,10 +34,28 @@ func (hr *haloRing) Reuse(origin *geom.Vec, rMin, rMax float64) {
 	hr.Clear()
 }
 
+type internalOption func(*haloRing)
+type Option internalOption
+
+func Log(log bool) Option {
+	return func(hr *haloRing) { hr.log = log }
+}
+
 // Init initialized a haloRing.
 func (hr *haloRing) Init(
-	norm, origin *geom.Vec, rMin, rMax float64, bins, n int,
+	norm, origin *geom.Vec, rMin, rMax float64, bins, n int, opts ...Option,
 ) {
+	hr.log = false
+	for _, opt := range opts { opt(hr) }
+	if hr.log {
+		if rMax <= 0 || rMin <= 0 {
+			panic("Non-positive bounding radius given to logarithmic haloRing.")
+		}
+
+		rMin = math.Log(rMin)
+		rMax = math.Log(rMax)
+	}
+
 	hr.ProfileRing.Init(rMin, rMax, bins, n)
 	zAxis := &geom.Vec{0, 0, 1}
 	
@@ -87,16 +109,26 @@ func (hr *haloRing) insert(t *geom.Tetra, rho float64) {
 				
 				rSqrEnter := enterX*enterX + enterY*enterY
 				rSqrExit := exitX*exitX + exitY*exitY
-				
-				rEnter = math.Sqrt(float64(rSqrEnter))
-				rExit = math.Sqrt(float64(rSqrExit))
+
+				if hr.log {
+					rEnter = math.Log(float64(rSqrEnter)) / 2
+					rExit = math.Log(float64(rSqrExit)) / 2
+				} else {
+					rEnter = math.Sqrt(float64(rSqrEnter))
+					rExit = math.Sqrt(float64(rSqrExit))
+				}
 				if rExit < rEnter { rEnter, rExit = rExit, rEnter }
 			} else {
 				// The polygon encloses the origin.
 				exitX, exitY, _ := geom.Solve(l, l1)
 				rSqrExit := exitX*exitX + exitY*exitY
-				rExit = math.Sqrt(float64(rSqrExit))
-				rEnter = 0.0
+				if hr.log {
+					rExit = math.Log(float64(rSqrExit))
+					rEnter = math.Inf(-1)
+				} else {
+					rExit = math.Sqrt(float64(rSqrExit))
+					rEnter = 0.0
+				}
 			}
 
 			hr.Insert(rEnter, rExit, rho, idx)
@@ -173,7 +205,7 @@ type HaloProfiles struct {
 // Init initializes a HaloProfiles struct with the given parameters.
 func (hp *HaloProfiles) Init(
 	id, rings int, origin *geom.Vec, rMin, rMax float64,
-	bins, n int,
+	bins, n int, opts ...Option,
 ) *HaloProfiles {
 	// We might be able to do better than this.
 	var norms []geom.Vec
@@ -197,7 +229,7 @@ func (hp *HaloProfiles) Init(
 	hp.id, hp.bins, hp.n = id, bins, n
 
 	for i := 0; i < rings; i++ {
-		hp.rs[i].Init(&norms[i], origin, rMin, rMax, bins, n)
+		hp.rs[i].Init(&norms[i], origin, rMin, rMax, bins, n, opts...)
 	}
 
 	return hp
