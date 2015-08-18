@@ -349,32 +349,44 @@ func (hp *HaloProfiles) Mass(rhoM float64) float64 {
 
 // rho returns the total enclosed density of the halo as estimate by averaging
 // the halo's profiles.
-func (hp *HaloProfiles) Rho() float64 {
-	rBuf, rSum := make([]float64, hp.bins), make([]float64, hp.bins)
-	profs := hp.n * len(hp.rs)
+func (hp *HaloProfiles) Rho(shs ...geom.Sphere) float64 {
+	rBuf, rAvg := make([]float64, hp.bins), make([]float64, hp.bins)
+	count := make([]int, hp.bins)
 
 	// Find the spherically averaged rho profile
 	for r := 0; r < len(hp.rs); r++ {
 		for i := 0; i < hp.n; i++ {
+			hp.GetRhos(r, i, rBuf, shs...)
 			hp.rs[r].Retrieve(i, rBuf)
-			for j := range rBuf { rSum[j] += rBuf[j] }
+			for j := range rBuf {
+				if !math.IsNaN(rBuf[j]) {
+					rAvg[j] += rBuf[j]
+					count[j]++
+				}
+			}
 		}
 	}
-	for j := range rSum { rSum[j] /= float64(profs) }
+	for j := range rAvg {
+		if count[j] == 0 { 
+			rAvg[j] = 0 
+		} else {
+			rAvg[j] /= float64(count[j])
+		}
+	}
 
 	// Integrate
-	sum := 0.0	
+	sum := 0.0
 	if hp.log {
 		minlr := hp.rs[0].lowR
 		dlr := hp.rs[0].ProfileRing.dr
-		for i, rho := range rSum {
+		for i, rho := range rAvg {
 			lr := (float64(i) + 0.5)*dlr + minlr
 			r := math.Exp(lr)
 			sum += r*r*r*dlr*rho
 		}
 	} else {
-		dr := float64(hp.R - hp.minSphere.R) / float64(len(rSum))
-		for i, rho := range rSum {
+		dr := float64(hp.R - hp.minSphere.R) / float64(len(rAvg))
+		for i, rho := range rAvg {
 			r := (float64(i) + 0.5)*dr + float64(hp.minSphere.R)
 			sum += r*r*dr*rho
 		}
