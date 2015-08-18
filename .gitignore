@@ -12,6 +12,7 @@ scripts/out
 out/
 plots/
 doc/
+los/main/plots/
 log
 gotetra
 
@@ -38,6 +39,7 @@ _testmain.go
 *.dat
 *.pyc
 *.txt
+*.png
 
 *
 !*.*
