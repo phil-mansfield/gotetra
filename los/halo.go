@@ -336,8 +336,8 @@ func (hp *HaloProfiles) Rho() float64 {
 	// Integrate
 	sum := 0.0	
 	if hp.log {
-		minlr := math.Log(float64(hp.minSphere.R))
-		dlr := (math.Log(float64(hp.R)) - minlr) / float64(len(rSum))
+		minlr := hp.rs[0].lowR
+		dlr := hp.rs[0].ProfileRing.dr
 		for i, rho := range rSum {
 			lr := (float64(i) + 0.5)*dlr + minlr
 			r := math.Exp(lr)
@@ -362,18 +362,15 @@ func (hp *HaloProfiles) Bins() int { return hp.bins }
 func (hp *HaloProfiles) Profiles() int { return hp.n }
 
 func (hp *HaloProfiles) GetRs(out []float64) {
-	if hp.n != len(out) { panic("Length of out array != hp.Bins().") }
+	if hp.bins != len(out) { panic("Length of out array != hp.Bins().") }
 
-	for i := range out {
-		out[i] = hp.rMin
-	}
-
-	if hp.log {
-		for i := range out { out[i] = math.Exp(out[i]) }
-	}
+	rMin := hp.rs[0].lowR
+	dr := hp.rs[0].ProfileRing.dr
+	for i := range out { out[i] = (float64(i) + 0.5) * dr + rMin }
+	if hp.log { for i := range out { out[i] = math.Exp(out[i]) } }
 }
 
 func (hp *HaloProfiles) GetRhos(ring, prof int, out []float64) {
-	if hp.n != len(out) { panic("Length of out array != hp.Bins().") }
+	if hp.bins != len(out) { panic("Length of out array != hp.Bins().") }
 	hp.rs[ring].Retrieve(prof, out)
 }
