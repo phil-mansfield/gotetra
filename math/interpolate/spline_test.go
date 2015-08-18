@@ -16,8 +16,8 @@ func splinePlots(xs, ys []float64) {
 	sp := NewSpline(xs, ys)
 	for i := 0; i < 100; i++ { spYs[i] = sp.Eval(spXs[i]) }
 
-	plt.Plot(spXs, spYs, "b", plt.Label("Spline"), plt.Lw(3))
-	plt.Plot(xs, ys, "ok", plt.Label("Input"), plt.Lw(3))
+	plt.Plot(spXs, spYs, "b", plt.Label("Spline"), plt.LW(3))
+	plt.Plot(xs, ys, "ok", plt.Label("Input"), plt.LW(3))
 }
 
 func (sp *Spline) terms() int { return len(sp.coeffs) }

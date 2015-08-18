@@ -95,15 +95,15 @@ func TestPyplotSavGol(t *testing.T) {
 
 	plt.Reset()
 
-	plt.Plot(xs, rawYs, "m", plt.Label("Underlying Function"), plt.Lw(3))
-	plt.Plot(xs, noiseYs, "k", plt.Label("Noisy Function"), plt.Lw(3))
+	plt.Plot(xs, rawYs, "m", plt.Label("Underlying Function"), plt.LW(3))
+	plt.Plot(xs, noiseYs, "k", plt.Label("Noisy Function"), plt.LW(3))
 	plt.Plot(xs, tk.Convolve(noiseYs, Extension), "r",
-		plt.Label("Tophat"), plt.Lw(3))
+		plt.Label("Tophat"), plt.LW(3))
 	plt.Plot(xs, gk.Convolve(noiseYs, Extension), "g",
-		plt.Label("Gaussian"), plt.Lw(3))
+		plt.Label("Gaussian"), plt.LW(3))
 	plt.Plot(xs, sgk.Convolve(noiseYs, Extension), "b",
-		plt.Label("Savitzky-Golay"), plt.Lw(3))
+		plt.Label("Savitzky-Golay"), plt.LW(3))
 
-	plt.Legend(plt.Loc("lower left"), plt.Frameon(false))
+	plt.Legend(plt.Loc("lower left"), plt.FrameOn(false))
 	plt.Show()
 }
