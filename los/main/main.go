@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"os"
 	"path"
 	"sort"
@@ -17,6 +18,8 @@ import (
 
 	"github.com/phil-mansfield/gotetra/los"
 	"github.com/phil-mansfield/gotetra/los/geom"
+
+	plt "github.com/phil-mansfield/pyplot"
 )
 
 const (
@@ -58,6 +61,8 @@ func main() {
 	if err != nil { log.Fatal(err.Error()) }
 	pprof.StartCPUProfile(f)
 	defer pprof.StopCPUProfile()
+
+	rs, rhos := make([]float64, bins), make([]float64, bins)
 	for _, i := range []int{1000, 1001, 1002, 1003, 1004} {
 		origin := &geom.Vec{float32(xs[i]), float32(ys[i]), float32(zs[i])}
 		h.Init(i, rings, origin, rs[i] * rMinMult, rs[i] * rMaxMult, bins, n)
@@ -68,8 +73,25 @@ func main() {
 		)
 
 		intersectionTest(h, hdIntrs, fileIntrs, buf)
+		plotExampleProfiles(h, rs, rhos)
 	}
+
+	plt.Show()
 }
+
+func plotExampleProfiles(hp *los.HaloProfiles, rs, rhos []float64) {
+	plt.Figure()
+	hp.GetRs(rs)
+	for ring := 0; ring < hp.Rings(); ring++ {
+		hp.GetRhos(ring, rand.Intn(hp.Profiles()), rhos)
+		plt.Plot(rs, rhos, plt.LW(3))
+	}
+	
+	plt.Title(fmt.Sprintf("Halo %d", hp.ID()))
+	plt.XLabel(`$R$ $[{\rm Mpc}/h]$`)
+	plt.YLabel(`$\rho$ [$\rho_m$]`)
+}
+
 // createBuffers allocates all the buffers needed for repeated calls to the
 // various sheet transformation functions.
 func createBuffers(

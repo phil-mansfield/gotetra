@@ -17,7 +17,7 @@ type Buffers struct {
 	bufHs []HaloProfiles
 }
 
-func NewBuffers(file string, hd *io.SheetHeader, rings int) *Buffers {
+func NewBuffers(file string, hd *io.SheetHeader) *Buffers {
 	buf := new(Buffers)
 
     sw := hd.SegmentWidth

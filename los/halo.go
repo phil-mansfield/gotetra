@@ -79,7 +79,14 @@ func (hr *haloRing) insert(t *geom.Tetra, rho float64) {
 	hr.t.Rotate(&hr.rot)
 	hr.pt.Init(&hr.t) // This is slower than it has to be by a lot!
 	
-	rSqrMin, rSqrMax := float32(hr.lowR*hr.lowR), float32(hr.highR*hr.highR)
+	
+	var rSqrMin, rSqrMax float32
+	if hr.log {
+		rMin, rMax := float32(math.Exp(hr.lowR)), float32(math.Exp(hr.highR))
+		rSqrMin, rSqrMax = rMin*rMin, rMax*rMax
+	} else {
+		rSqrMin, rSqrMax = float32(hr.lowR*hr.lowR), float32(hr.highR*hr.highR)
+	}
 	if hr.t.ZPlaneSlice(&hr.pt, 0, &hr.poly) {
 		// Stop early if possible.
 		rSqrTMin, rSqrTMax := hr.poly.RSqrMinMax()
@@ -200,6 +207,8 @@ type HaloProfiles struct {
 	rs []haloRing
 	rMin, rMax float64
 	id, bins, n int
+
+	log bool
 }
 
 // Init initializes a HaloProfiles struct with the given parameters.
@@ -231,6 +240,8 @@ func (hp *HaloProfiles) Init(
 	for i := 0; i < rings; i++ {
 		hp.rs[i].Init(&norms[i], origin, rMin, rMax, bins, n, opts...)
 	}
+
+	hp.log = hp.rs[0].log
 
 	return hp
 }
@@ -323,14 +334,46 @@ func (hp *HaloProfiles) Rho() float64 {
 	for j := range rSum { rSum[j] /= float64(profs) }
 
 	// Integrate
-	dr := float64(hp.R - hp.minSphere.R) / float64(len(rSum))
-	sum := 0.0
-	for i, rho := range rSum {
-		r := (float64(i) + 0.5)*dr + float64(hp.minSphere.R)
-		sum += r*r*dr*rho
+	sum := 0.0	
+	if hp.log {
+		minlr := math.Log(float64(hp.minSphere.R))
+		dlr := (math.Log(float64(hp.R)) - minlr) / float64(len(rSum))
+		for i, rho := range rSum {
+			lr := (float64(i) + 0.5)*dlr + minlr
+			r := math.Exp(lr)
+			sum += r*r*r*dlr*rho
+		}
+	} else {
+		dr := float64(hp.R - hp.minSphere.R) / float64(len(rSum))
+		for i, rho := range rSum {
+			r := (float64(i) + 0.5)*dr + float64(hp.minSphere.R)
+			sum += r*r*dr*rho
+		}
 	}
 
 	sum *= 4*math.Pi	
 	vol := (4 * math.Pi / 3) * hp.R*hp.R*hp.R
 	return sum / float64(vol)
+}
+
+func (hp *HaloProfiles) ID() int { return hp.id }
+func (hp *HaloProfiles) Rings() int { return len(hp.rs) }
+func (hp *HaloProfiles) Bins() int { return hp.bins }
+func (hp *HaloProfiles) Profiles() int { return hp.n }
+
+func (hp *HaloProfiles) GetRs(out []float64) {
+	if hp.n != len(out) { panic("Length of out array != hp.Bins().") }
+
+	for i := range out {
+		out[i] = hp.rMin
+	}
+
+	if hp.log {
+		for i := range out { out[i] = math.Exp(out[i]) }
+	}
+}
+
+func (hp *HaloProfiles) GetRhos(ring, prof int, out []float64) {
+	if hp.n != len(out) { panic("Length of out array != hp.Bins().") }
+	hp.rs[ring].Retrieve(prof, out)
 }
