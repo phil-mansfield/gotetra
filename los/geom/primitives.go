@@ -218,6 +218,41 @@ func (s *Sphere) TetraIntersect(t *Tetra) bool {
 	return false
 }
 
+// LineSegment represents a line segment.
+type LineSegment struct {
+	Origin, Dir Vec
+	StartR, EndR float32
+}
+
+// LineSegmentIntersect tests for intersection between a sphere and a line
+// segment. The distances between the line segment's origin and the two
+// intersect points are returned as the first two arguments and bools indicating
+// whether those entrance points exist on the line segment are returned as the
+// second two arguments.
+func (s *Sphere) LineSegmentIntersect(
+	ls *LineSegment,
+) (enter, exit float32, enters, exits bool) {
+	dr := Vec{}
+	for i := 0; i < 3; i++ { dr[i] = ls.Origin[i] - s.C[i] }
+	b := 2 * ls.Dir[0]*dr[0] + ls.Dir[1]*dr[1] + ls.Dir[2]*dr[2]
+	c := dr[0]*dr[0] + dr[1]*dr[1] + dr[2]*dr[2] - s.R*s.R
+	disc := b*b - 4*c
+
+	if disc > 0 {
+		exit = (-b + float32(math.Sqrt(float64(disc)))) / 2
+		enter = (-b - float32(math.Sqrt(float64(disc)))) / 2
+	} else if disc == 0 {
+		enter, exit = -b/2, -b/2
+	} else {
+		return 0, 0, false, false
+	}
+
+	enters = ls.StartR < enter && ls.EndR > enter
+	exits = ls.StartR < exit && ls.EndR > exit
+
+	return enter, exit, enters, exits
+}
+
 // SphereContain returns true if s1 is completely contained in s2.
 func (s1 *Sphere) SphereContain(s2 *Sphere) bool {
 	sum := float32(0)

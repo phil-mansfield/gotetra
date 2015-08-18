@@ -1,6 +1,7 @@
 package geom
 
 import (
+	"math"
 	"math/rand"
 	"testing"
 )
@@ -123,6 +124,49 @@ func TestSphereSphereContain(t *testing.T) {
 		if test.s1.SphereContain(&test.s2) != test.res {
 			t.Errorf("%d) %v.SphereContain(%v) -> %v",
 				i+1, test.s1, test.s2, test.res)
+		}
+	}
+}
+
+func TestSphereLineSegmentIntersect(t *testing.T) {
+	eps := float32(1e-4)
+	rt2 := 1/float32(math.Sqrt(2))
+	table := []struct {
+		s Sphere
+		ls LineSegment
+		enter, exit float32
+		enters, exits bool
+	} {
+		{Sphere{Vec{0, 0, 0}, 1},
+			LineSegment{Vec{0, 0, 0}, Vec{1, 0, 0}, -2, +2},
+			-1, +1, true, true},
+		{Sphere{Vec{0, 0, 0}, 1},
+			LineSegment{Vec{0, 0, 0}, Vec{rt2, rt2, 0}, -1.1, +2},
+			-1, +1, true, true},
+		{Sphere{Vec{0, 0, 10}, 1},
+			LineSegment{Vec{0, 0, 0}, Vec{1, 0, 0}, -2, +2},
+			0, 0, false, false},
+		{Sphere{Vec{7, 0, 0}, 1},
+			LineSegment{Vec{0, 0, 0}, Vec{1, 0, 0}, 1, 10},
+			6, 8, true, true},
+		{Sphere{Vec{10, 0, 0}, 1},
+			LineSegment{Vec{0, 0, 0}, Vec{1, 0, 0}, 1, 10},
+			9, 0, true, false},
+		{Sphere{Vec{1, 0, 0}, 1},
+			LineSegment{Vec{0, 0, 0}, Vec{1, 0, 0}, 1, 10},
+			0, 2, false, true},
+	}
+
+	for i, test := range table {
+		enter, exit, enters, exits := test.s.LineSegmentIntersect(&test.ls)
+		if enters != test.enters || exits != test.exits ||
+			(enters && !almostEq(enter, test.enter,eps)) || 
+			(exits && !almostEq(exit, test.exit,eps)) {
+			t.Errorf(
+				"%d) expected intersect result of (%g %g %v %v), got " + 
+					"(%g %g %v %v) ", i + 1, test.enter, test.exit, test.enters,
+				test.exits, enter, exit, enters, exits,
+			)
 		}
 	}
 }
