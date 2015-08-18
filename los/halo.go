@@ -73,6 +73,7 @@ func (hr *haloRing) Init(
 	for i := 0; i < 3; i++ { hr.dr[i] *= -1 }
 }
 
+// This is it. This is the critical innermost for loop.
 func (hr *haloRing) insert(t *geom.Tetra, rho float64) {
 	hr.t = *t
 	hr.t.Translate(&hr.dr)
@@ -161,6 +162,34 @@ func (hr1 *haloRing) Add(hr2 *haloRing) {
 // Clear resets the contents of the haloRing.
 func (hr *haloRing) Clear() {
 	for i := range hr.derivs { hr.derivs[i] = 0 }
+}
+
+// BinIdx computes the radial bin containing the given radius.
+func (hr *haloRing) BinIdx(r float64) int {
+	if hr.log {
+		return int((math.Log(r) - hr.lowR) / hr.ProfileRing.dr)
+	} else {
+		return int((r - hr.lowR) / hr.ProfileRing.dr)
+	}
+}
+
+// LineSegment write a line segment corresponding to the given profile 
+func (hr *haloRing) LineSegment(prof int, out *geom.LineSegment) {
+	vec := geom.Vec{}
+	sin, cos := math.Sincos(float64(hr.phis[prof]))
+	vec[0], vec[1] = float32(cos), float32(sin)
+	vec.Rotate(&hr.irot)
+	
+	if hr.log {
+		*out = geom.LineSegment{Origin: hr.dr, Dir: vec,
+			StartR: float32(math.Exp(hr.lowR)),
+			EndR: float32(math.Exp(hr.highR)) }
+		for i := 0; i < 3; i++ { out.Origin[i] *= -1 }
+	} else {
+		*out = geom.LineSegment{Origin: hr.dr, Dir: vec,
+			StartR: float32(hr.lowR), EndR: float32(hr.highR) }
+		for i := 0; i < 3; i++ { out.Origin[i] *= -1 }
+	}
 }
 
 // Add adds the contents of hp2 to hp1.
@@ -370,7 +399,30 @@ func (hp *HaloProfiles) GetRs(out []float64) {
 	if hp.log { for i := range out { out[i] = math.Exp(out[i]) } }
 }
 
-func (hp *HaloProfiles) GetRhos(ring, prof int, out []float64) {
+func (hp *HaloProfiles) GetRhos(
+	ring, prof int, out []float64, shs ...geom.Sphere,
+) {
 	if hp.bins != len(out) { panic("Length of out array != hp.Bins().") }
-	hp.rs[ring].Retrieve(prof, out)
+	r := &hp.rs[ring]
+	r.Retrieve(prof, out)
+
+	ls := new(geom.LineSegment)
+	r.LineSegment(prof, ls)
+
+	for i := range shs {
+		enter32, exit32, enters, exits := shs[i].LineSegmentIntersect(ls)
+		if !enters && !exits { continue }
+		enter, exit := float64(enter32), float64(exit32)
+
+		enterIdx, exitIdx := 0, hp.bins
+		if enters && exits {
+			enterIdx, exitIdx = r.BinIdx(enter), r.BinIdx(exit) + 1
+		} else if enters {
+			enterIdx = r.BinIdx(enter)
+		} else if exits  {
+			exitIdx = r.BinIdx(exit) + 1
+		}
+
+		for i := enterIdx; i < exitIdx; i++ { out[i] = math.NaN() }
+	}
 }
