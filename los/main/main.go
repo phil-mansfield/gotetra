@@ -51,10 +51,10 @@ func main() {
 		err = io.ReadSheetHeaderAt(files[i], &hds[i])
 		if err != nil { log.Fatal(err.Error()) }
 	}
-	fmt.Println()
 
 	xs, ys, zs, ms, rs, err := readHalos(haloFileName, &hds[0].Cosmo)
 	if err != nil { log.Fatal(err.Error()) }
+	fmt.Printf("%d halos read.\n" len(xs))
 
 	buf := los.NewBuffers(files[0], &hds[0])
 	h := new(los.HaloProfiles)
