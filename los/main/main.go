@@ -24,23 +24,24 @@ import (
 
 const (
 	rType = halo.R200m
-	rMaxMult =3.0
+	rMaxMult = 3.0
 	rMinMult = 0.5
 
 	n = 1024
 	bins = 256
 
-	rings = 3
+	rings = 10
 )
 
 func main() {
 	fmt.Println("Running")
-	if len(os.Args) != 3 {
-		log.Fatalf("Usage: $ %s input_dir halo_file", os.Args[0])
+	if len(os.Args) != 4 {
+		log.Fatalf("Usage: $ %s input_dir halo_file plot_dir", os.Args[0])
 	}
 
 	dirName := os.Args[1]
 	haloFileName := os.Args[2]
+	plotDir := os.Args[3]
 
 	files, err := fileNames(dirName)
 	if err != nil { log.Fatal(err.Error()) }
@@ -62,10 +63,11 @@ func main() {
 	pprof.StartCPUProfile(f)
 	defer pprof.StopCPUProfile()
 
-	rs, rhos := make([]float64, bins), make([]float64, bins)
+	plotRs, plotRhos := make([]float64, bins), make([]float64, bins)
 	for _, i := range []int{1000, 1001, 1002, 1003, 1004} {
 		origin := &geom.Vec{float32(xs[i]), float32(ys[i]), float32(zs[i])}
-		h.Init(i, rings, origin, rs[i] * rMinMult, rs[i] * rMaxMult, bins, n)
+		h.Init(i, rings, origin, rs[i] * rMinMult, rs[i] * rMaxMult,
+			bins, n, los.Log(false))
 		hdIntrs, fileIntrs := intersectingSheets(h, hds, files)
 
 		fmt.Printf(
@@ -73,23 +75,39 @@ func main() {
 		)
 
 		intersectionTest(h, hdIntrs, fileIntrs, buf)
-		plotExampleProfiles(h, rs, rhos)
+		plotExampleProfiles(h, plotRs, plotRhos, plotDir)
 	}
 
-	plt.Show()
+	plt.Execute()
 }
 
-func plotExampleProfiles(hp *los.HaloProfiles, rs, rhos []float64) {
+func plotExampleProfiles(hp *los.HaloProfiles, rs, rhos []float64, dir string) {
+	fname := path.Join(dir, fmt.Sprintf("profs_%dh.png", hp.ID()))
+
 	plt.Figure()
 	hp.GetRs(rs)
+
+	r := rs[len(rs) - 1] / rMaxMult
+	plt.Plot([]float64{r, r}, []float64{1e-2, 1e3}, "k", plt.LW(2))
+
 	for ring := 0; ring < hp.Rings(); ring++ {
 		hp.GetRhos(ring, rand.Intn(hp.Profiles()), rhos)
 		plt.Plot(rs, rhos, plt.LW(3))
 	}
+
 	
 	plt.Title(fmt.Sprintf("Halo %d", hp.ID()))
-	plt.XLabel(`$R$ $[{\rm Mpc}/h]$`)
-	plt.YLabel(`$\rho$ [$\rho_m$]`)
+	plt.XLabel(`$R$ $[{\rm Mpc}/h]$`, plt.FontSize(16))
+	plt.YLabel(`$\rho$ [$\rho_m$]`, plt.FontSize(16))
+
+	plt.XScale("log")
+
+	plt.YScale("log")
+	plt.YLim(1e-2, 1e3)
+
+	plt.Grid(plt.Axis("x"))
+	plt.Grid(plt.Axis("y"), plt.Which("both"))
+	plt.SaveFig(fname)
 }
 
 // createBuffers allocates all the buffers needed for repeated calls to the
