@@ -1,6 +1,7 @@
 package interpolate
 
 import (
+	"fmt"
 	"math"
 	"github.com/phil-mansfield/gotetra/math/mat"
 )
@@ -62,7 +63,7 @@ func (b BoundaryCondition) negGet(xs []float64, i int) float64 {
 	panic("Impossible")
 }
 
-// ConvolveAt convolves a 1d data set according to the filter f. Boundary
+// Convolve convolves a 1d data set according to the filter f. Boundary
 // conditions are specified with b.
 func (k *Kernel) Convolve(xs []float64, b BoundaryCondition) []float64 {
 	out := make([]float64, len(xs))

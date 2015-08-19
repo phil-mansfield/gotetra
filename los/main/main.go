@@ -144,7 +144,7 @@ func plotExampleProfiles(
 		}
 		for i := range rhoSets {
 			plotRs, plotRhos := auxSets[0][i], rhoSets[i]
-			smoothRhos, _, ok := analyze.Smooth(plotRs, plotRhos, 25)
+			smoothRhos, _, ok := analyze.Smooth(plotRs, plotRhos, 41)
 			if !ok { continue }
 			plt.Plot(plotRs, smoothRhos, plt.LW(3), plt.C(colors[ring]))
 		}
