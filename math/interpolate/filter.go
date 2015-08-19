@@ -186,8 +186,6 @@ func NewSavGolDerivKernel(dx float64, dOrder, pOrder, width int) *Kernel {
 		panic("Kernel width cannot be smaller than pOrder.")
 	}
 
-	panic("Not Yet Implemented")
-
 	k := new(Kernel)
 	k.cs = make([]float64, width)
 	k.center = width / 2
