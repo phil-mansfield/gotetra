@@ -105,10 +105,11 @@ func plotExampleProfiles(hp *los.HaloProfiles, rs, rhos []float64, dir string) {
 
 	for ring := 0; ring < hp.Rings(); ring++ {
 		hp.GetRhos(ring, rand.Intn(hp.Profiles()), rhos)
-		rhoSets, rSets := analyze.NaNSplit(rhos, analyze.Aux(rs))
+		rhoSets, auxSets := analyze.NaNSplit(rhos, analyze.Aux(rs))
 
 		for i := range rhoSets {
-			plt.Plot(rSets[i], rhoSets[i], plt.LW(3), plt.C(colors[ring]))
+			plotRs, plotRhos := auxSets[0][i], rhoSets[i]
+			plt.Plot(plotRs, plotRhos, plt.LW(3), plt.C(colors[ring]))
 		}
 	}
 
