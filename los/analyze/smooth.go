@@ -1,6 +1,8 @@
 package analyze
 
 import (
+	"math"
+
 	intr "github.com/phil-mansfield/gotetra/math/interpolate"
 )
 
@@ -53,11 +55,16 @@ func Smooth(
 	if vals == nil { vals = make([]float64, len(xs)) }
 	if derivs == nil { derivs = make([]float64, len(xs)) }
 
-	dx := (xs[0] - xs[len(xs) - 1])/ float64(len(xs) - 1)
+	dx := (math.Log(xs[0]) - math.Log(xs[len(xs) - 1]))/ float64(len(xs) - 1)
 	k, kd := getSmoothingKernel(window, dx)
 
+
+	for i := range ys { ys[i] = math.Log(ys[i]) }
 	k.ConvolveAt(ys, intr.Extension, vals)
 	kd.ConvolveAt(ys, intr.Extension, derivs)
+	for i := range ys { ys[i] = math.Exp(ys[i]) }
+	for i := range vals { vals[i] = math.Exp(vals[i]) }
+
 	return vals, derivs, true
 }
 
