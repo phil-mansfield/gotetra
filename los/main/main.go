@@ -90,10 +90,10 @@ func main() {
 	for _, i := range []int{1000, 1001, 1002, 1003, 1004} {
 		fmt.Println("Hosts:", sf.HostCount(i), "Subhalos:", sf.SubhaloCount(i))
 		spheres := subhaloSpheres(sf, i, xs, ys, zs, rs)
-
+		
 		origin := &geom.Vec{float32(xs[i]), float32(ys[i]), float32(zs[i])}
 		h.Init(i, rings, origin, rs[i] * rMinMult, rs[i] * rMaxMult,
-			bins, n, los.Log(false))
+			bins, n, hds[0].TotalWidth, los.Log(false))
 		hdIntrs, fileIntrs := intersectingSheets(h, hds, files)
 
 		fmt.Printf(
@@ -208,5 +208,5 @@ func intersectionTest(
 		fmt.Printf("Setup: %.3g s  Density: %.3g s\n",
 			(t2 - t1) / 1e9, (t3 - t2) / 1e9)
 	}
-	fmt.Printf("    Rho: %.3g\n", h.Rho(subhalos...))
+	//fmt.Printf("    Rho: %.3g\n", h.Rho(subhalos...))
 }

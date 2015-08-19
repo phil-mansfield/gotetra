@@ -236,6 +236,7 @@ type HaloProfiles struct {
 	rs []haloRing
 	rMin, rMax float64
 	id, bins, n int
+	boxWidth float32
 
 	log bool
 }
@@ -243,7 +244,7 @@ type HaloProfiles struct {
 // Init initializes a HaloProfiles struct with the given parameters.
 func (hp *HaloProfiles) Init(
 	id, rings int, origin *geom.Vec, rMin, rMax float64,
-	bins, n int, opts ...Option,
+	bins, n int, boxWidth float64, opts ...Option,
 ) *HaloProfiles {
 	// We might be able to do better than this.
 	var norms []geom.Vec
@@ -265,6 +266,7 @@ func (hp *HaloProfiles) Init(
 	hp.minSphere.C, hp.minSphere.R = *origin, float32(rMin)
 	hp.rMin, hp.rMax = rMin, rMax
 	hp.id, hp.bins, hp.n = id, bins, n
+	hp.boxWidth = float32(boxWidth)
 
 	for i := 0; i < rings; i++ {
 		hp.rs[i].Init(&norms[i], origin, rMin, rMax, bins, n, opts...)
@@ -412,6 +414,19 @@ func (hp *HaloProfiles) GetRs(out []float64) {
 	if hp.log { for i := range out { out[i] = math.Exp(out[i]) } }
 }
 
+func dist(x, y float32) float32 {
+	diff := x - y
+	if diff < 0 { return -diff }
+	return diff
+}
+
+func change(x, anchor, bw float32) float32 {
+	normDist := dist(x, anchor)
+	if dist(x + bw, anchor) < normDist { return +bw }
+	if dist(x - bw, anchor) < normDist { return -bw }
+	return 0
+}
+
 func (hp *HaloProfiles) GetRhos(
 	ring, prof int, out []float64, shs ...geom.Sphere,
 ) {
@@ -422,8 +437,17 @@ func (hp *HaloProfiles) GetRhos(
 	ls := new(geom.LineSegment)
 	r.LineSegment(prof, ls)
 
+	dx, bw := [3]float32{}, hp.boxWidth
 	for i := range shs {
+		for j := 0; j < 3; j++ {
+			dx[j] = change(shs[i].C[j], ls.Origin[j], bw)
+			shs[i].C[j] += dx[j]
+		}
 		enter32, exit32, enters, exits := shs[i].LineSegmentIntersect(ls)
+		for j := 0; j < 3; j++ {
+			shs[i].C[j] -= dx[j]
+		}
+
 		if !enters && !exits { continue }
 		enter, exit := float64(enter32), float64(exit32)
 
