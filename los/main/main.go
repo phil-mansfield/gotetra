@@ -29,6 +29,10 @@ const (
 	bins = 256
 
 	rings = 6
+
+	// SubhaloFinder params.
+	finderCells = 150
+	overlapMult = 3
 )
 
 var (
@@ -59,15 +63,21 @@ func main() {
 		err = io.ReadSheetHeaderAt(files[i], &hds[i])
 		if err != nil { log.Fatal(err.Error()) }
 	}
+	fmt.Println()
 
+	buf := los.NewBuffers(files[0], &hds[0])
+	h := new(los.HaloProfiles)
+
+	// Find halos, subhalos, etc.
 	xs, ys, zs, ms, rs, err := halo.ReadRockstar(
 		haloFileName, rType, &hds[0].Cosmo,
 	)
 	if err != nil { log.Fatal(err.Error()) }
 	fmt.Printf("%d halos read.\n", len(xs))
-
-	buf := los.NewBuffers(files[0], &hds[0])
-	h := new(los.HaloProfiles)
+	g := halo.NewGrid(finderCells, hds[0].TotalWidth, len(xs))
+	g.Insert(xs, ys, zs)
+	sf := halo.NewSubhaloFinder(g)
+	sf.FindSubhalos(xs, ys, zs, rs, overlapMult)
 
 	// Profiling boilerplate.
 	f, err := os.Create("out.pprof")
@@ -78,6 +88,8 @@ func main() {
 	// Analyze each halo.
 	plotRs, plotRhos := make([]float64, bins), make([]float64, bins)
 	for _, i := range []int{1000, 1001, 1002, 1003, 1004} {
+		fmt.Println("Hosts:", sf.HostCount(i), "Subhalos:", sf.SubhaloCount(i))
+
 		origin := &geom.Vec{float32(xs[i]), float32(ys[i]), float32(zs[i])}
 		h.Init(i, rings, origin, rs[i] * rMinMult, rs[i] * rMaxMult,
 			bins, n, los.Log(false))
