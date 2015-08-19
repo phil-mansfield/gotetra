@@ -14,10 +14,10 @@ import (
 	"github.com/phil-mansfield/table"
 	"github.com/phil-mansfield/gotetra/render/io"	
 	"github.com/phil-mansfield/gotetra/render/halo"
-	rGeom "github.com/phil-mansfield/gotetra/render/geom"
 
 	"github.com/phil-mansfield/gotetra/los"
 	"github.com/phil-mansfield/gotetra/los/geom"
+	"github.com/phil-mansfield/gotetra/los/analyze"
 
 	plt "github.com/phil-mansfield/pyplot"
 )
@@ -30,7 +30,14 @@ const (
 	n = 1024
 	bins = 256
 
-	rings = 10
+	rings = 6
+)
+
+var (
+	colors = []string{
+		"DarkSlateBlue", "DarkSlateGray", "DarkTurquoise",
+		"DarkViolet", "DeepPink", "DimGray",
+	}
 )
 
 func main() {
@@ -54,7 +61,7 @@ func main() {
 
 	xs, ys, zs, ms, rs, err := readHalos(haloFileName, &hds[0].Cosmo)
 	if err != nil { log.Fatal(err.Error()) }
-	fmt.Printf("%d halos read.\n" len(xs))
+	fmt.Printf("%d halos read.\n", len(xs))
 
 	buf := los.NewBuffers(files[0], &hds[0])
 	h := new(los.HaloProfiles)
@@ -92,7 +99,11 @@ func plotExampleProfiles(hp *los.HaloProfiles, rs, rhos []float64, dir string) {
 
 	for ring := 0; ring < hp.Rings(); ring++ {
 		hp.GetRhos(ring, rand.Intn(hp.Profiles()), rhos)
-		plt.Plot(rs, rhos, plt.LW(3))
+		rhoSets, rSets := analyze.NaNSplit(rhos, analyze.Aux(rs))
+
+		for i := range rhoSets {
+			plt.Plot(rSets[i], rhoSets[i], plt.LW(3), plt.C(colors[ring]))
+		}
 	}
 
 	
@@ -105,26 +116,12 @@ func plotExampleProfiles(hp *los.HaloProfiles, rs, rhos []float64, dir string) {
 	plt.YScale("log")
 	plt.YLim(1e-2, 1e3)
 
-	plt.Grid(plt.Axis("x"))
-	plt.Grid(plt.Axis("y"), plt.Which("both"))
+	plt.Grid(plt.Axis("y"))
+	plt.Grid(plt.Axis("x"), plt.Which("both"))
 	plt.SaveFig(fname)
 }
 
-// createBuffers allocates all the buffers needed for repeated calls to the
-// various sheet transformation functions.
-func createBuffers(
-	hd *io.SheetHeader,
-) ([]rGeom.Vec, []geom.Tetra, []geom.Sphere, []float64) {
-
-	xsBuf := make([]rGeom.Vec, hd.GridCount)
-	sw := hd.SegmentWidth
-	tsBuf := make([]geom.Tetra, 6*sw*sw*sw)
-	ssBuf := make([]geom.Sphere, 6*sw*sw*sw)
-	rhosBuf := make([]float64, 6*sw*sw*sw)
-	return xsBuf, tsBuf, ssBuf, rhosBuf
-}
-
-// fileNames returns the names of all the files ina  directory.
+// fileNames returns the names of all the files in a directory.
 func fileNames(dirName string) ([]string, error) {
 	infos, err := ioutil.ReadDir(dirName)
 	if err != nil { return nil, err }

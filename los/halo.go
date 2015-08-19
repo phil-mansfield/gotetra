@@ -366,6 +366,7 @@ func (hp *HaloProfiles) Rho(shs ...geom.Sphere) float64 {
 			}
 		}
 	}
+
 	for j := range rAvg {
 		if count[j] == 0 { 
 			rAvg[j] = 0 
