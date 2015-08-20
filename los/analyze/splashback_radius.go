@@ -1,6 +1,5 @@
 package analyze
 
-
 type splashbackRadiusParams struct { dLim float64 }
 type internalSplashbackRadiusOption func(*splashbackRadiusParams)
 type SplashbackRadiusOption internalSplashbackRadiusOption

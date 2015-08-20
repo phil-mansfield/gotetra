@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"math/rand"
 	"os"
 	"path"
+	"strings"
 	"time"
 	"runtime/pprof"
 
@@ -87,7 +87,7 @@ func main() {
 
 	// Analyze each halo.
 	plotRs, plotRhos := make([]float64, bins), make([]float64, bins)
-	for _, i := range []int{1000, 1001, 1002, 1003, 1004} {
+	for i := 1000; i < 1010; i++ {
 		fmt.Println("Hosts:", sf.HostCount(i), "Subhalos:", sf.SubhaloCount(i))
 		spheres := subhaloSpheres(sf, i, xs, ys, zs, rs)
 		
@@ -95,15 +95,16 @@ func main() {
 		h.Init(i, rings, origin, rs[i] * rMinMult, rs[i] * rMaxMult,
 			bins, n, hds[0].TotalWidth, los.Log(false))
 		hdIntrs, fileIntrs := intersectingSheets(h, hds, files)
-
+		
 		fmt.Printf(
 			"Halo mass is: %.3g, intersects are: %d\n", ms[i], len(hdIntrs),
 		)
-
+			
 		intersectionTest(h, hdIntrs, fileIntrs, buf, spheres)
 		plotExampleProfiles(h, plotRs, plotRhos, plotDir, spheres)
+		plotExampleDerivs(h, plotRs, plotRhos, plotDir, spheres)
 	}
-
+	
 	plt.Execute()
 }
 
@@ -134,16 +135,17 @@ func plotExampleProfiles(
 	r := rs[len(rs) - 1] / rMaxMult
 	plt.Plot([]float64{r, r}, []float64{1e-2, 1e3}, "k", plt.LW(2))
 
+
 	for ring := 0; ring < hp.Rings(); ring++ {
-		hp.GetRhos(ring, rand.Intn(hp.Profiles()), rhos, subhalos...)
+		if ring > 4 { break }
+		hp.GetRhos(ring, 13, rhos, subhalos...)
 		rhoSets, auxSets := analyze.NaNSplit(rhos, analyze.Aux(rs))
 
 		for i := range rhoSets {
 			rawRs, rawRhos := auxSets[0][i], rhoSets[i]
-			smoothRhos, smoothDerivs, ok := analyze.Smooth(rawRs, rawRhos, 61)
+			smoothRhos, smoothDerivs, ok := analyze.Smooth(rawRs, rawRhos, 41)
 			if !ok { continue }
 			plt.Plot(rawRs, smoothRhos, plt.LW(3), plt.C(colors[ring]))
-			
 			r, ok := analyze.SplashbackRadius(rawRs, smoothRhos, smoothDerivs)
 			if !ok { continue }
 			plt.Plot([]float64{r, r}, []float64{1e3, 0.01}, plt.C(colors[ring]))
@@ -163,6 +165,53 @@ func plotExampleProfiles(
 	plt.Grid(plt.Axis("y"))
 	plt.Grid(plt.Axis("x"), plt.Which("both"))
 	plt.SaveFig(fname)
+}
+
+func plotExampleDerivs(
+	hp *los.HaloProfiles, rs, rhos []float64,
+	dir string, subhalos []geom.Sphere,
+) {
+	fname := path.Join(dir, fmt.Sprintf("derivs_%dh.png", hp.ID()))
+
+
+	plt.Figure()
+	hp.GetRs(rs)
+
+	r := rs[len(rs) - 1] / rMaxMult
+	plt.Plot([]float64{r, r}, []float64{-20, +10}, "k", plt.LW(2))
+
+	for ring := 0; ring < hp.Rings(); ring++ {
+		hp.GetRhos(ring, 13, rhos, subhalos...)
+		rhoSets, auxSets := analyze.NaNSplit(rhos, analyze.Aux(rs))
+
+		for i := range rhoSets {
+			rawRs, rawRhos := auxSets[0][i], rhoSets[i]
+			smoothRhos, smoothDerivs, ok := analyze.Smooth(rawRs, rawRhos, 41)
+			if !ok { continue }
+			plt.Plot(rawRs, smoothDerivs, plt.LW(3), plt.C(colors[ring]))
+			r, ok := analyze.SplashbackRadius(rawRs, smoothRhos, smoothDerivs)
+			if !ok { continue }
+			plt.Plot([]float64{r, r}, []float64{-20, +10}, plt.C(colors[ring]))
+		}
+	}
+
+	// Plot specifications.
+	plt.Title(fmt.Sprintf("Halo %d", hp.ID()))
+	plt.XLabel(`$R$ $[{\rm Mpc}/h]$`, plt.FontSize(16))
+	plt.YLabel(`$d \ln{\rho}/ d\ln{r}$ [$\rho_m$]`, plt.FontSize(16))
+
+	plt.XScale("log")
+	plt.YLim(-20, +10)
+
+	plt.Grid(plt.Axis("y"))
+	plt.Grid(plt.Axis("x"), plt.Which("both"))
+	plt.SaveFig(fname)
+}
+
+func strSlice(xs []float64) string {
+	tokens := make([]string, len(xs))
+	for i := range tokens { tokens[i] = fmt.Sprintf("%.4g", xs[i]) }
+	return fmt.Sprintf("[%s]", strings.Join(tokens, ","))
 }
 
 // fileNames returns the names of all the files in a directory.
