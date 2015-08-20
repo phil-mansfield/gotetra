@@ -193,7 +193,7 @@ func NewSavGolDerivKernel(dx float64, dOrder, pOrder, width int) *Kernel {
 	k.savgol(pOrder, dOrder)
 	fact := float64(factorial(dOrder))
 	for i := range k.cs {
-		k.cs[i] /= fact*dx
+		k.cs[i] /= math.Pow(dx, dOrder)/fact
 	}
 	return k
 }
