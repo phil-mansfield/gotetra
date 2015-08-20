@@ -139,14 +139,14 @@ func plotExampleProfiles(
 		rhoSets, auxSets := analyze.NaNSplit(rhos, analyze.Aux(rs))
 
 		for i := range rhoSets {
-			plotRs, plotRhos := auxSets[0][i], rhoSets[i]
-			plt.Plot(plotRs, plotRhos, plt.LW(1), plt.C(colors[ring]))
-		}
-		for i := range rhoSets {
-			plotRs, plotRhos := auxSets[0][i], rhoSets[i]
-			smoothRhos, _, ok := analyze.Smooth(plotRs, plotRhos, 61)
+			rawRs, rawRhos := auxSets[0][i], rhoSets[i]
+			smoothRhos, smoothDerivs, ok := analyze.Smooth(rawRs, rawRhos, 61)
 			if !ok { continue }
-			plt.Plot(plotRs, smoothRhos, plt.LW(3), plt.C(colors[ring]))
+			plt.Plot(rawRs, smoothRhos, plt.LW(3), plt.C(colors[ring]))
+			
+			r, ok := analyze.SplashbackRadius(rawRs, smoothRhos, smoothDerivs)
+			if !ok { continue }
+			plt.Plot([]float64{r, r}, []float64{1e3, 0.01}, plt.C(colors[ring]))
 		}
 	}
 
