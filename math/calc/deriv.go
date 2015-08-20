@@ -26,7 +26,7 @@ func Deriv(xs, ys []float64, order int, opts ...DerivOption) []float64 {
 
 	if len(ys) != n {
 		panic("Length of ys and xs are not the same.")
-	} else if len(p.out) != n {
+	} else if len(out) != n {
 		panic("Length of out and xs are not the same.")
 	}
 
