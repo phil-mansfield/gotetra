@@ -41,5 +41,5 @@ func SplashbackRadius(
 }
 
 func isMinimum(xs []float64, i int) bool {
-	return xs[i] > xs[i+1] && xs[i] < xs[i-1]
+	return xs[i] < xs[i+1] && xs[i] < xs[i-1]
 }
