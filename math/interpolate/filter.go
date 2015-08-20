@@ -1,7 +1,6 @@
 package interpolate
 
 import (
-	"fmt"
 	"math"
 	"github.com/phil-mansfield/gotetra/math/mat"
 )
