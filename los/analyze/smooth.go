@@ -55,9 +55,8 @@ func Smooth(
 	if vals == nil { vals = make([]float64, len(xs)) }
 	if derivs == nil { derivs = make([]float64, len(xs)) }
 
-	dx := (math.Log(xs[0]) - math.Log(xs[len(xs) - 1]))/ float64(len(xs) - 1)
+	dx := math.Log(xs[1]) - math.Log(xs[0])
 	k, kd := getSmoothingKernel(window, dx)
-
 
 	for i := range ys { ys[i] = math.Log(ys[i]) }
 	k.ConvolveAt(ys, intr.Extension, vals)
