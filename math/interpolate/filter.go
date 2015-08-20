@@ -1,6 +1,7 @@
 package interpolate
 
 import (
+	"fmt"
 	"math"
 	"github.com/phil-mansfield/gotetra/math/mat"
 )
@@ -193,8 +194,9 @@ func NewSavGolDerivKernel(dx float64, dOrder, pOrder, width int) *Kernel {
 	k.savgol(pOrder, dOrder)
 	fact := float64(factorial(dOrder))
 	for i := range k.cs {
-		k.cs[i] /= math.Pow(dx, dOrder)/fact
+		k.cs[i] *= fact/math.Pow(dx, float64(dOrder))
 	}
+	//fmt.Println(k.cs)
 	return k
 }
 
