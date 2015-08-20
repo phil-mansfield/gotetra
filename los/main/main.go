@@ -29,6 +29,7 @@ const (
 	bins = 256
 
 	rings = 6
+	plotStart = 0
 
 	// SubhaloFinder params.
 	finderCells = 150
@@ -87,7 +88,7 @@ func main() {
 
 	// Analyze each halo.
 	plotRs, plotRhos := make([]float64, bins), make([]float64, bins)
-	for i := 1000; i < 1010; i++ {
+	for i := plotStart; i < plotStart + 10; i++ {
 		fmt.Println("Hosts:", sf.HostCount(i), "Subhalos:", sf.SubhaloCount(i))
 		spheres := subhaloSpheres(sf, i, xs, ys, zs, rs)
 		
@@ -101,8 +102,8 @@ func main() {
 		)
 			
 		intersectionTest(h, hdIntrs, fileIntrs, buf, spheres)
-		plotExampleProfiles(h, plotRs, plotRhos, plotDir, spheres)
-		plotExampleDerivs(h, plotRs, plotRhos, plotDir, spheres)
+		plotExampleProfiles(h, ms[i], plotRs, plotRhos, plotDir, spheres)
+		plotExampleDerivs(h, ms[i], plotRs, plotRhos, plotDir, spheres)
 	}
 	
 	plt.Execute()
@@ -124,7 +125,7 @@ func subhaloSpheres(
 }
 
 func plotExampleProfiles(
-	hp *los.HaloProfiles, rs, rhos []float64,
+	hp *los.HaloProfiles, m float64, rs, rhos []float64,
 	dir string, subhalos []geom.Sphere,
 ) {
 	fname := path.Join(dir, fmt.Sprintf("profs_%dh.png", hp.ID()))
@@ -137,13 +138,12 @@ func plotExampleProfiles(
 
 
 	for ring := 0; ring < hp.Rings(); ring++ {
-		if ring > 4 { break }
 		hp.GetRhos(ring, 13, rhos, subhalos...)
 		rhoSets, auxSets := analyze.NaNSplit(rhos, analyze.Aux(rs))
 
 		for i := range rhoSets {
 			rawRs, rawRhos := auxSets[0][i], rhoSets[i]
-			smoothRhos, smoothDerivs, ok := analyze.Smooth(rawRs, rawRhos, 41)
+			smoothRhos, smoothDerivs, ok := analyze.Smooth(rawRs, rawRhos, 61)
 			if !ok { continue }
 			plt.Plot(rawRs, smoothRhos, plt.LW(3), plt.C(colors[ring]))
 			r, ok := analyze.SplashbackRadius(rawRs, smoothRhos, smoothDerivs)
@@ -153,7 +153,9 @@ func plotExampleProfiles(
 	}
 
 	// Plot specifications.
-	plt.Title(fmt.Sprintf("Halo %d", hp.ID()))
+	plt.Title(fmt.Sprintf(
+		`Halo %d: $M_{\rm 200c}$ = %.3g $M_\odot/h$`, hp.ID(), m),
+	)
 	plt.XLabel(`$R$ $[{\rm Mpc}/h]$`, plt.FontSize(16))
 	plt.YLabel(`$\rho$ [$\rho_m$]`, plt.FontSize(16))
 
@@ -161,6 +163,7 @@ func plotExampleProfiles(
 
 	plt.YScale("log")
 	plt.YLim(1e-2, 1e3)
+	setXRange(rs[0], rs[len(rs) - 1])
 
 	plt.Grid(plt.Axis("y"))
 	plt.Grid(plt.Axis("x"), plt.Which("both"))
@@ -168,7 +171,7 @@ func plotExampleProfiles(
 }
 
 func plotExampleDerivs(
-	hp *los.HaloProfiles, rs, rhos []float64,
+	hp *los.HaloProfiles, m float64, rs, rhos []float64,
 	dir string, subhalos []geom.Sphere,
 ) {
 	fname := path.Join(dir, fmt.Sprintf("derivs_%dh.png", hp.ID()))
@@ -186,7 +189,7 @@ func plotExampleDerivs(
 
 		for i := range rhoSets {
 			rawRs, rawRhos := auxSets[0][i], rhoSets[i]
-			smoothRhos, smoothDerivs, ok := analyze.Smooth(rawRs, rawRhos, 41)
+			smoothRhos, smoothDerivs, ok := analyze.Smooth(rawRs, rawRhos, 61)
 			if !ok { continue }
 			plt.Plot(rawRs, smoothDerivs, plt.LW(3), plt.C(colors[ring]))
 			r, ok := analyze.SplashbackRadius(rawRs, smoothRhos, smoothDerivs)
@@ -196,16 +199,27 @@ func plotExampleDerivs(
 	}
 
 	// Plot specifications.
-	plt.Title(fmt.Sprintf("Halo %d", hp.ID()))
+	plt.Title(fmt.Sprintf(
+		`Halo %d: $M_{\rm 200c}$ = %.3g $M_\odot/h$`, hp.ID(), m),
+	)
 	plt.XLabel(`$R$ $[{\rm Mpc}/h]$`, plt.FontSize(16))
 	plt.YLabel(`$d \ln{\rho}/ d\ln{r}$ [$\rho_m$]`, plt.FontSize(16))
 
 	plt.XScale("log")
 	plt.YLim(-20, +10)
+	setXRange(rs[0], rs[len(rs) - 1])
 
 	plt.Grid(plt.Axis("y"))
 	plt.Grid(plt.Axis("x"), plt.Which("both"))
 	plt.SaveFig(fname)
+}
+
+func setXRange(xLow, xHigh float64) {
+	if (xLow < 1 && xHigh  > 1) ||
+		(xLow < 0.1 && xHigh > 0.1) || 
+		(xLow < 0.01 && xHigh > 0.01) {
+		plt.XLim(xLow, xHigh)
+	}
 }
 
 func strSlice(xs []float64) string {
