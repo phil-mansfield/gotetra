@@ -36,6 +36,7 @@ func NewSpline(xs, ys []float64) *Spline {
 
 	sp.y2s = make([]float64, len(xs))
 	sp.coeffs = make([]splineCoeff, len(xs)-1)
+	sp.xs, sp.ys = xs, ys
 	sp.Init(xs, ys)
 
 	return sp
