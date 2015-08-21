@@ -29,8 +29,8 @@ const (
 	bins = 256
 
 	rings = 6
-	plotStart = 1000
-	plotCount = 1
+	plotStart = 1001
+	plotCount = 3
 
 	// SubhaloFinder params.
 	finderCells = 150
@@ -91,7 +91,7 @@ func main() {
 	plotRs, plotRhos := make([]float64, bins), make([]float64, bins)
 	_, _ = plotRs, plotRhos
 	r := new(analyze.RingBuffer)
-	r.Init(h.Profiles(), h.Bins())
+	r.Init(n, bins)
 	for i := plotStart; i < plotStart + plotCount; i++ {
 		fmt.Println("Hosts:", sf.HostCount(i), "Subhalos:", sf.SubhaloCount(i))
 		spheres := subhaloSpheres(sf, i, xs, ys, zs, rs)
@@ -110,7 +110,7 @@ func main() {
 		//plotExampleDerivs(h, ms[i], plotRs, plotRhos, plotDir, spheres)
 		for ring := 0; ring < rings; ring++ {
 			r.Clear()
-			r.Splashback(h, ring, 61, 5)
+			r.Splashback(h, ring, 61, -5)
 			plotPlane(r, ms[i], h.ID(), ring, plotDir)
 		}
 	}
@@ -228,19 +228,24 @@ func plotPlane(r *analyze.RingBuffer, m float64, id, ring int, dir string) {
 
 	for i := 0; i < r.N; i++ {
 		if r.Oks[i] {
-			xs = append(xs, r.Xs[i])
-			ys = append(ys, r.Ys[i])
+			xs = append(xs, r.PlaneXs[i])
+			ys = append(ys, r.PlaneYs[i])
 		}
 	}
 
-	plt.Figure()
+	plt.Figure(plt.FigSize(8, 8))
 	plt.Plot(xs, ys, "ow")
 	plt.Title(fmt.Sprintf(
 		`Halo %d: $M_{\rm 200c}$ = %.3g $M_\odot/h$`, id, m),
 	)
-	plt.XLabel(`$X_0$ $[{\rm Mpc}/h]$`, plt.FontSize(16))
-	plt.YLabel(`$Y_0$ $[{\rm Mpc}/h]$`, plt.FontSize(16))
-
+	plt.XLabel(`$X_1$ $[{\rm Mpc}/h]$`, plt.FontSize(16))
+	plt.YLabel(`$X_2$ $[{\rm Mpc}/h]$`, plt.FontSize(16))
+	rMax := 0.0
+	for _, r := range r.Rs {
+		if r > rMax { rMax = r }
+	}
+	plt.XLim(-rMax, +rMax)
+	plt.YLim(-rMax, +rMax)
 	plt.SaveFig(fname)
 }
 
