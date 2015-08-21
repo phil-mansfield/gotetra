@@ -29,7 +29,8 @@ const (
 	bins = 256
 
 	rings = 6
-	plotStart = 0
+	plotStart = 1000
+	plotCount = 1
 
 	// SubhaloFinder params.
 	finderCells = 150
@@ -88,7 +89,10 @@ func main() {
 
 	// Analyze each halo.
 	plotRs, plotRhos := make([]float64, bins), make([]float64, bins)
-	for i := plotStart; i < plotStart + 10; i++ {
+	_, _ = plotRs, plotRhos
+	r := new(analyze.RingBuffer)
+	r.Init(h.Profiles(), h.Bins())
+	for i := plotStart; i < plotStart + plotCount; i++ {
 		fmt.Println("Hosts:", sf.HostCount(i), "Subhalos:", sf.SubhaloCount(i))
 		spheres := subhaloSpheres(sf, i, xs, ys, zs, rs)
 		
@@ -102,8 +106,13 @@ func main() {
 		)
 			
 		intersectionTest(h, hdIntrs, fileIntrs, buf, spheres)
-		plotExampleProfiles(h, ms[i], plotRs, plotRhos, plotDir, spheres)
-		plotExampleDerivs(h, ms[i], plotRs, plotRhos, plotDir, spheres)
+		//plotExampleProfiles(h, ms[i], plotRs, plotRhos, plotDir, spheres)
+		//plotExampleDerivs(h, ms[i], plotRs, plotRhos, plotDir, spheres)
+		for ring := 0; ring < rings; ring++ {
+			r.Clear()
+			r.Splashback(h, ring, 61, 5)
+			plotPlane(r, ms[i], h.ID(), ring, plotDir)
+		}
 	}
 	
 	plt.Execute()
@@ -135,7 +144,6 @@ func plotExampleProfiles(
 
 	r := rs[len(rs) - 1] / rMaxMult
 	plt.Plot([]float64{r, r}, []float64{1e-2, 1e3}, "k", plt.LW(2))
-
 
 	for ring := 0; ring < hp.Rings(); ring++ {
 		hp.GetRhos(ring, 13, rhos, subhalos...)
@@ -176,7 +184,6 @@ func plotExampleDerivs(
 ) {
 	fname := path.Join(dir, fmt.Sprintf("derivs_%dh.png", hp.ID()))
 
-
 	plt.Figure()
 	hp.GetRs(rs)
 
@@ -211,6 +218,29 @@ func plotExampleDerivs(
 
 	plt.Grid(plt.Axis("y"))
 	plt.Grid(plt.Axis("x"), plt.Which("both"))
+	plt.SaveFig(fname)
+}
+
+func plotPlane(r *analyze.RingBuffer, m float64, id, ring int, dir string) {
+	fname := path.Join(dir, fmt.Sprintf("plane_h%d_r%d.png", id, ring))
+	xs := make([]float64, 0, r.N)
+	ys := make([]float64, 0, r.N)
+
+	for i := 0; i < r.N; i++ {
+		if r.Oks[i] {
+			xs = append(xs, r.Xs[i])
+			ys = append(ys, r.Ys[i])
+		}
+	}
+
+	plt.Figure()
+	plt.Plot(xs, ys, "ow")
+	plt.Title(fmt.Sprintf(
+		`Halo %d: $M_{\rm 200c}$ = %.3g $M_\odot/h$`, id, m),
+	)
+	plt.XLabel(`$X_0$ $[{\rm Mpc}/h]$`, plt.FontSize(16))
+	plt.YLabel(`$Y_0$ $[{\rm Mpc}/h]$`, plt.FontSize(16))
+
 	plt.SaveFig(fname)
 }
 
