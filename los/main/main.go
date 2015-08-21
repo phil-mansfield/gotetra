@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -35,6 +36,8 @@ const (
 	// SubhaloFinder params.
 	finderCells = 150
 	overlapMult = 3
+
+	hdSaveFile = "hdSave.dat"
 )
 
 var (
@@ -44,36 +47,62 @@ var (
 	}
 )
 
+func loadHeaders(files []string, saveDir string) ([]io.SheetHeader, error) {
+	saveFile := path.Join(saveDir, hdSaveFile)
+	hds := make([]io.SheetHeader, len(files))
+
+	if _, err := os.Stat(saveFile); err == nil {
+		f, err := os.Open(saveFile)
+		if err != nil { return nil, err }
+		defer f.Close()
+		fmt.Println("Loading saved headers.")
+		binary.Read(f, binary.LittleEndian, hds)
+		
+	} else {
+		fmt.Print("Loading individual headers: ")
+
+		for i := range files {
+			if i % 50 == 0 { fmt.Print(i, " ") }
+			err = io.ReadSheetHeaderAt(files[i], &hds[i])
+			if err != nil { return nil, err }
+		}
+
+		f, err := os.Create(saveFile)
+		if err != nil { return nil, err }
+		defer f.Close()
+		binary.Write(f, binary.LittleEndian, hds)
+		fmt.Println()
+
+	}
+	return hds, nil
+}
+
 func main() {
 	// Argument Parsing.
 	fmt.Println("Running")
-	if len(os.Args) != 4 {
-		log.Fatalf("Usage: $ %s input_dir halo_file plot_dir", os.Args[0])
+	if len(os.Args) != 5 {
+		log.Fatalf("Usage: $ %s input_dir halo_file plot_dir save_dir",
+			os.Args[0])
 	}
 
 	dirName := os.Args[1]
 	haloFileName := os.Args[2]
 	plotDir := os.Args[3]
-
+	saveDir := os.Args[4]
 
 	// Do I/O and set up buffers.
 	files, err := fileNames(dirName)
 	if err != nil { log.Fatal(err.Error()) }
-	hds := make([]io.SheetHeader, len(files))
-	for i := range files {
-		if i % 50 == 0 { fmt.Print(i, " ") }
-		err = io.ReadSheetHeaderAt(files[i], &hds[i])
-		if err != nil { log.Fatal(err.Error()) }
-	}
-	fmt.Println()
-
+	hds, err := loadHeaders(files, saveDir)
+	if err != nil { log.Fatal(err.Error()) }
 	buf := los.NewBuffers(files[0], &hds[0])
 	h := new(los.HaloProfiles)
-
+	
 	// Find halos, subhalos, etc.
 	xs, ys, zs, ms, rs, err := halo.ReadRockstar(
 		haloFileName, rType, &hds[0].Cosmo,
 	)
+
 	if err != nil { log.Fatal(err.Error()) }
 	fmt.Printf("%d halos read.\n", len(xs))
 	g := halo.NewGrid(finderCells, hds[0].TotalWidth, len(xs))
