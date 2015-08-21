@@ -11,7 +11,7 @@ type splineCoeff struct {
 // Spline represents a 1D cubic spline which can be used to interpolate between
 // points.
 type Spline struct {
-	xs, ys, y2s, sqrs []float64
+	xs, ys, y2s []float64
 	coeffs []splineCoeff
 
 	incr bool
@@ -22,8 +22,6 @@ type Spline struct {
 
 // NewSpline creates a spline based off a table of x and y values. The values
 // must be sorted in increasing or decreasing order in x.
-//
-// xs and ys must not be modified throughout the lifetime of the Spline.
 func NewSpline(xs, ys []float64) *Spline {
 	if len(xs) != len(ys) {
 		log.Fatalf(
@@ -36,11 +34,15 @@ func NewSpline(xs, ys []float64) *Spline {
 
 	sp := new(Spline)
 
-	sp.xs, sp.ys = xs, ys
-	sp.xs = make([]float64, len(xs))
-	sp.ys = make([]float64, len(xs))
 	sp.y2s = make([]float64, len(xs))
 	sp.coeffs = make([]splineCoeff, len(xs)-1)
+	sp.Init(xs, ys)
+
+	return sp
+}
+
+func (sp *Spline) Init(xs, ys []float64) {
+	sp.xs, sp.ys = xs, ys
 
 	if xs[0] < xs[1] {
 		sp.incr = true
@@ -59,12 +61,8 @@ func NewSpline(xs, ys []float64) *Spline {
 	}
 
 	sp.dx = (xs[len(xs)-1] - xs[0]) / float64(len(xs)-1)
-
-	copy(sp.xs, xs)
-	copy(sp.ys, ys)
 	sp.calcY2s()
 	sp.calcCoeffs()
-	return sp
 }
 
 // Eval computes the value of the spline at the given point.
@@ -175,7 +173,6 @@ func (sp *Spline) calcY2s() {
 	n := len(sp.xs)
 	as, bs := make([]float64, n-2), make([]float64, n-2)
 	cs, rs := make([]float64, n-2), make([]float64, n-2)
-
 	// Solve for everything but the boundaries. The boundaries will be set to
 	// zero. Better yet, they could be set to something computed via finite
 	// differences.
@@ -245,7 +242,7 @@ func TriDiagAt(as, bs, cs, rs, out []float64) {
 	}
 }
 
-// TriTiagAt solves the system of equations
+// TriTiag solves the system of equations
 //
 // | b0 c0 ..    |   | u0 |   | r0 |
 // | a1 a2 c2 .. |   | u1 |   | r1 |
