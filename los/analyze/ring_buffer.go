@@ -58,6 +58,7 @@ func (r *RingBuffer) Splashback(
 		if !r.Oks[i] { continue }
 
 		r.Phis[i] = float64(h.Phi(i))
+		if r.Phis[i] < 0 { r.Phis[i] += math.Pi }
 		sin, cos := math.Sincos(r.Phis[i])
 		r.PlaneXs[i], r.PlaneYs[i] = cos * r.Rs[i], sin * r.Rs[i]
 
