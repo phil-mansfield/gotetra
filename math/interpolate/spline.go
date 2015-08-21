@@ -42,6 +42,9 @@ func NewSpline(xs, ys []float64) *Spline {
 }
 
 func (sp *Spline) Init(xs, ys []float64) {
+	if len(xs) != len(sp.xs) || len(ys) != len(sp.ys) {
+		panic("Length of input arrays do not equal internal spline arrays.")
+	}
 	sp.xs, sp.ys = xs, ys
 
 	if xs[0] < xs[1] {
