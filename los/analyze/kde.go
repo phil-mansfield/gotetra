@@ -3,6 +3,7 @@ package analyze
 import (
 	"math"
 
+	//plt "github.com/phil-mansfield/pyplot"
 	intr "github.com/phil-mansfield/gotetra/math/interpolate"
 )
 
@@ -60,6 +61,27 @@ func NewKDETree(rs, phis []float64, splits int) *KDETree {
 
 	kt.growTrees(rs, phis, splits)
 	kt.findMaxes()
+
+	/*
+	plt.Reset()
+	pltRs := make([]float64, 200)
+	vals := make([]float64, 200)
+	pltDr := (kt.high - kt.low) / float64(len(pltRs))
+	for i := range pltRs { pltRs[i] = pltDr * (float64(i) + 0.5) }
+	cs := []string{"r", "b", "g", "m", "k"}
+	for i, sps := range kt.spTree {
+		for j, sp := range sps {
+			for k := range vals { vals[k] = sp.Eval(pltRs[k]) }
+			plt.Plot(pltRs, vals, plt.Color(cs[i]))
+
+			pltMaxRs := kt.maxesTree[i][j]
+			pltMaxes := make([]float64, len(pltMaxRs))
+			for i := range pltMaxes { pltMaxes[i] = sp.Eval(pltMaxRs[i]) }
+			plt.Plot(pltMaxRs, pltMaxes, "o", plt.Color(cs[i]))
+		}
+	}
+	plt.Show()
+*/
 	kt.connectMaxes()
 
 	return kt
@@ -87,7 +109,7 @@ func binByTheta(
 	dth := (2 * math.Pi) / float64(bins)
 	for i := range rs {
 		idx := int(ths[i] / dth)
-		rBins[i] = append(rBins[idx], rs[i])
+		rBins[idx] = append(rBins[idx], rs[i])
 	}
 
 	thBins = make([]float64, bins)
@@ -115,9 +137,9 @@ func localSplineMaxes(xs []float64, sp *intr.Spline) []float64 {
 	prev, curr, next := sp.Eval(xs[0]), sp.Eval(xs[1]), sp.Eval(xs[2])
 	maxes := []float64{}
 	if curr > next && curr > prev { maxes = append(maxes, xs[1]) }
-	for i := 2; i < len(xs); i++ {
-		prev, curr, next = curr, next, xs[i]
-		if curr > next && curr > prev { maxes = append(maxes, xs[1]) }
+	for i := 2; i < len(xs) - 1; i++ {
+		prev, curr, next = curr, next, sp.Eval(xs[i+1])
+		if curr > next && curr > prev { maxes = append(maxes, xs[i]) }
 	}
 	return maxes
 }
@@ -141,7 +163,7 @@ func (kt *KDETree) connectMaxes() {
 			} else {
 				connIdx, maxDist := -1, -1.0
 				for i := range nodeMaxes {
-					dist := math.Abs(nodePrevMax - nodeMaxes[connIdx])
+					dist := math.Abs(nodePrevMax - nodeMaxes[i])
 					if dist > maxDist { connIdx, maxDist = i, dist }
 				}
 				connMax = nodeMaxes[connIdx]
@@ -157,14 +179,14 @@ func (kt *KDETree) connectMaxes() {
 					if math.Abs(max - spR) < kt.h { currMaxes[node] = max }
 				}
 			}
-
-			kt.connMaxes = append(kt.connMaxes, currMaxes)
 		}
+
+		kt.connMaxes = append(kt.connMaxes, currMaxes)
 	}
 }
 
 func (kt *KDETree) getFinestMax(idx, level int) float64 {
-	for i := 0; i < level; i++ {
+	for i := 0; i <= level; i++ {
 		r := kt.connMaxes[level - i][idx / (1 << uint(i))]
 		if !math.IsNaN(r) { return r }
 	}
@@ -173,21 +195,23 @@ func (kt *KDETree) getFinestMax(idx, level int) float64 {
 
 func (kt *KDETree) GetConnMaxes(level int) (rs, ths []float64) {
 	ths = kt.thTree[level]
-	maxes := make([]float64, len(kt.connMaxes[level]))
+	maxes := kt.connMaxes[level]
+	retMaxes := make([]float64, len(maxes))
 	for i := range maxes {
-		maxes[i] = kt.getFinestMax(i, level)
+		retMaxes[i] = kt.getFinestMax(i, level)
 	}
-	return maxes, ths
+	return retMaxes, ths
 }
 
 func extendAngularRange(maxes, ths []float64) (spMaxes, spThs []float64) {
 	n := len(maxes)
 	buf := 5
+	if buf > n { buf = n }
 	spThs, spMaxes = make([]float64, 2*buf + n), make([]float64, 2*buf + n)
 
 	j := n - buf
 	for i := 0; i < buf; i++ {
-		spThs[i], spMaxes[i] = ths[j] + 2*math.Pi, maxes[j]
+		spThs[i], spMaxes[i] = ths[j] - 2*math.Pi, maxes[j]
 		j++
 	}
 	j = 0
@@ -196,8 +220,8 @@ func extendAngularRange(maxes, ths []float64) (spMaxes, spThs []float64) {
 		j++
 	}
 	j = 0
-	for i := n + buf; i < 2*n + buf; i++ {
-		spThs[i], spMaxes[i] = ths[j] - 2*math.Pi, maxes[j]
+	for i := n + buf; i < n + 2*buf; i++ {
+		spThs[i], spMaxes[i] = ths[j] + 2*math.Pi, maxes[j]
 		j++
 	}
 	return spMaxes, spThs
@@ -211,7 +235,7 @@ func (kt *KDETree) GetRFunc(level int) (func(float64) float64) {
 		sin, cos := math.Sincos(th)
 		spXs[i], spYs[i] = spMaxes[i] * cos, spMaxes[i] * sin
 	}
-	xSp, ySp := intr.NewSpline(spXs, spThs), intr.NewSpline(spYs, spThs)
+	xSp, ySp := intr.NewSpline(spThs, spXs), intr.NewSpline(spThs, spYs)
 	return func(th float64) float64 {
 		x, y := xSp.Eval(th), ySp.Eval(th)
 		return math.Sqrt(x*x + y*y)
