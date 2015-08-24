@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"math"
+	//"math"
 	"math/rand"
 	"os"
 	"path"
@@ -30,10 +30,12 @@ const (
 
 	n = 1024
 	bins = 256
+	window = 61
+	cutoff = 0.0
 
 	rings = 3
-	plotStart = 0
-	plotCount = 3
+	plotStart = 1000
+	plotCount = 50
 
 	// SubhaloFinder params.
 	finderCells = 150
@@ -129,6 +131,10 @@ func main() {
 	r.Init(n, bins)
 	for i := plotStart; i < plotStart + plotCount; i++ {
 		fmt.Println("Hosts:", sf.HostCount(i), "Subhalos:", sf.SubhaloCount(i))
+		if sf.HostCount(i) > 0 { 
+			fmt.Println("Ignoring halo with host.")
+			continue
+		}
 		spheres := subhaloSpheres(sf, i, xs, ys, zs, rs)
 		
 		origin := &geom.Vec{float32(xs[i]), float32(ys[i]), float32(zs[i])}
@@ -141,11 +147,11 @@ func main() {
 		)
 			
 		intersectionTest(h, hdIntrs, fileIntrs, buf, spheres)
-		//plotExampleProfiles(h, ms[i], plotRs, plotRhos, plotDir, spheres)
-		//plotExampleDerivs(h, ms[i], plotRs, plotRhos, plotDir, spheres)
+		plotExampleProfiles(h, ms[i], plotRs, plotRhos, plotDir)
+		plotExampleDerivs(h, ms[i], plotRs, plotRhos, plotDir)
 		for ring := 0; ring < rings; ring++ {
 			r.Clear()
-			r.Splashback(h, ring, 61, -5)
+			r.Splashback(h, ring, window, cutoff)
 			plotPlane(r, ms[i], h.ID(), ring, plotDir)
 			plotExampleProfiles(
 				h, ms[i], ring, plotRs, plotRhos, plotDir,
@@ -177,25 +183,28 @@ func plotExampleProfiles(
 ) {
 	fname := path.Join(dir, fmt.Sprintf("profs_h%d_r%d.png", hp.ID(), ring))
 
-	plt.Figure()
+	//plt.Figure()
+	plt.InsertLine("plt.clf()")
 	hp.GetRs(rs)
 
 	r := rs[len(rs) - 1] / rMaxMult
 	plt.Plot([]float64{r, r}, []float64{1e-2, 1e3}, "k", plt.LW(2))
 
 
-	for _, visIdx := range visProfs {
+	for cIdx, visIdx := range visProfs {
 		hp.GetRhos(ring, visIdx, rhos)
 		rhoSets, auxSets := analyze.NaNSplit(rhos, analyze.Aux(rs))
 		
 		for i := range rhoSets {
 			rawRs, rawRhos := auxSets[0][i], rhoSets[i]
-			smoothRhos, smoothDerivs, ok := analyze.Smooth(rawRs, rawRhos, 61)
+			smoothRhos, smoothDerivs, ok := analyze.Smooth(
+				rawRs, rawRhos, window,
+			)
 			if !ok { continue }
-			plt.Plot(rawRs, smoothRhos, plt.LW(3), plt.C(colors[visIdx]))
+			plt.Plot(rawRs, smoothRhos, plt.LW(3), plt.C(colors[cIdx]))
 			r, ok := analyze.SplashbackRadius(rawRs, smoothRhos, smoothDerivs)
 			if !ok { continue }
-			plt.Plot([]float64{r, r}, []float64{1e3,0.01}, plt.C(colors[visIdx]))
+			plt.Plot([]float64{r, r}, []float64{1e3, 0.01}, plt.C(colors[cIdx]))
 		}
 	}
 
@@ -223,24 +232,25 @@ func plotExampleDerivs(
 ) {
 	fname := path.Join(dir, fmt.Sprintf("derivs_%dh.png", hp.ID()))
 
-	plt.Figure()
+	plt.Figure(plt.Num(0))
 	hp.GetRs(rs)
 
 	r := rs[len(rs) - 1] / rMaxMult
 	plt.Plot([]float64{r, r}, []float64{-20, +10}, "k", plt.LW(2))
 
-	hp.GetRhos(ring, 13, rhos)
-	rhoSets, auxSets := analyze.NaNSplit(rhos, analyze.Aux(rs))
-
-	for _, visIdx := range visProfs {
+	for cIdx, visIdx := range visProfs {
+		hp.GetRhos(ring, visIdx, rhos)
+		rhoSets, auxSets := analyze.NaNSplit(rhos, analyze.Aux(rs))
 		for i := range rhoSets {
 			rawRs, rawRhos := auxSets[0][i], rhoSets[i]
-			smoothRhos, smoothDerivs, ok := analyze.Smooth(rawRs, rawRhos, 61)
+			smoothRhos, smoothDerivs, ok := analyze.Smooth(
+				rawRs, rawRhos, window,
+			)
 			if !ok { continue }
-			plt.Plot(rawRs, smoothDerivs, plt.LW(3), plt.C(colors[visIdx]))
+			plt.Plot(rawRs, smoothDerivs, plt.LW(3), plt.C(colors[cIdx]))
 			r, ok := analyze.SplashbackRadius(rawRs, smoothRhos, smoothDerivs)
 			if !ok { continue }
-			plt.Plot([]float64{r, r}, []float64{-20, +10}, plt.C(colors[visIdx]))
+			plt.Plot([]float64{r, r}, []float64{-20, +10}, plt.C(colors[cIdx]))
 		}
 	}
 
@@ -279,6 +289,7 @@ func plotPlane(r *analyze.RingBuffer, m float64, id, ring int, dir string) {
 			validPhis = append(validPhis, r.Phis[i])
 		}
 	}
+	/*
 	kt := analyze.NewKDETree(validRs, validPhis, 4)
 	rf := kt.GetRFunc(4)
 	spXs := make([]float64, 200)
@@ -290,9 +301,10 @@ func plotPlane(r *analyze.RingBuffer, m float64, id, ring int, dir string) {
 		spXs[i], spYs[i] = r * cos, r * sin
 	}
 	spXs[len(spXs) - 1], spYs[len(spYs) - 1] = spXs[0], spYs[0]
+	*/
 
-
-	plt.Figure(plt.FigSize(8, 8))
+	plt.Figure(plt.Num(1), plt.FigSize(8, 8))
+	plt.InsertLine("plt.clf()")
 	plt.Plot(xs, ys, "ow")
 	// Plot the colored profiles.
 	for i := 0; i < r.N; i++ {
@@ -300,7 +312,7 @@ func plotPlane(r *analyze.RingBuffer, m float64, id, ring int, dir string) {
 			for visIdx, j := range visProfs {
 				if j == i { 
 					plt.Plot(
-						r.PlaneXs[i], r.PlaneYs[i],
+						[]float64{r.PlaneXs[i]}, []float64{r.PlaneYs[i]},
 						"o", plt.Color(colors[visIdx]),
 					)
 				}
@@ -308,7 +320,7 @@ func plotPlane(r *analyze.RingBuffer, m float64, id, ring int, dir string) {
 		}
 	}
 
-	plt.Plot(spXs, spYs, plt.Color("r"), plt.LW(2))
+	//plt.Plot(spXs, spYs, plt.Color("r"), plt.LW(2))
 
 	plt.Title(fmt.Sprintf(
 		`Halo %d: $M_{\rm 200c}$ = %.3g $M_\odot/h$`, id, m),
