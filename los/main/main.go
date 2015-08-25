@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	//"math"
 	"math/rand"
 	"os"
 	"path"
@@ -26,15 +25,15 @@ import (
 const (
 	rType = halo.R200m
 	rMaxMult = 3.0
-	rMinMult = 0.5
+	rMinMult = 0.3
 
 	n = 1024
 	bins = 256
-	window = 61
+	window = 121
 	cutoff = 0.0
 
 	rings = 3
-	plotStart = 1000
+	plotStart = 6000
 	plotCount = 50
 
 	// SubhaloFinder params.
@@ -139,7 +138,7 @@ func main() {
 		
 		origin := &geom.Vec{float32(xs[i]), float32(ys[i]), float32(zs[i])}
 		h.Init(i, rings, origin, rs[i] * rMinMult, rs[i] * rMaxMult,
-			bins, n, hds[0].TotalWidth, los.Log(false))
+			bins, n, hds[0].TotalWidth, los.Log(true))
 		hdIntrs, fileIntrs := intersectingSheets(h, hds, files)
 		
 		fmt.Printf(
@@ -147,15 +146,12 @@ func main() {
 		)
 			
 		intersectionTest(h, hdIntrs, fileIntrs, buf, spheres)
-		plotExampleProfiles(h, ms[i], plotRs, plotRhos, plotDir)
-		plotExampleDerivs(h, ms[i], plotRs, plotRhos, plotDir)
 		for ring := 0; ring < rings; ring++ {
 			r.Clear()
 			r.Splashback(h, ring, window, cutoff)
 			plotPlane(r, ms[i], h.ID(), ring, plotDir)
-			plotExampleProfiles(
-				h, ms[i], ring, plotRs, plotRhos, plotDir,
-			)
+			plotExampleProfiles(h, ms[i], ring, plotRs, plotRhos, plotDir)
+			plotExampleDerivs(h, ms[i], ring, plotRs, plotRhos, plotDir)
 		}
 	}
 	
@@ -188,8 +184,7 @@ func plotExampleProfiles(
 	hp.GetRs(rs)
 
 	r := rs[len(rs) - 1] / rMaxMult
-	plt.Plot([]float64{r, r}, []float64{1e-2, 1e3}, "k", plt.LW(2))
-
+	plt.Plot([]float64{r, r}, []float64{1e5, 0.01}, "k", plt.LW(2))
 
 	for cIdx, visIdx := range visProfs {
 		hp.GetRhos(ring, visIdx, rhos)
@@ -204,7 +199,7 @@ func plotExampleProfiles(
 			plt.Plot(rawRs, smoothRhos, plt.LW(3), plt.C(colors[cIdx]))
 			r, ok := analyze.SplashbackRadius(rawRs, smoothRhos, smoothDerivs)
 			if !ok { continue }
-			plt.Plot([]float64{r, r}, []float64{1e3, 0.01}, plt.C(colors[cIdx]))
+			plt.Plot([]float64{r, r}, []float64{1e5, 0.01}, plt.C(colors[cIdx]))
 		}
 	}
 
@@ -230,13 +225,14 @@ func plotExampleDerivs(
 	hp *los.HaloProfiles, m float64, ring int,
 	rs, rhos []float64, dir string,
 ) {
-	fname := path.Join(dir, fmt.Sprintf("derivs_%dh.png", hp.ID()))
+	fname := path.Join(dir, fmt.Sprintf("derivs_h%d_r%d.png", hp.ID(), ring))
 
-	plt.Figure(plt.Num(0))
+	plt.InsertLine("plt.clf()")
 	hp.GetRs(rs)
 
 	r := rs[len(rs) - 1] / rMaxMult
 	plt.Plot([]float64{r, r}, []float64{-20, +10}, "k", plt.LW(2))
+
 
 	for cIdx, visIdx := range visProfs {
 		hp.GetRhos(ring, visIdx, rhos)
@@ -246,9 +242,11 @@ func plotExampleDerivs(
 			smoothRhos, smoothDerivs, ok := analyze.Smooth(
 				rawRs, rawRhos, window,
 			)
+
 			if !ok { continue }
 			plt.Plot(rawRs, smoothDerivs, plt.LW(3), plt.C(colors[cIdx]))
 			r, ok := analyze.SplashbackRadius(rawRs, smoothRhos, smoothDerivs)
+
 			if !ok { continue }
 			plt.Plot([]float64{r, r}, []float64{-20, +10}, plt.C(colors[cIdx]))
 		}
@@ -263,6 +261,7 @@ func plotExampleDerivs(
 
 	plt.XScale("log")
 	plt.YLim(-20, +10)
+	// plt.YLim(-2, +1)
 	setXRange(rs[0], rs[len(rs) - 1])
 
 	plt.Grid(plt.Axis("y"))
