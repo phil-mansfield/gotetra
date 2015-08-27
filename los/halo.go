@@ -417,7 +417,9 @@ func (hp *HaloProfiles) GetRs(out []float64) {
 	rMin := hp.rs[0].lowR
 	dr := hp.rs[0].ProfileRing.dr
 	for i := range out { out[i] = (float64(i) + 0.5) * dr + rMin }
-	if hp.log { for i := range out { out[i] = math.Exp(out[i]) } }
+	if hp.log {
+		for i := range out { out[i] = math.Exp(out[i]) }
+	}
 }
 
 func dist(x, y float32) float32 {
