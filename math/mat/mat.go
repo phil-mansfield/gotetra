@@ -78,6 +78,95 @@ func (m1 *Matrix) MultAt(m2, out *Matrix) *Matrix {
 	return out
 }
 
+// TODO: test.
+func MultVec(m *Matrix, v, out []float64) {
+	if m.Height != len(out) || m.Width != len(v) {
+		panic("Shape error.")
+	}
+
+	for i := range out { out[i] = 0 }
+	offset := 0
+	for j := 0; j < m.Height; j++ {
+		for i := 0; i < m.Width; i++ {
+			out[j] += m.Vals[offset + i] * v[i]
+		}
+		offset += m.Width
+	}
+}
+
+// TODO: test.
+func VecMult(v []float64, m *Matrix, out []float64) {
+	if m.Height != len(v) || m.Width != len(out) {
+		panic("Shape error.")
+	}
+	for i := range out { out[i] = 0 }
+	offset := 0
+	for j := 0; j < m.Height; j++ {
+		for i := 0; i < m.Width; i++ {
+			out[j] += v[j] * m.Vals[i + offset]
+		}
+		offset += m.Width
+	}
+}
+
+func (m *Matrix) Transpose() *Matrix {
+	vals := make([]float64, m.Height*m.Width)
+	out :=NewMatrix(vals, m.Height, m.Width)
+	m.TransposeAt(out)
+	return out
+}
+
+func (m *Matrix) TransposeAt(out *Matrix) {
+	recTranspose(m.Vals, out.Vals, m.Width, m.Height,
+		0, 0, m.Width, m.Height, 0, 0)
+}
+
+const transposeRecWidth = 16000000
+func recTranspose(
+	m, out []float64, width, height int,
+	mXLow, mYLow, mXWidth, mYWidth int,
+	outXLow, outYLow int,
+) {
+	if mXWidth <= transposeRecWidth && mYWidth <= transposeRecWidth {
+		baseTranspose(m, out, width, height, mXLow, mYLow,
+			mXWidth, mYWidth, outXLow, outYLow)
+	} else {
+		if mXWidth > mYWidth {
+			newMXWidth := mXWidth / 2
+			recTranspose(m, out, width, height, mXLow, mYLow,
+				newMXWidth, mYWidth, outXLow, outYLow)
+			recTranspose(m, out, width, height,
+				mXLow + newMXWidth, mYLow,
+				mXWidth - newMXWidth, mYWidth,
+				outXLow, outYLow + newMXWidth)
+		} else {
+			newMYWidth := mYWidth / 2
+			recTranspose(m, out, width, height, mXLow, mYLow,
+				mXWidth, newMYWidth, outXLow, outYLow)
+			recTranspose(m, out, width, height,
+				mXLow, mYLow + newMYWidth,
+				mXWidth, mYWidth - newMYWidth,
+				outXLow + newMYWidth, outYLow)
+		}
+	}
+}
+
+func baseTranspose(
+	m, out []float64, width, height int,
+	mXLow, mYLow, mXWidth, mYWidth int,
+	outXLow, outYLow int,
+	
+) {
+	for y := 0; y < mYWidth; y++ {
+		my, outx := mYLow + y, outXLow + y
+		mOffset := my*width
+		for x := 0; x < mXWidth; x++ {
+			mx, outy := mXLow + x, outYLow + x
+			out[outy*height + outx] = m[mOffset + mx]
+		}
+	}
+}
+
 // Invert computes the inverse of a matrix.
 func (m *Matrix) Invert() *Matrix {
 	lu := m.LU()
