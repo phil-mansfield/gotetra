@@ -126,3 +126,103 @@ func BenchmarkLUInvert3(b *testing.B) {
 		lus[idx].InvertAt(out)
 	}
 }
+
+func BenchmarkTransposeAt2_2(b *testing.B) {
+	width, height := 2, 2
+	mVals := make([]float64, width * height)
+	outVals := make([]float64, width * height)
+	m := NewMatrix(mVals, width, height)
+	out := NewMatrix(outVals, height, width)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ { m.TransposeAt(out) }
+}
+
+func BenchmarkTransposeAt4_4(b *testing.B) {
+	width, height := 4, 4
+	mVals := make([]float64, width * height)
+	outVals := make([]float64, width * height)
+	m := NewMatrix(mVals, width, height)
+	out := NewMatrix(outVals, height, width)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ { m.TransposeAt(out) }
+}
+
+func BenchmarkTransposeAt8_8(b *testing.B) {
+	width, height := 8, 8
+	mVals := make([]float64, width * height)
+	outVals := make([]float64, width * height)
+	m := NewMatrix(mVals, width, height)
+	out := NewMatrix(outVals, height, width)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ { m.TransposeAt(out) }
+}
+
+func BenchmarkTransposeAt16_16(b *testing.B) {
+	width, height := 16, 16
+	mVals := make([]float64, width * height)
+	outVals := make([]float64, width * height)
+	m := NewMatrix(mVals, width, height)
+	out := NewMatrix(outVals, height, width)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ { m.TransposeAt(out) }
+}
+
+func BenchmarkTransposeAt32_32(b *testing.B) {
+	width, height := 32, 32
+	mVals := make([]float64, width * height)
+	outVals := make([]float64, width * height)
+	m := NewMatrix(mVals, width, height)
+	out := NewMatrix(outVals, height, width)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ { m.TransposeAt(out) }
+}
+
+func BenchmarkTransposeAt64_64(b *testing.B) {
+	width, height := 64, 64
+	mVals := make([]float64, width * height)
+	outVals := make([]float64, width * height)
+	m := NewMatrix(mVals, width, height)
+	out := NewMatrix(outVals, height, width)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ { m.TransposeAt(out) }
+}
+
+func BenchmarkTransposeAt128_128(b *testing.B) {
+	width, height := 128, 128
+	mVals := make([]float64, width * height)
+	outVals := make([]float64, width * height)
+	m := NewMatrix(mVals, width, height)
+	out := NewMatrix(outVals, height, width)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ { m.TransposeAt(out) }
+}
+
+func BenchmarkTransposeAt1280_1280(b *testing.B) {
+	width, height := 1280, 1280
+	mVals := make([]float64, width * height)
+	outVals := make([]float64, width * height)
+	m := NewMatrix(mVals, width, height)
+	out := NewMatrix(outVals, height, width)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ { m.TransposeAt(out) }
+}
+
+
+func BenchmarkTransposeAt12800_1280(b *testing.B) {
+	width, height := 12800, 1280
+	mVals := make([]float64, width * height)
+	outVals := make([]float64, width * height)
+	m := NewMatrix(mVals, width, height)
+	out := NewMatrix(outVals, height, width)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ { m.TransposeAt(out) }
+}
