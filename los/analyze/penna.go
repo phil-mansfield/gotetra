@@ -4,6 +4,8 @@ import (
 	"math"
 	
 	"github.com/phil-mansfield/gotetra/math/mat"
+	"github.com/phil-mansfield/gotetra/los"
+
 	"github.com/gonum/matrix/mat64"
 )
 
@@ -61,8 +63,6 @@ func PennaCoeffs(xs, ys, zs []float64, I, J, K int) []float64 {
 				sinphi := math.Pow(sinphis[n], float64(j))
 				cosphi := 1.0
 				for i := 0; i < I; i++ {
-					// sin(th) can't be done via multiplication because the
-					// floating point errors are too large.
 					MVals[m*M.Width + n] =
 						math.Pow(sinths[n], float64(i+j)) *
 						cosphi * costh * sinphi
@@ -97,5 +97,49 @@ func PennaFunc(cs []float64, I, J, K int) func(phi, th float64) float64 {
 			}
 		}
 		return sum
+	}
+}
+
+
+func PennaVolumeFit(
+	xs, ys [][]float64, h los.HaloProfiles, I, J int,
+) (cs []float64, rf func(phi, th float64) float64) {
+	n := 0
+	for i := range xs { n += len(xs[i]) }
+	fXs, fYs, fZs := make([]float64, n), make([]float64, n), make([]float64, n)
+	
+	idx := 0
+	for i := range xs {
+		for j := range xs[i] {
+			fXs[idx], fYs[idx], fZs[idx] =
+				h.PlaneToVolume(i, xs[i][j], ys[i][j])
+		}
+	}
+
+	cs = PennaCoeffs(fXs, fYs, fZs, I, J, 2)
+	return cs, PennaFunc(cs, I, J, 2)
+}
+
+func PennaPlaneFit(
+	xs, ys [][]float64, h *los.HaloProfiles, ring, I, J int,
+) (cs []float64, rf func(ring int, phi float64) float64) {
+	n := 0
+	for i := range xs { n += len(xs[i]) }
+	fXs, fYs, fZs := make([]float64, n), make([]float64, n), make([]float64, n)
+	
+	idx := 0
+	for i := range xs {
+		for j := range xs[i] {
+			fXs[idx], fYs[idx], fZs[idx] =
+				h.PlaneToVolume(i, xs[i][j], ys[i][j])
+		}
+	}
+
+	cs = PennaCoeffs(fXs, fYs, fZs, I, J, 2)
+	pf := PennaFunc(cs, I, J, 2)
+	return cs, func (ring int, phi float64) float64 {
+		sin, cos := math.Sincos(phi)
+		x, y, z := h.PlaneToVolume(ring, cos, sin)
+		return pf(math.Atan2(y, x), math.Acos(z))
 	}
 }
