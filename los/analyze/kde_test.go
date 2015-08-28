@@ -52,7 +52,7 @@ func TestGaussianKDETree(t *testing.T) {
 	
 
 	kt := NewKDETree(rs, ths, 5)
-	f := kt.GetRFunc(5)
+	f := kt.GetRFunc(5, Cartesian)
 	spXs, spYs := make([]float64, 200), make([]float64, 200)
 	for i := 0; i < len(spXs) - 1; i++ {
 		th := 2 * math.Pi * (float64(i) + 0.5) / 200
