@@ -113,6 +113,7 @@ func PennaVolumeFit(
 		for j := range xs[i] {
 			fXs[idx], fYs[idx], fZs[idx] =
 				h.PlaneToVolume(i, xs[i][j], ys[i][j])
+			idx++
 		}
 	}
 
@@ -121,8 +122,8 @@ func PennaVolumeFit(
 }
 
 func PennaPlaneFit(
-	xs, ys [][]float64, h *los.HaloProfiles, ring, I, J int,
-) (cs []float64, rf func(ring int, phi float64) float64) {
+	xs, ys [][]float64, h *los.HaloProfiles, I, J int,
+) (cs []float64, prf func(ring int, phi float64) float64) {
 	n := 0
 	for i := range xs { n += len(xs[i]) }
 	fXs, fYs, fZs := make([]float64, n), make([]float64, n), make([]float64, n)
@@ -132,6 +133,7 @@ func PennaPlaneFit(
 		for j := range xs[i] {
 			fXs[idx], fYs[idx], fZs[idx] =
 				h.PlaneToVolume(i, xs[i][j], ys[i][j])
+			idx++
 		}
 	}
 
@@ -140,6 +142,44 @@ func PennaPlaneFit(
 	return cs, func (ring int, phi float64) float64 {
 		sin, cos := math.Sincos(phi)
 		x, y, z := h.PlaneToVolume(ring, cos, sin)
-		return pf(math.Atan2(y, x), math.Acos(z))
+		pi2 := 2 * math.Pi
+		return pf(math.Mod(math.Atan2(y, x) + pi2, pi2), math.Acos(z))
 	}
+}
+
+func FilterPoints(
+	rs []RingBuffer, levels int,
+) (pxs, pys [][]float64) {
+	pxs, pys = [][]float64{}, [][]float64{}
+	for ri := range rs {
+		r := &rs[ri]
+		validXs := make([]float64, 0, r.N)
+		validYs := make([]float64, 0, r.N)
+		
+		for i := 0; i < r.N; i++ {
+			if r.Oks[i] {
+				validXs = append(validXs, r.PlaneXs[i])
+				validYs = append(validYs, r.PlaneYs[i])
+			}
+		}
+		
+		validRs, validPhis := []float64{}, []float64{}
+		for i := range r.Rs {
+			if r.Oks[i] {
+				validRs = append(validRs, r.Rs[i])
+				validPhis = append(validPhis, r.Phis[i])
+			}
+		}
+		
+		kt := NewKDETree(validRs, validPhis, levels)		
+		fRs, fThs, _ := kt.FilterNearby(validRs, validPhis, levels, kt.H() / 2)
+		fXs, fYs := make([]float64, len(fRs)), make([]float64, len(fRs))
+		for i := range fRs {
+			sin, cos := math.Sincos(fThs[i])
+			fXs[i], fYs[i] = fRs[i] * cos, fRs[i] * sin
+		}
+
+		pxs, pys = append(pxs, fXs), append(pys, fYs)
+	}
+	return pxs, pys
 }

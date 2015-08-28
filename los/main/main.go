@@ -33,10 +33,12 @@ const (
 	window = 121
 	cutoff = 0.0
 
-	rings = 3
-	plotStart = 1001
-	plotCount = 1
+	rings = 4
+	plotStart = 1000
+	plotCount = 50
 
+	I, J = 2, 2
+	
 	// SubhaloFinder params.
 	finderCells = 150
 	overlapMult = 3
@@ -128,11 +130,10 @@ func main() {
 	// Analyze each halo.
 	plotRs, plotRhos := make([]float64, bins), make([]float64, bins)
 	_, _ = plotRs, plotRhos
-	r := new(analyze.RingBuffer)
-	r.Init(n, bins)
-	for _, i := range []int{1001, 1006, 1008, 1009,
-		1014, 1017, 1018, 1033, 1047, 6006, 6030} {
-	//for i := plotStart; i < plotStart + plotCount; i++ {
+
+	rbs := make([]analyze.RingBuffer, rings)
+	for i := range rbs { rbs[i].Init(n, bins) }
+	for i := plotStart; i < plotStart + plotCount; i++ {
 		fmt.Println("Hosts:", sf.HostCount(i), "Subhalos:", sf.SubhaloCount(i))
 		if sf.HostCount(i) > 0 { 
 			fmt.Println("Ignoring halo with host.")
@@ -150,10 +151,21 @@ func main() {
 		)
 			
 		intersectionTest(h, hdIntrs, fileIntrs, buf, spheres)
+		for i := range rbs {
+			rbs[i].Clear()
+			rbs[i].Splashback(h, i, window, cutoff)
+		}
+
+		pxs, pys := analyze.FilterPoints(rbs, 4)
+		// _, prf := analyze.PennaPlaneFit(pxs, pys, h, I, J)
+		prfs := []func(ring int, phi float64)float64{ }
+		for i := 2; i <= 5; i++ {
+			_, prf := analyze.PennaPlaneFit(pxs, pys, h, i, i)
+			prfs = append(prfs, prf)
+		}
+
 		for ring := 0; ring < rings; ring++ {
-			r.Clear()
-			r.Splashback(h, ring, window, cutoff)
-			plotPlane(r, ms[i], h.ID(), ring, plotDir, textDir)
+			plotPlane(&rbs[ring], ms[i], h.ID(), ring, prfs, plotDir, textDir)
 			plotExampleProfiles(h, ms[i], ring, plotRs, plotRhos, plotDir)
 			plotExampleDerivs(h, ms[i], ring, plotRs, plotRhos, plotDir)
 		}
@@ -274,7 +286,8 @@ func plotExampleDerivs(
 }
 
 func plotPlane(
-	r *analyze.RingBuffer, m float64, id, ring int, plotDir, textDir string,
+	r *analyze.RingBuffer, m float64, id, ring int,
+	prfs []func(ring int, phi float64) float64, plotDir, textDir string,
 ) {
 	pName := path.Join(plotDir, fmt.Sprintf("plane_h%d_r%d.png", id, ring))
 	tName := path.Join(textDir, fmt.Sprintf("pts_h%d_r%d.txt", id, ring))
@@ -313,6 +326,36 @@ func plotPlane(
 	plt.Figure(plt.Num(1), plt.FigSize(8, 8))
 	plt.InsertLine("plt.clf()")
 	plt.Plot(xs, ys, "ow")
+
+	rf := kt.GetRFunc(4, analyze.Radial)
+	spXs := make([]float64, 200)
+	spYs := make([]float64, 200)
+	dPhi := 2 * math.Pi / float64(len(spXs) - 1)
+	for i := range spXs {
+		phi := (float64(i) + 0.5) * dPhi
+		r := rf(phi)
+		sin, cos := math.Sincos(phi)
+		spXs[i], spYs[i] = r * cos, r * sin
+	}
+
+
+	spXs[len(spXs) - 1], spYs[len(spYs) - 1] = spXs[0], spYs[0]
+	plt.Plot(spXs, spYs, plt.Color("r"), plt.LW(2))
+	plt.Plot(fXs, fYs, "o", plt.Color("r"))
+
+	cs := []string{"g", "cyan", "b", "DarkBlue"}
+	for i, prf := range prfs {
+		rXs, rYs := make([]float64, 100), make([]float64, 100)
+		for i := range rXs {
+			phi := float64(i) * 2 * math.Pi / float64(len(rXs) - 1)
+			r := prf(ring, phi)
+			sin, cos := math.Sincos(phi)
+			rXs[i], rYs[i] = r * cos, r * sin
+		}
+		rXs[len(rXs)-1], rYs[len(rYs)-1] = rXs[0], rYs[0]
+		plt.Plot(rXs, rYs, plt.C(cs[i]), plt.LW(2))
+	}
+
 	// Plot the colored profiles.
 	for i := 0; i < r.N; i++ {
 		if r.Oks[i] {
@@ -327,21 +370,6 @@ func plotPlane(
 		}
 	}
 
-	rf := kt.GetRFunc(4, analyze.Radial)
-	spXs := make([]float64, 200)
-	spYs := make([]float64, 200)
-	dPhi := 2 * math.Pi / float64(len(spXs) - 1)
-	for i := range spXs {
-		phi := (float64(i) + 0.5) * dPhi
-		r := rf(phi)
-		sin, cos := math.Sincos(phi)
-		spXs[i], spYs[i] = r * cos, r * sin
-	}
-
-	spXs[len(spXs) - 1], spYs[len(spYs) - 1] = spXs[0], spYs[0]
-	plt.Plot(spXs, spYs, plt.Color("r"), plt.LW(2))
-	plt.Plot(fXs, fYs, "o", plt.Color("r"))
-
 	plt.Title(fmt.Sprintf(
 		`Halo %d: $M_{\rm 200c}$ = %.3g $M_\odot/h$`, id, m),
 	)
@@ -351,21 +379,23 @@ func plotPlane(
 	for _, r := range r.Rs {
 		if r > rMax { rMax = r }
 	}
+	//_ = rMax
 	plt.XLim(-rMax, +rMax)
 	plt.YLim(-rMax, +rMax)
 	plt.SaveFig(pName)
 
-	f, err := os.Create(tName)
-	defer f.Close()
-	if err != nil { panic(err.Error()) }
+	_ = tName
+	//f, err := os.Create(tName)
+	//defer f.Close()
+	//if err != nil { panic(err.Error()) }
 
-	fmt.Fprintf(f, "%6d %6d\n", len(xs), len(fXs))
-	for i := range xs {
-		fmt.Fprintf(f, "%6.3g %6.3g\n", xs[i], ys[i])
-	}
-	for i := range fXs {
-		fmt.Fprintf(f, "%6.3g %6.3g\n", fXs[i], fYs[i])
-	}
+	//fmt.Fprintf(f, "%6d %6d\n", len(xs), len(fXs))
+	//for i := range xs {
+	//	fmt.Fprintf(f, "%6.3g %6.3g\n", xs[i], ys[i])
+	//}
+	//for i := range fXs {
+	//	fmt.Fprintf(f, "%6.3g %6.3g\n", fXs[i], fYs[i])
+	//}
 }
 
 func setXRange(xLow, xHigh float64) {
