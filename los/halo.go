@@ -422,6 +422,22 @@ func (hp *HaloProfiles) GetRs(out []float64) {
 	}
 }
 
+func (hp *HaloProfiles) PlaneToVolume(
+	ring int, px, py float64,
+) (x, y, z float64) {
+	v := &geom.Vec{float32(x), float32(y), 0}
+	v.Rotate(&hp.rs[ring].rot)
+	return float64(v[0]), float64(v[1]), float64(v[2])
+}
+
+func (hp *HaloProfiles) VolumeToPlane(
+	ring int, x, y, z float64,
+) (px, py float64) {
+	v := &geom.Vec{float32(x), float32(y), float32(z)}
+	v.Rotate(&hp.rs[ring].irot)
+	return float64(v[0]), float64(v[1])
+}
+
 func dist(x, y float32) float32 {
 	diff := x - y
 	if diff < 0 { return -diff }
