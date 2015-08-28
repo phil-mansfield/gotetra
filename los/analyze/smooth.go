@@ -57,7 +57,6 @@ func Smooth(
 
 	dx := math.Log(xs[1]) - math.Log(xs[0])
 	k, kd := getSmoothingKernel(window, dx)
-
 	for i := range ys { ys[i] = math.Log(ys[i]) }
 	k.ConvolveAt(ys, intr.Extension, vals)
 	kd.ConvolveAt(ys, intr.Extension, derivs)
