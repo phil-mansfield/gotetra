@@ -100,12 +100,12 @@ func VecMult(v []float64, m *Matrix, out []float64) {
 		panic("Shape error.")
 	}
 	for i := range out { out[i] = 0 }
-	offset := 0
-	for j := 0; j < m.Height; j++ {
-		for i := 0; i < m.Width; i++ {
-			out[j] += v[j] * m.Vals[i + offset]
+	for i := 0; i < m.Width; i++ {
+		sum := 0.0
+		for j := 0; j < m.Height; j++ {
+			sum += v[j] * m.Vals[i + m.Width*j]
 		}
-		offset += m.Width
+		out[i] = sum
 	}
 }
 
