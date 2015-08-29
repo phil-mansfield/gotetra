@@ -108,7 +108,8 @@ func main() {
 	if err != nil { log.Fatal(err.Error()) }
 	buf := los.NewBuffers(files[0], &hds[0])
 	h := new(los.HaloProfiles)
-	
+	hRef := new(los.HaloProfiles)
+
 	// Find halos, subhalos, etc.
 	xs, ys, zs, ms, rs, err := halo.ReadRockstar(
 		haloFileName, rType, &hds[0].Cosmo,
@@ -129,52 +130,57 @@ func main() {
 
 	// Analyze each halo.
 	plotRs, plotRhos := make([]float64, bins), make([]float64, bins)
-	_, _ = plotRs, plotRhos
 
 	rbs := make([]analyze.RingBuffer, rings)
-	for i := range rbs { rbs[i].Init(n, bins) }
+	rbRefs := make([]analyze.RingBuffer, rings)
+	for i := range rbs {
+		rbs[i].Init(n, bins)
+		rbRefs[i].Init(n, bins)
+	}
+
 	for i := plotStart; i < plotStart + plotCount; i++ {
 		fmt.Println("Hosts:", sf.HostCount(i), "Subhalos:", sf.SubhaloCount(i))
 		if sf.HostCount(i) > 0 { 
 			fmt.Println("Ignoring halo with host.")
 			continue
 		}
-		spheres := subhaloSpheres(sf, i, xs, ys, zs, rs)
 		
 		origin := &geom.Vec{float32(xs[i]), float32(ys[i]), float32(zs[i])}
 		h.Init(i, rings, origin, rs[i] * rMinMult, rs[i] * rMaxMult,
 			bins, n, hds[0].TotalWidth, los.Log(true))
+		hRef.Init(i, rings, origin, rs[i] * rMinMult, rs[i] * rMaxMult,
+			bins, n, hds[0].TotalWidth, los.Log(true),
+			los.Rotate(float32(2 * math.Pi * rand.Float64()),
+				float32(2 * math.Pi * rand.Float64()), 
+				float32(2 * math.Pi * rand.Float64())))
 		hdIntrs, fileIntrs := intersectingSheets(h, hds, files)
 		
 		fmt.Printf(
-			"Halo mass is: %.3g, intersects are: %d\n", ms[i], len(hdIntrs),
+			"%d) Halo mass is: %.3g, intersects are: %d\n",
+			i, ms[i], len(hdIntrs),
 		)
 			
-		intersectionTest(h, hdIntrs, fileIntrs, buf, spheres)
-		rbRefs := make([]analyze.RingBuffer, 0, rings / 2)
+		intersectionTest(h, hdIntrs, fileIntrs, buf)
+		intersectionTest(h, hdIntrs, fileIntrs, buf)
 		for i := range rbs {
 			rbs[i].Clear()
 			rbs[i].Splashback(h, i, window, cutoff)
-			if i % 2 == 0 { rbRefs = append(rbRefs, rbs[i]) }
+			rbRefs[i].Clear()
+			rbRefs[i].Splashback(h, i, window, cutoff)
 		}
 		
-
-		var pxs, pys [][]float64
-		if rings == 10 {
-			pxs, pys = analyze.FilterPoints(rbRefs, 4) 
-		} else  {
-			pxs, pys = analyze.FilterPoints(rbs, 4) 
-		}
+		pxs, pys := analyze.FilterPoints(rbRefs, 4) 
 
 		// _, prf := analyze.PennaPlaneFit(pxs, pys, h, I, J)
-		prfs := []func(ring int, phi float64)float64{ }
+		prfs := []func(h *los.HaloProfiles, ring int, phi float64)float64{ }
 		for i := 2; i <= 5; i++ {
-			_, prf := analyze.PennaPlaneFit(pxs, pys, h, i, i)
+			_, prf := analyze.PennaPlaneFit(pxs, pys, hRef, i, i)
 			prfs = append(prfs, prf)
 		}
 
 		for ring := 0; ring < rings; ring++ {
-			plotPlane(&rbs[ring], ms[i], h.ID(), ring, prfs, plotDir, textDir)
+			plotPlane(h, &rbs[ring], ms[i], h.ID(),
+				ring, prfs, plotDir, textDir)
 			plotExampleProfiles(h, ms[i], ring, plotRs, plotRhos, plotDir)
 			plotExampleDerivs(h, ms[i], ring, plotRs, plotRhos, plotDir)
 		}
@@ -295,8 +301,9 @@ func plotExampleDerivs(
 }
 
 func plotPlane(
-	r *analyze.RingBuffer, m float64, id, ring int,
-	prfs []func(ring int, phi float64) float64, plotDir, textDir string,
+	h *los.HaloProfiles, r *analyze.RingBuffer, m float64, id, ring int,
+	prfs []func(h *los.HaloProfiles, ring int, phi float64) float64,
+	plotDir, textDir string,
 ) {
 	pName := path.Join(plotDir, fmt.Sprintf("plane_h%d_r%d.png", id, ring))
 	tName := path.Join(textDir, fmt.Sprintf("pts_h%d_r%d.txt", id, ring))
@@ -357,7 +364,7 @@ func plotPlane(
 		rXs, rYs := make([]float64, 100), make([]float64, 100)
 		for i := range rXs {
 			phi := float64(i) * 2 * math.Pi / float64(len(rXs) - 1)
-			r := prf(ring, phi)
+			r := prf(h, ring, phi)
 			sin, cos := math.Sincos(phi)
 			rXs[i], rYs[i] = r * cos, r * sin
 		}
@@ -379,16 +386,8 @@ func plotPlane(
 		}
 	}
 
-	if ring % 2 == 0 {
-		plt.Title(fmt.Sprintf(
-			`Halo %d: $M_{\rm 200c}$ = %.3g $M_\odot/h - Reference Plane$`, id, m),
-		)
-	} else {
-		plt.Title(fmt.Sprintf(
-			`Halo %d: $M_{\rm 200c}$ = %.3g $M_\odot/h - Test Plane$`, id, m),
-		)
-	}
-
+	
+	plt.Title(fmt.Sprintf(`Halo %d: $M_{\rm 200c}$ = %.3g $M_\odot/h$`, id, m))
 	plt.XLabel(`$X_1$ $[{\rm Mpc}/h]$`, plt.FontSize(16))
 	plt.YLabel(`$X_2$ $[{\rm Mpc}/h]$`, plt.FontSize(16))
 	rMax := 0.0
@@ -457,8 +456,8 @@ func intersectingSheets(
 
 // intersectionTest is kind of a BS function.
 func intersectionTest(
-	h *los.HaloProfiles, hds []io.SheetHeader, files []string,
-	buf *los.Buffers, subhalos []geom.Sphere,
+	h *los.HaloProfiles, hds []io.SheetHeader,
+	files []string, buf *los.Buffers,
 ) {
 	hs := []los.HaloProfiles{*h}
 	h = &hs[0]
