@@ -33,7 +33,7 @@ const (
 	window = 121
 	cutoff = 0.0
 
-	rings = 4
+	rings = 10
 	plotStart = 1000
 	plotCount = 50
 
@@ -151,12 +151,21 @@ func main() {
 		)
 			
 		intersectionTest(h, hdIntrs, fileIntrs, buf, spheres)
+		rbRefs := make([]analyze.RingBuffer, 0, rings / 2)
 		for i := range rbs {
 			rbs[i].Clear()
 			rbs[i].Splashback(h, i, window, cutoff)
+			if i % 2 == 0 { rbRefs = append(rbRefs, rbs[i]) }
+		}
+		
+
+		var pxs, pys [][]float64
+		if rings == 10 {
+			pxs, pys = analyze.FilterPoints(rbRefs, 4) 
+		} else  {
+			pxs, pys = analyze.FilterPoints(rbs, 4) 
 		}
 
-		pxs, pys := analyze.FilterPoints(rbs, 4)
 		// _, prf := analyze.PennaPlaneFit(pxs, pys, h, I, J)
 		prfs := []func(ring int, phi float64)float64{ }
 		for i := 2; i <= 5; i++ {
@@ -221,7 +230,7 @@ func plotExampleProfiles(
 
 	// Plot specifications.
 	plt.Title(fmt.Sprintf(
-		`Halo %d: $M_{\rm 200c}$ = %.3g $M_\odot/h$`, hp.ID(), m),
+		`Halo %d: $M_{\rm 200m}$ = %.3g $M_\odot/h$`, hp.ID(), m),
 	)
 	plt.XLabel(`$R$ $[{\rm Mpc}/h]$`, plt.FontSize(16))
 	plt.YLabel(`$\rho$ [$\rho_m$]`, plt.FontSize(16))
@@ -370,9 +379,16 @@ func plotPlane(
 		}
 	}
 
-	plt.Title(fmt.Sprintf(
-		`Halo %d: $M_{\rm 200c}$ = %.3g $M_\odot/h$`, id, m),
-	)
+	if ring % 2 == 0 {
+		plt.Title(fmt.Sprintf(
+			`Halo %d: $M_{\rm 200c}$ = %.3g $M_\odot/h - Reference Plane$`, id, m),
+		)
+	} else {
+		plt.Title(fmt.Sprintf(
+			`Halo %d: $M_{\rm 200c}$ = %.3g $M_\odot/h - Test Plane$`, id, m),
+		)
+	}
+
 	plt.XLabel(`$X_1$ $[{\rm Mpc}/h]$`, plt.FontSize(16))
 	plt.YLabel(`$X_2$ $[{\rm Mpc}/h]$`, plt.FontSize(16))
 	rMax := 0.0

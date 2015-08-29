@@ -14,6 +14,7 @@ type haloRing struct {
 	ProfileRing
 	phis []float32
 	rot, irot mat.Matrix32
+	norm geom.Vec
 	rMax float64
 
 	// Options
@@ -41,12 +42,21 @@ func Log(log bool) Option {
 	return func(hr *haloRing) { hr.log = log }
 }
 
+func Rotate(phi, theta, psi float32) Option {
+	return func(hr *haloRing) {
+		rot := geom.EulerMatrix(phi, theta, psi)
+		hr.norm.Rotate(rot)
+	}
+}
+
 // Init initialized a haloRing.
 func (hr *haloRing) Init(
 	norm, origin *geom.Vec, rMin, rMax float64, bins, n int, opts ...Option,
 ) {
 	hr.log = false
+	hr.norm = *norm
 	for _, opt := range opts { opt(hr) }
+
 	if hr.log {
 		if rMax <= 0 || rMin <= 0 {
 			panic("Non-positive bounding radius given to logarithmic haloRing.")
@@ -61,8 +71,8 @@ func (hr *haloRing) Init(
 	
 	hr.rot.Init(make([]float32, 9), 3, 3)
 	hr.irot.Init(make([]float32, 9), 3, 3)
-	geom.EulerMatrixBetweenAt(norm, zAxis, &hr.rot)
-	geom.EulerMatrixBetweenAt(zAxis, norm, &hr.irot)
+	geom.EulerMatrixBetweenAt(&hr.norm, zAxis, &hr.rot)
+	geom.EulerMatrixBetweenAt(zAxis, &hr.norm, &hr.irot)
 	hr.phis = make([]float32, n)
 	for i := 0; i < n; i++ {
 		hr.phis[i] = float32(i) / float32(n) * (2 * math.Pi)
