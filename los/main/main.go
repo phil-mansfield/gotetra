@@ -149,10 +149,10 @@ func main() {
 		}
 	}
 
-//	for i := plotStart; i < plotStart + plotCount; i++ {
-	for _, i := range []int{
-		1001, 1006, 1008, 1009, 1014, 1017, 1018, 1033, 1047, 6006, 6030,
-	} {
+	for i := plotStart; i < plotStart + plotCount; i++ {
+//	for _, i := range []int{
+//		1001, 1006, 1008, 1009, 1014, 1017, 1018, 1033, 1047, 6006, 6030,
+//	} {
 		fmt.Println("Hosts:", sf.HostCount(i), "Subhalos:", sf.SubhaloCount(i))
 		if sf.HostCount(i) > 0 { 
 			fmt.Println("Ignoring halo with host.")
@@ -194,6 +194,10 @@ func main() {
 			pxs, pys := analyze.FilterPoints(rbRefs[j], 4) 
 			_, prf := analyze.PennaPlaneFit(pxs, pys, &hRefs[j], I, J)
 			prfs[j] = prf
+		}
+
+		for j := range totRbs {
+			plotKde(totRbs[j], ms[i], h.ID(), j, plotDir)
 		}
 
 		for ring := 0; ring < rings; ring++ {
@@ -304,7 +308,7 @@ func plotExampleDerivs(
 
 	// Plot specifications.
 	plt.Title(fmt.Sprintf(
-		`Halo %d: $M_{\rm 200c}$ = %.3g $M_\odot/h$`, hp.ID(), m),
+		`Halo %d: $M_{\rm 200m}$ = %.3g $M_\odot/h$`, hp.ID(), m),
 	)
 	plt.XLabel(`$R$ $[{\rm Mpc}/h]$`, plt.FontSize(16))
 	plt.YLabel(`$d \ln{\rho}/ d\ln{r}$ [$\rho_m$]`, plt.FontSize(16))
@@ -317,6 +321,32 @@ func plotExampleDerivs(
 	plt.Grid(plt.Axis("y"))
 	plt.Grid(plt.Axis("x"), plt.Which("both"))
 	plt.SaveFig(fname)
+}
+
+func plotKde(rbs []analyze.RingBuffer, m float64, id, rot int, plotDir string) {
+	fName := path.Join(plotDir, fmt.Sprintf("kde_h%d_rot%d"))
+
+	plt.Figure(plt.Num(1), plt.FigSize(8, 8))
+	plt.InsertLine("plt.clf()")
+
+	n := len(rbs[0].Oks)
+	validRs, validPhis := make([]float64, 0, n), make([]float64, 0, n)
+	for i := range rbs {
+		r := &rbs[i]
+		validRs, validPhis = validRs[:0], validPhis[:0]
+		for i := range r.Rs {
+			if r.Oks[i] {
+				validRs = append(validRs, r.Rs[i])
+				validPhis = append(validPhis, r.Phis[i])
+			}
+		}
+		kt := analyze.NewKDETree(validRs, validPhis, 1)
+		kt.PlotLevel(0, plt.C(colors[rot]), plt.LW(3))
+	}
+
+	plt.Title(fmt.Sprintf(`Halo %d: $M_{\rm 200c}$ = %.3g $M_\odot/h$`, id, m))
+	plt.XLabel(`$r$ [{\rm Mpc}/$h$]`)
+	plt.SaveFig(fName)
 }
 
 func plotPlane(
@@ -405,7 +435,7 @@ func plotPlane(
 	}
 
 	
-	plt.Title(fmt.Sprintf(`Halo %d: $M_{\rm 200c}$ = %.3g $M_\odot/h$`, id, m))
+	plt.Title(fmt.Sprintf(`Halo %d: $M_{\rm 200m}$ = %.3g $M_\odot/h$`, id, m))
 	plt.XLabel(`$X_1$ $[{\rm Mpc}/h]$`, plt.FontSize(16))
 	plt.YLabel(`$X_2$ $[{\rm Mpc}/h]$`, plt.FontSize(16))
 	rMax := 0.0

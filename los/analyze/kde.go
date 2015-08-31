@@ -3,7 +3,7 @@ package analyze
 import (
 	"math"
 
-	//plt "github.com/phil-mansfield/pyplot"
+	plt "github.com/phil-mansfield/pyplot"
 	intr "github.com/phil-mansfield/gotetra/math/interpolate"
 )
 
@@ -85,6 +85,20 @@ func NewKDETree(rs, phis []float64, splits int) *KDETree {
 	kt.connectMaxes()
 
 	return kt
+}
+
+func (kt *KDETree) PlotLevel(level int, opts ...interface{}) {
+	sps := kt.spTree[level]
+	rs := make([]float64, 100)
+	vals := make([]float64, 100)
+	dr := (kt.high - kt.low) / float64(len(rs))
+	for i := range rs { rs[i] = dr * (float64(i) + 0.5) + kt.low }
+
+	for _, sp := range sps {
+		for j := range vals { vals[j] = sp.Eval(rs[j]) }
+		args := append([]interface{}{rs, vals}, opts...)
+		plt.Plot(args)
+	}
 }
 
 func (kt *KDETree) growTrees(rs, phis []float64, splits int) {
