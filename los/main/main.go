@@ -33,11 +33,11 @@ const (
 	window = 121
 	cutoff = 0.0
 
-	rings = 10
+	rings = 3
 	plotStart = 1000
-	plotCount = 50
+	plotCount = 20
 
-	I, J = 2, 2
+	I, J = 5, 5
 	
 	// SubhaloFinder params.
 	finderCells = 150
@@ -51,6 +51,11 @@ var (
 		"DarkSlateBlue", "DarkSlateGray", "DarkTurquoise",
 		"DarkViolet", "DeepPink", "DimGray",
 	}
+	refRings = []int{
+		10, 10, 10, 10, 10, 10,
+		//3, 4, 6, 10,
+	}
+	refHalos = len(refRings)
 	visProfs = []int{
 		rand.Intn(n), rand.Intn(n), rand.Intn(n),
 		rand.Intn(n), rand.Intn(n), rand.Intn(n),
@@ -107,8 +112,6 @@ func main() {
 	hds, err := loadHeaders(files, saveDir)
 	if err != nil { log.Fatal(err.Error()) }
 	buf := los.NewBuffers(files[0], &hds[0])
-	h := new(los.HaloProfiles)
-	hRef := new(los.HaloProfiles)
 
 	// Find halos, subhalos, etc.
 	xs, ys, zs, ms, rs, err := halo.ReadRockstar(
@@ -131,14 +134,25 @@ func main() {
 	// Analyze each halo.
 	plotRs, plotRhos := make([]float64, bins), make([]float64, bins)
 
-	rbs := make([]analyze.RingBuffer, rings)
-	rbRefs := make([]analyze.RingBuffer, rings)
-	for i := range rbs {
-		rbs[i].Init(n, bins)
-		rbRefs[i].Init(n, bins)
+	totRbs := make([][]analyze.RingBuffer, refHalos + 1)
+	totRbs[0] = make([]analyze.RingBuffer, rings)
+	rbs := totRbs[0]
+	rbRefs := totRbs[1:]
+	for j := range rbRefs {
+		rbRefs[j] = make([]analyze.RingBuffer, refRings[j])
 	}
 
-	for i := plotStart; i < plotStart + plotCount; i++ {
+	for j := range totRbs {
+		for i := range totRbs[j] {
+			totRbs[j][i].Init(n, bins)
+			fmt.Println(len(totRbs[j][i].Oks))
+		}
+	}
+
+//	for i := plotStart; i < plotStart + plotCount; i++ {
+	for _, i := range []int{
+		1001, 1006, 1008, 1009, 1014, 1017, 1018, 1033, 1047, 6006, 6030,
+	} {
 		fmt.Println("Hosts:", sf.HostCount(i), "Subhalos:", sf.SubhaloCount(i))
 		if sf.HostCount(i) > 0 { 
 			fmt.Println("Ignoring halo with host.")
@@ -146,43 +160,48 @@ func main() {
 		}
 		
 		origin := &geom.Vec{float32(xs[i]), float32(ys[i]), float32(zs[i])}
+
+		hs := make([]los.HaloProfiles, refHalos + 1)
+		h := &hs[0]
+		hRefs := hs[1:]
+
 		h.Init(i, rings, origin, rs[i] * rMinMult, rs[i] * rMaxMult,
 			bins, n, hds[0].TotalWidth, los.Log(true))
-		hRef.Init(i, rings, origin, rs[i] * rMinMult, rs[i] * rMaxMult,
-			bins, n, hds[0].TotalWidth, los.Log(true),
-			los.Rotate(float32(2 * math.Pi * rand.Float64()),
-				float32(2 * math.Pi * rand.Float64()), 
-				float32(2 * math.Pi * rand.Float64())))
-		hdIntrs, fileIntrs := intersectingSheets(h, hds, files)
-		
+		for j := range hRefs {
+			hRefs[j].Init(i, refRings[j], origin, rs[i] * rMinMult,
+				rs[i] * rMaxMult, bins, n, hds[0].TotalWidth, los.Log(true),
+				los.Rotate(float32(2 * math.Pi * rand.Float64()),
+					float32(2 * math.Pi * rand.Float64()),
+					float32(2 * math.Pi * rand.Float64())))
+		}
+		hdIntrs, fileIntrs := intersectingSheets(h, hds, files)		
+
 		fmt.Printf(
 			"%d) Halo mass is: %.3g, intersects are: %d\n",
 			i, ms[i], len(hdIntrs),
 		)
-			
-		intersectionTest(h, hdIntrs, fileIntrs, buf)
-		intersectionTest(h, hdIntrs, fileIntrs, buf)
-		for i := range rbs {
-			rbs[i].Clear()
-			rbs[i].Splashback(h, i, window, cutoff)
-			rbRefs[i].Clear()
-			rbRefs[i].Splashback(h, i, window, cutoff)
-		}
 		
-		pxs, pys := analyze.FilterPoints(rbRefs, 4) 
+		intersectionTest(hs, hdIntrs, fileIntrs, buf)
+		for j := range totRbs {
+			for k := range totRbs[j] {
+				totRbs[j][k].Clear()
+				totRbs[j][k].Splashback(&hs[j], k, window, cutoff)
+			}
+		}
 
-		// _, prf := analyze.PennaPlaneFit(pxs, pys, h, I, J)
-		prfs := []func(h *los.HaloProfiles, ring int, phi float64)float64{ }
-		for i := 2; i <= 5; i++ {
-			_, prf := analyze.PennaPlaneFit(pxs, pys, hRef, i, i)
-			prfs = append(prfs, prf)
+		prfs := make([]func(*los.HaloProfiles, int, float64)float64, len(hRefs))
+		for j := range prfs {
+			pxs, pys := analyze.FilterPoints(rbRefs[j], 4) 
+			_, prf := analyze.PennaPlaneFit(pxs, pys, &hRefs[j], I, J)
+			prfs[j] = prf
 		}
 
 		for ring := 0; ring < rings; ring++ {
 			plotPlane(h, &rbs[ring], ms[i], h.ID(),
 				ring, prfs, plotDir, textDir)
-			plotExampleProfiles(h, ms[i], ring, plotRs, plotRhos, plotDir)
-			plotExampleDerivs(h, ms[i], ring, plotRs, plotRhos, plotDir)
+			_, _ = plotRhos, plotRs
+			//plotExampleProfiles(h, ms[i], ring, plotRs, plotRhos, plotDir)
+			//plotExampleDerivs(h, ms[i], ring, plotRs, plotRhos, plotDir)
 		}
 	}
 	
@@ -359,7 +378,6 @@ func plotPlane(
 	plt.Plot(spXs, spYs, plt.Color("r"), plt.LW(2))
 	plt.Plot(fXs, fYs, "o", plt.Color("r"))
 
-	cs := []string{"g", "cyan", "b", "DarkBlue"}
 	for i, prf := range prfs {
 		rXs, rYs := make([]float64, 100), make([]float64, 100)
 		for i := range rXs {
@@ -369,7 +387,7 @@ func plotPlane(
 			rXs[i], rYs[i] = r * cos, r * sin
 		}
 		rXs[len(rXs)-1], rYs[len(rYs)-1] = rXs[0], rYs[0]
-		plt.Plot(rXs, rYs, plt.C(cs[i]), plt.LW(2))
+		plt.Plot(rXs, rYs, plt.C(colors[i]), plt.LW(2))
 	}
 
 	// Plot the colored profiles.
@@ -456,12 +474,9 @@ func intersectingSheets(
 
 // intersectionTest is kind of a BS function.
 func intersectionTest(
-	h *los.HaloProfiles, hds []io.SheetHeader,
+	hs []los.HaloProfiles, hds []io.SheetHeader,
 	files []string, buf *los.Buffers,
 ) {
-	hs := []los.HaloProfiles{*h}
-	h = &hs[0]
-
 	for i, file := range files {
 		hd := &hds[i]
 		fmt.Printf("    Reading %s -> ", path.Base(file))
@@ -470,7 +485,9 @@ func intersectionTest(
 		t1 := float64(time.Now().UnixNano())
 		buf.ParallelRead(file, hd)
 		t2 := float64(time.Now().UnixNano())
-		buf.ParallelDensity(h)
+		for j := range hs {
+			buf.ParallelDensity(&hs[j])
+		}
 		t3 := float64(time.Now().UnixNano())
 
 		fmt.Printf("Setup: %.3g s  Density: %.3g s\n",
