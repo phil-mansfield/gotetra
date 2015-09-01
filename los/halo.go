@@ -517,3 +517,17 @@ func (hp *HaloProfiles) GetRhos(
 		for i := enterIdx; i < exitIdx; i++ { out[i] = math.NaN() }
 	}
 }
+
+func LoadDensities(
+	hs []HaloProfiles, hds []io.SheetHeader,
+	files []string, buf *Buffers,
+) {
+	for i, file := range files {
+		hd := &hds[i]
+		WrapHalo(hs, hd)
+		buf.ParallelRead(file, hd)
+		for j := range hs {
+			buf.ParallelDensity(&hs[j])
+		}
+	}
+}
