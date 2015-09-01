@@ -80,7 +80,7 @@ func (s1 Shell) MaxDiff(s2 Shell, samples int) float64 {
 }
 
 func CumulativeShells(
-	xs, ys [][]float64, h los.HaloProfiles,
+	xs, ys [][]float64, h *los.HaloProfiles,
 	I, J, start, stop, step int,
 ) (ringCounts []int, shells []Shell) {
 	n := 0
@@ -106,4 +106,55 @@ func CumulativeShells(
 	}
 
 	return ringCounts, shells
+}
+
+type Tracers struct {
+	Vol, Sa, Ix, Iy, Iz float64
+}
+
+func CumulativeTracers(
+	shells [][]Shell, samples int,
+) (means, stds []Tracers) {
+	rings := len(shells[0])
+	sums, sqrs := make([]Tracers, rings), make([]Tracers, rings)
+
+	for ir := range shells[0] {
+		for ih := range shells {
+			shell := shells[ih][ir]
+
+			vol := shell.Volume(samples)
+			sa  := shell.SurfaceArea(samples)
+			ix, iy, iz := shell.Moments(samples)
+
+			sums[ir].Vol += vol
+			sums[ir].Sa += sa
+			sums[ir].Ix += ix
+			sums[ir].Iy += iy
+			sums[ir].Iz += iz
+
+			sqrs[ir].Vol += vol
+			sqrs[ir].Sa += sa*sa
+			sqrs[ir].Ix += ix*ix
+			sqrs[ir].Iy += iy*iy
+			sqrs[ir].Iz += iz*iz
+		}
+	}
+	
+	means, stds = make([]Tracers, rings), make([]Tracers, rings)
+	n := float64(len(shells[0]))
+	for i := range means {
+		means[i].Vol = sums[i].Vol / n
+		means[i].Sa =  sums[i].Sa  / n
+		means[i].Ix =  sums[i].Ix  / n
+		means[i].Iy =  sums[i].Iy  / n
+		means[i].Iz =  sums[i].Iz  / n
+
+		stds[i].Vol = math.Sqrt(sqrs[i].Vol / n - means[i].Vol*means[i].Vol)
+		stds[i].Sa =  math.Sqrt(sqrs[i].Sa  / n - means[i].Sa*means[i].Sa)
+		stds[i].Ix =  math.Sqrt(sqrs[i].Ix  / n - means[i].Ix*means[i].Ix)
+		stds[i].Iy =  math.Sqrt(sqrs[i].Iy  / n - means[i].Iy*means[i].Iy)
+		stds[i].Iz =  math.Sqrt(sqrs[i].Iz  / n - means[i].Iz*means[i].Iz)
+	}
+
+	return means, stds
 }
