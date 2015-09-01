@@ -152,10 +152,7 @@ func main() {
 	}
 
 	for i := plotStart; i < plotStart + plotCount; i++ {
-//	for _, i := range []int{
-//		1006, 1008, 1009, 1014, 1017, 1018, 1033, 1047, 6006, 6030,
-//	} {
-		fmt.Println("Hosts:", sf.HostCount(i), "Subhalos:", sf.SubhaloCount(i))
+		fmt.Println("Loading")
 		if sf.HostCount(i) > 0 { 
 			fmt.Println("Ignoring halo with host.")
 			continue
@@ -177,12 +174,8 @@ func main() {
 					float32(2 * math.Pi * rand.Float64())))
 		}
 		hdIntrs, fileIntrs := intersectingSheets(h, hds, files)		
-
-		fmt.Printf(
-			"%d) Halo mass is: %.3g, intersects are: %d\n",
-			i, ms[i], len(hdIntrs),
-		)
 		
+		fmt.Println("Computing Densities")
 		los.LoadDensities(hs, hdIntrs, fileIntrs, buf)
 		for j := range totRbs {
 			for k := range totRbs[j] {
@@ -191,6 +184,7 @@ func main() {
 			}
 		}
 
+		fmt.Println("Single Fit")
 		pShells := make([]analyze.ProjectedShell, len(hRefs))
 		shells := make([]analyze.Shell, len(hRefs))
 		for j := range pShells {
@@ -208,6 +202,9 @@ func main() {
 		//	plotKde(rbRefs[j], ms[i], h.ID(), j, plotDir)
 		//}
 
+		fmt.Println("Plotting Tracers")
+		plotTracers(hRefs, rbRefs, h.ID(), 1, 1000, plotDir)
+		fmt.Println("Plotting Plane")
 		for ring := 0; ring < rings; ring++ {
 			plotPlane(h, &rbs[ring], ms[i], h.ID(),
 				ring, pShells, plotDir, textDir)
@@ -427,6 +424,56 @@ func plotPlane(
 	plt.XLim(-rMax, +rMax)
 	plt.YLim(-rMax, +rMax)
 	plt.SaveFig(pName)
+}
+
+func plotTracers(
+	hs []los.HaloProfiles, rbs [][]analyze.RingBuffer,
+	id, step, samples int, plotDir string,
+) {
+	fname := path.Join(plotDir, fmt.Sprintf("trace_%dh.png", id))
+
+	// Set up the cumulative shell measures.
+	start, stop := 10, len(rbs)
+	shells, ringCounts := [][]analyze.Shell{}, []int{}
+	for ih := range hs {
+		h := &hs[ih]
+		xs, ys := analyze.FilterPoints(rbs[ih], 4)
+		hRingCounts, hShells := analyze.CumulativeShells(
+			xs, ys, h, I, J, start, stop, step,
+		)
+		ringCounts = hRingCounts
+		shells = append(shells, hShells)
+	}
+
+	means, stds := analyze.CumulativeTracers(shells, samples)
+	n := len(means)
+
+	vols := make([]float64, n)
+	sas := make([]float64, n)
+	ixs := make([]float64, n)
+	iys := make([]float64, n)
+	izs := make([]float64, n)
+	for i := 0; i < n; i++ {
+		vols[i] = stds[i].Vol / means[i].Vol
+		sas[i] = stds[i].Sa / means[i].Sa
+		ixs[i] = stds[i].Ix / means[i].Ix
+		iys[i] = stds[i].Iy / means[i].Iy
+		izs[i] = stds[i].Iz / means[i].Iz
+	}
+
+	plt.Figure(plt.Num(1), plt.FigSize(8, 8))
+	plt.InsertLine("plt.clf()")
+
+	plt.Plot(ringCounts, vols, "r", plt.LW(3), plt.Label("Volume"))
+	plt.Plot(ringCounts, sas, "b", plt.LW(3), plt.Label("Surface Area"))
+	plt.Plot(ringCounts, ixs, "g", plt.LW(3), plt.Label(`$I_{\rm x}$`))
+	plt.Plot(ringCounts, iys, "purple", plt.LW(3), plt.Label(`$I_{\rm y}$`))
+	plt.Plot(ringCounts, izs, "orange", plt.LW(3), plt.Label(`$I_{\rm z}$`))
+
+	plt.XLabel("Ring Count", plt.FontSize(16))
+	plt.YLabel(`${\rm std}(X) / {\rm mean}(X)$`)
+	
+	plt.SaveFig(fname)
 }
 
 func setXRange(xLow, xHigh float64) {
