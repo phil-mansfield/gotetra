@@ -103,7 +103,7 @@ func PennaFunc(cs []float64, I, J, K int) func(phi, th float64) float64 {
 
 func PennaVolumeFit(
 	xs, ys [][]float64, h los.HaloProfiles, I, J int,
-) (cs []float64, rf func(phi, th float64) float64) {
+) (cs []float64, shell Shell) {
 	n := 0
 	for i := range xs { n += len(xs[i]) }
 	fXs, fYs, fZs := make([]float64, n), make([]float64, n), make([]float64, n)
@@ -123,7 +123,7 @@ func PennaVolumeFit(
 
 func PennaPlaneFit(
 	xs, ys [][]float64, hRef *los.HaloProfiles, I, J int,
-) (cs []float64, prf func(h *los.HaloProfiles, ring int, phi float64) float64) {
+) (cs []float64, shell ProjectedShell) {
 	n := 0
 	for i := range xs { n += len(xs[i]) }
 	fXs, fYs, fZs := make([]float64, n), make([]float64, n), make([]float64, n)

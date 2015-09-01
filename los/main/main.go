@@ -10,7 +10,6 @@ import (
 	"os"
 	"path"
 	"strings"
-	"time"
 	"runtime/pprof"
 
 	"github.com/phil-mansfield/gotetra/render/io"	
@@ -184,7 +183,7 @@ func main() {
 			i, ms[i], len(hdIntrs),
 		)
 		
-		intersectionTest(hs, hdIntrs, fileIntrs, buf)
+		los.LoadDensities(hs, hdIntrs, fileIntrs, buf)
 		for j := range totRbs {
 			for k := range totRbs[j] {
 				totRbs[j][k].Clear()
@@ -192,13 +191,13 @@ func main() {
 			}
 		}
 
-		prfs := make([]func(*los.HaloProfiles, int, float64)float64, len(hRefs))
+		pShells := make([]analyze.ProjectedShell, len(hRefs))
 		shells := make([]analyze.Shell, len(hRefs))
-		for j := range prfs {
+		for j := range pShells {
 			pxs, pys := analyze.FilterPoints(rbRefs[j], 4) 
-			cs, prf := analyze.PennaPlaneFit(pxs, pys, &hRefs[j], I, J)
-			shell := analyze.Shell(analyze.PennaFunc(cs, I, J, 2))
-			prfs[j], shells[j] = prf, shell
+			cs, pShell := analyze.PennaPlaneFit(pxs, pys, &hRefs[j], I, J)
+			shell := analyze.PennaFunc(cs, I, J, 2)
+			pShells[j], shells[j] = pShell, shell
 		}
 
 		for j, shell := range shells {
@@ -211,7 +210,7 @@ func main() {
 
 		for ring := 0; ring < rings; ring++ {
 			plotPlane(h, &rbs[ring], ms[i], h.ID(),
-				ring, prfs, plotDir, textDir)
+				ring, pShells, plotDir, textDir)
 			_, _ = plotRhos, plotRs
 			//plotExampleProfiles(h, ms[i], ring, plotRs, plotRhos, plotDir)
 			//plotExampleDerivs(h, ms[i], ring, plotRs, plotRhos, plotDir)
@@ -342,13 +341,7 @@ func plotKde(rbs []analyze.RingBuffer, m float64, id, rot int, plotDir string) {
 	validRs, validPhis := make([]float64, 0, n), make([]float64, 0, n)
 	for i := range rbs {
 		r := &rbs[i]
-		validRs, validPhis = validRs[:0], validPhis[:0]
-		for i := range r.Rs {
-			if r.Oks[i] {
-				validRs = append(validRs, r.Rs[i])
-				validPhis = append(validPhis, r.Phis[i])
-			}
-		}
+		validRs, validPhis = r.OkPolarCoords(validRs, validPhis)
 		kt := analyze.NewKDETree(validRs, validPhis, 1)
 		kt.PlotLevel(0, plt.C(colors[rot]), plt.LW(3))
 	}
@@ -360,37 +353,17 @@ func plotKde(rbs []analyze.RingBuffer, m float64, id, rot int, plotDir string) {
 
 func plotPlane(
 	h *los.HaloProfiles, r *analyze.RingBuffer, m float64, id, ring int,
-	prfs []func(h *los.HaloProfiles, ring int, phi float64) float64,
-	plotDir, textDir string,
+	pShells []analyze.ProjectedShell, plotDir, textDir string,
 ) {
 	pName := path.Join(plotDir, fmt.Sprintf("plane_h%d_r%d.png", id, ring))
-	tName := path.Join(textDir, fmt.Sprintf("pts_h%d_r%d.txt", id, ring))
-	xs := make([]float64, 0, r.N)
-	ys := make([]float64, 0, r.N)
+	xs, ys := make([]float64, 0, r.N), make([]float64, 0, r.N)
+	rs, phis := make([]float64, 0, r.N), make([]float64, 0, r.N)
 
-	for i := 0; i < r.N; i++ {
-		if r.Oks[i] {
-			xs = append(xs, r.PlaneXs[i])
-			ys = append(ys, r.PlaneYs[i])
-		}
-	}
-	
-	validRs, validPhis := []float64{}, []float64{}
-	for i := range r.Rs {
-		if r.Oks[i] {
-			validRs = append(validRs, r.Rs[i])
-			validPhis = append(validPhis, r.Phis[i])
-		}
-	}
-	
-	kt := analyze.NewKDETree(validRs, validPhis, 4)
-	for i := 0; i <= 4; i++ {
-		rs, ths := kt.GetConnMaxes(i)
-		rf := kt.GetRFunc(i, analyze.Cartesian)
-		for i := range rs { rs[i] = rf(ths[i]) }
-	}
+	xs, ys = r.OkPlaneCoords(xs, ys)
+	rs, phis = r.OkPolarCoords(rs, phis)
+	kt := analyze.NewKDETree(rs, phis, 4)
 
-	fRs, fThs, _ := kt.FilterNearby(validRs, validPhis, 4, kt.H() / 2)
+	fRs, fThs, _ := kt.FilterNearby(rs, phis, 4, kt.H() / 2)
 	fXs, fYs := make([]float64, len(fRs)), make([]float64, len(fRs))
 	for i := range fRs {
 		sin, cos := math.Sincos(fThs[i])
@@ -412,16 +385,15 @@ func plotPlane(
 		spXs[i], spYs[i] = r * cos, r * sin
 	}
 
-
 	spXs[len(spXs) - 1], spYs[len(spYs) - 1] = spXs[0], spYs[0]
 	plt.Plot(spXs, spYs, plt.Color("r"), plt.LW(2))
 	plt.Plot(fXs, fYs, "o", plt.Color("r"))
 
-	for i, prf := range prfs {
+	for i, pShell := range pShells {
 		rXs, rYs := make([]float64, 100), make([]float64, 100)
 		for i := range rXs {
 			phi := float64(i) * 2 * math.Pi / float64(len(rXs) - 1)
-			r := prf(h, ring, phi)
+			r := pShell(h, ring, phi)
 			sin, cos := math.Sincos(phi)
 			rXs[i], rYs[i] = r * cos, r * sin
 		}
@@ -451,23 +423,10 @@ func plotPlane(
 	for _, r := range r.Rs {
 		if r > rMax { rMax = r }
 	}
-	//_ = rMax
+
 	plt.XLim(-rMax, +rMax)
 	plt.YLim(-rMax, +rMax)
 	plt.SaveFig(pName)
-
-	_ = tName
-	//f, err := os.Create(tName)
-	//defer f.Close()
-	//if err != nil { panic(err.Error()) }
-
-	//fmt.Fprintf(f, "%6d %6d\n", len(xs), len(fXs))
-	//for i := range xs {
-	//	fmt.Fprintf(f, "%6.3g %6.3g\n", xs[i], ys[i])
-	//}
-	//for i := range fXs {
-	//	fmt.Fprintf(f, "%6.3g %6.3g\n", fXs[i], fYs[i])
-	//}
 }
 
 func setXRange(xLow, xHigh float64) {
@@ -509,30 +468,6 @@ func intersectingSheets(
 		}
 	}
 	return hdOuts, fileOuts
-}
-
-// intersectionTest is kind of a BS function.
-func intersectionTest(
-	hs []los.HaloProfiles, hds []io.SheetHeader,
-	files []string, buf *los.Buffers,
-) {
-	for i, file := range files {
-		hd := &hds[i]
-		fmt.Printf("    Reading %s -> ", path.Base(file))
-		los.WrapHalo(hs, hd)
-
-		t1 := float64(time.Now().UnixNano())
-		buf.ParallelRead(file, hd)
-		t2 := float64(time.Now().UnixNano())
-		for j := range hs {
-			buf.ParallelDensity(&hs[j])
-		}
-		t3 := float64(time.Now().UnixNano())
-
-		fmt.Printf("Setup: %.3g s  Density: %.3g s\n",
-			(t2 - t1) / 1e9, (t3 - t2) / 1e9)
-	}
-	//fmt.Printf("    Rho: %.3g\n", h.Rho(subhalos...))
 }
 
 func printShellStats(shell analyze.Shell, ID, cIdx, samples int) {

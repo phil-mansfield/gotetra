@@ -68,3 +68,25 @@ func (r *RingBuffer) Splashback(
 		r.Zs[i] = r.Rs[i] * float64(ls.Dir[2])
 	}
 }
+
+func (r *RingBuffer) OkPlaneCoords(xs, ys []float64) (okXs, okYs []float64) {
+	xs, ys = xs[:0], ys[:0]
+	for i, ok := range r.Oks {
+		if ok {
+			xs = append(xs, r.PlaneXs[i])
+			ys = append(ys, r.PlaneYs[i])
+		}
+	}
+	return xs, ys
+}
+
+func (r *RingBuffer) OkPolarCoords(rs, phis []float64) (okRs, okPhis []float64) {
+	rs, phis = rs[:0], phis[:0]
+	for i, ok := range r.Oks {
+		if ok {
+			rs = append(rs, r.Rs[i])
+			phis = append(phis, r.Phis[i])
+		}
+	}
+	return rs, phis
+}
