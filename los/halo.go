@@ -3,6 +3,7 @@ package los
 import (
 	"fmt"
 	"math"
+	"math/rand"
 	"runtime"
 
 	"github.com/phil-mansfield/gotetra/render/io"
@@ -258,16 +259,35 @@ func (hp *HaloProfiles) Init(
 ) *HaloProfiles {
 	// We might be able to do better than this.
 	var norms []geom.Vec
-	if rings >= 3 {
+	switch {
+	case rings > 10:
+		solid, _ := geom.NewUniquePlatonicSolid(10)
+		norms = solid.UniqueNormals()
+		for i := 10; i < rings; i++ {
+			v := geom.Vec{
+				float32(rand.Float64() - 0.5),
+				float32(rand.Float64() - 0.5),
+				float32(rand.Float64() - 0.5),
+			}
+			sum := 0.0
+			for _, x := range v { sum += float64(x*x) }
+			for i := range v { v[i] /= float32(math.Sqrt(sum)) }
+			norms = append(norms, v)
+
+		}
+
+	case rings >= 3:
 		solid, ok := geom.NewUniquePlatonicSolid(rings)
 		norms = solid.UniqueNormals()
 		if !ok {
 			panic(fmt.Sprintf("Cannot uniformly space %d rings.", rings))
 		}
-	} else if rings == 1 {
-		norms = []geom.Vec{{0, 0, 1}}
-	} else if rings == 2 {
+	case rings == 2:
 		norms = []geom.Vec{{0, 0, 1}, {0, 1, 0}}
+	case rings == 1:
+		norms = []geom.Vec{{0, 0, 1}}
+	default:
+		panic("Invalid ring number.")
 	}
 
 	hp.rs = make([]haloRing, rings)
