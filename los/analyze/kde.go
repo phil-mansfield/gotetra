@@ -97,7 +97,7 @@ func (kt *KDETree) PlotLevel(level int, opts ...interface{}) {
 	for _, sp := range sps {
 		for j := range vals { vals[j] = sp.Eval(rs[j]) }
 		args := append([]interface{}{rs, vals}, opts...)
-		plt.Plot(args)
+		plt.Plot(args...)
 	}
 }
 
