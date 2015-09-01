@@ -190,10 +190,16 @@ func main() {
 		}
 
 		prfs := make([]func(*los.HaloProfiles, int, float64)float64, len(hRefs))
+		shells := make([]analyze.Shell, len(hRefs))
 		for j := range prfs {
 			pxs, pys := analyze.FilterPoints(rbRefs[j], 4) 
-			_, prf := analyze.PennaPlaneFit(pxs, pys, &hRefs[j], I, J)
-			prfs[j] = prf
+			cs, prf := analyze.PennaPlaneFit(pxs, pys, &hRefs[j], I, J)
+			shell := analyze.Shell(analyze.PennaFunc(cs, I, J, 2))
+			prfs[j], shells[j] = prf, shell
+		}
+
+		for j, shell := range shells {
+			printShellStats(shell, h.ID(), j, 10 * 1000)
 		}
 
 		for j := range totRbs {
@@ -524,4 +530,15 @@ func intersectionTest(
 			(t2 - t1) / 1e9, (t3 - t2) / 1e9)
 	}
 	//fmt.Printf("    Rho: %.3g\n", h.Rho(subhalos...))
+}
+
+func printShellStats(shell analyze.Shell, ID, cIdx, samples int) {
+	c := colors[cIdx]
+	v := shell.Volume(samples)
+	Ix, Iy, Iz := shell.Moments(samples)
+	sa := shell.SurfaceArea(samples)
+	fmt.Printf(
+		"%5d) Vol: %7.4g SA: %7.4g Is: (%7.4g %7.4g %7.4g) (%s)\n",
+		ID, v, sa, Ix, Iy, Iz, c,
+	)
 }
