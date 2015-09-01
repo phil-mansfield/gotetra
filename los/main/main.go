@@ -34,8 +34,8 @@ const (
 	cutoff = 0.0
 
 	rings = 3
-	plotStart = 1000
-	plotCount = 20
+	plotStart = 1001
+	plotCount = 10
 
 	I, J = 5, 5
 	
@@ -52,7 +52,9 @@ var (
 		"DarkViolet", "DeepPink", "DimGray",
 	}
 	refRings = []int{
-		10, 10, 10, 10, 10, 10,
+		//10, 10, 10, 10, 10, 10,
+		//20, 20, 20, 20, 20, 20,
+		50, 50, 50, 50, 50, 50,
 		//3, 4, 6, 10,
 	}
 	refHalos = len(refRings)
@@ -112,6 +114,7 @@ func main() {
 	hds, err := loadHeaders(files, saveDir)
 	if err != nil { log.Fatal(err.Error()) }
 	buf := los.NewBuffers(files[0], &hds[0])
+	fmt.Println("Loaded headers")
 
 	// Find halos, subhalos, etc.
 	xs, ys, zs, ms, rs, err := halo.ReadRockstar(
@@ -119,11 +122,12 @@ func main() {
 	)
 
 	if err != nil { log.Fatal(err.Error()) }
-	fmt.Printf("%d halos read.\n", len(xs))
+	fmt.Println("Read halos")
 	g := halo.NewGrid(finderCells, hds[0].TotalWidth, len(xs))
 	g.Insert(xs, ys, zs)
 	sf := halo.NewSubhaloFinder(g)
 	sf.FindSubhalos(xs, ys, zs, rs, overlapMult)
+	fmt.Println("Found subhalos")
 
 	// Profiling boilerplate.
 	f, err := os.Create("out.pprof")
@@ -145,14 +149,13 @@ func main() {
 	for j := range totRbs {
 		for i := range totRbs[j] {
 			totRbs[j][i].Init(n, bins)
-			fmt.Println(len(totRbs[j][i].Oks))
 		}
 	}
 
-	for i := plotStart; i < plotStart + plotCount; i++ {
-//	for _, i := range []int{
-//		1001, 1006, 1008, 1009, 1014, 1017, 1018, 1033, 1047, 6006, 6030,
-//	} {
+//	for i := plotStart; i < plotStart + plotCount; i++ {
+	for _, i := range []int{
+		1006, 1008, 1009, 1014, 1017, 1018, 1033, 1047, 6006, 6030,
+	} {
 		fmt.Println("Hosts:", sf.HostCount(i), "Subhalos:", sf.SubhaloCount(i))
 		if sf.HostCount(i) > 0 { 
 			fmt.Println("Ignoring halo with host.")
@@ -202,9 +205,9 @@ func main() {
 			printShellStats(shell, h.ID(), j, 10 * 1000)
 		}
 
-		for j := range totRbs {
-			plotKde(totRbs[j], ms[i], h.ID(), j, plotDir)
-		}
+		//for j := range rbRefs {
+		//	plotKde(rbRefs[j], ms[i], h.ID(), j, plotDir)
+		//}
 
 		for ring := 0; ring < rings; ring++ {
 			plotPlane(h, &rbs[ring], ms[i], h.ID(),
@@ -330,7 +333,7 @@ func plotExampleDerivs(
 }
 
 func plotKde(rbs []analyze.RingBuffer, m float64, id, rot int, plotDir string) {
-	fName := path.Join(plotDir, fmt.Sprintf("kde_h%d_rot%d"))
+	fName := path.Join(plotDir, fmt.Sprintf("kde_h%d_rot%d", id, rot))
 
 	plt.Figure(plt.Num(1), plt.FigSize(8, 8))
 	plt.InsertLine("plt.clf()")
