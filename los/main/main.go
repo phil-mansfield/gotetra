@@ -35,7 +35,7 @@ const (
 
 	rings = 3
 	plotStart = 1001
-	plotCount = 10
+	plotCount = 1
 
 	I, J = 5, 5
 	
@@ -152,10 +152,10 @@ func main() {
 		}
 	}
 
-//	for i := plotStart; i < plotStart + plotCount; i++ {
-	for _, i := range []int{
-		1006, 1008, 1009, 1014, 1017, 1018, 1033, 1047, 6006, 6030,
-	} {
+	for i := plotStart; i < plotStart + plotCount; i++ {
+//	for _, i := range []int{
+//		1006, 1008, 1009, 1014, 1017, 1018, 1033, 1047, 6006, 6030,
+//	} {
 		fmt.Println("Hosts:", sf.HostCount(i), "Subhalos:", sf.SubhaloCount(i))
 		if sf.HostCount(i) > 0 { 
 			fmt.Println("Ignoring halo with host.")
