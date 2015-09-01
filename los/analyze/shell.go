@@ -1,10 +1,14 @@
 package analyze
 
 import (
-//	"fmt"
 	"math"
 	"math/rand"
+	
+	"github.com/phil-mansfield/gotetra/los"
 )
+
+type Shell func(phi, theta float64) float64
+type ProjectedShell func(h *los.HaloProfiles, ring int, phi float64) float64
 
 func randomAngle() (phi, theta float64) {
 	u, v := rand.Float64(), rand.Float64()
@@ -16,8 +20,6 @@ func cartesian(phi, theta, r float64) (x, y, z float64) {
 	sinT, cosT := math.Sincos(theta)
 	return r * sinT * cosP, r * sinT * sinP, r * cosT
 }
-
-type Shell func(phi, theta float64) float64
 
 func (s Shell) Volume(samples int) float64 {
 	sum := 0.0
@@ -75,4 +77,33 @@ func (s1 Shell) MaxDiff(s2 Shell, samples int) float64 {
 		if dr > max { max = dr }
 	}
 	return max
+}
+
+func CumulativeShells(
+	xs, ys [][]float64, h los.HaloProfiles,
+	I, J, start, stop, step int,
+) (ringCounts []int, shells []Shell) {
+	n := 0
+	for i := range xs { n += len(xs[i]) }
+	fXs, fYs, fZs := make([]float64, n), make([]float64, n), make([]float64, n)
+
+	idx := 0
+	for i := range xs {
+		for j := range xs[i] {
+			fXs[idx], fYs[idx], fZs[idx] =
+				h.PlaneToVolume(i, xs[i][j], ys[i][j])
+			idx++
+		}
+	}
+
+	shells, ringCounts = []Shell{}, []int{}
+	for rings := start; rings < stop; rings++ {
+		end := 0
+		for _, x := range xs[:rings] { end += len(x) }
+		cs := PennaCoeffs(fXs, fYs, fZs, I, J, 2)
+		shells = append(shells, PennaFunc(cs, I, J, 2))
+		ringCounts = append(ringCounts, rings)
+	}
+
+	return ringCounts, shells
 }
