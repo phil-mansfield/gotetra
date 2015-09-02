@@ -33,8 +33,8 @@ const (
 	cutoff = 0.0
 
 	rings = 3
-	plotStart = 1001
-	plotCount = 1
+	plotStart = 1033
+	plotCount = 5
 
 	I, J = 5, 5
 	
@@ -52,8 +52,12 @@ var (
 	}
 	refRings = []int{
 		//10, 10, 10, 10, 10, 10,
-		//20, 20, 20, 20, 20, 20,
 		50, 50, 50, 50, 50, 50,
+		50, 50, 50, 50, 50, 50,
+		50, 50, 50, 50, 50, 50,
+		50, 50, 50, 50, 50, 50,
+		50, 50, 50, 50, 50, 50,
+		//50, 50, 50, 50, 50, 50,
 		//3, 4, 6, 10,
 	}
 	refHalos = len(refRings)
@@ -255,10 +259,12 @@ func plotExampleProfiles(
 				rawRs, rawRhos, window,
 			)
 			if !ok { continue }
-			plt.Plot(rawRs, smoothRhos, plt.LW(3), plt.C(colors[cIdx]))
+			plt.Plot(rawRs, smoothRhos, plt.LW(3),
+				plt.C(colors[cIdx % len(colors)]))
 			r, ok := analyze.SplashbackRadius(rawRs, smoothRhos, smoothDerivs)
 			if !ok { continue }
-			plt.Plot([]float64{r, r}, []float64{1e5, 0.01}, plt.C(colors[cIdx]))
+			plt.Plot([]float64{r, r}, []float64{1e5, 0.01},
+				plt.C(colors[cIdx % len(colors)]))
 		}
 	}
 
@@ -303,11 +309,13 @@ func plotExampleDerivs(
 			)
 
 			if !ok { continue }
-			plt.Plot(rawRs, smoothDerivs, plt.LW(3), plt.C(colors[cIdx]))
+			plt.Plot(rawRs, smoothDerivs, plt.LW(3),
+				plt.C(colors[cIdx % len(colors)]))
 			r, ok := analyze.SplashbackRadius(rawRs, smoothRhos, smoothDerivs)
 
 			if !ok { continue }
-			plt.Plot([]float64{r, r}, []float64{-20, +10}, plt.C(colors[cIdx]))
+			plt.Plot([]float64{r, r}, []float64{-20, +10},
+				plt.C(colors[cIdx % len(colors)]))
 		}
 	}
 
@@ -340,7 +348,7 @@ func plotKde(rbs []analyze.RingBuffer, m float64, id, rot int, plotDir string) {
 		r := &rbs[i]
 		validRs, validPhis = r.OkPolarCoords(validRs, validPhis)
 		kt := analyze.NewKDETree(validRs, validPhis, 1)
-		kt.PlotLevel(0, plt.C(colors[rot]), plt.LW(3))
+		kt.PlotLevel(0, plt.C(colors[rot % len(colors)]), plt.LW(3))
 	}
 
 	plt.Title(fmt.Sprintf(`Halo %d: $M_{\rm 200c}$ = %.3g $M_\odot/h$`, id, m))
@@ -395,7 +403,7 @@ func plotPlane(
 			rXs[i], rYs[i] = r * cos, r * sin
 		}
 		rXs[len(rXs)-1], rYs[len(rYs)-1] = rXs[0], rYs[0]
-		plt.Plot(rXs, rYs, plt.C(colors[i]), plt.LW(2))
+		plt.Plot(rXs, rYs, plt.C(colors[i % len(colors)]), plt.LW(2))
 	}
 
 	// Plot the colored profiles.
@@ -405,7 +413,7 @@ func plotPlane(
 				if j == i { 
 					plt.Plot(
 						[]float64{r.PlaneXs[i]}, []float64{r.PlaneYs[i]},
-						"o", plt.Color(colors[visIdx]),
+						"o", plt.Color(colors[visIdx % len(colors)]),
 					)
 				}
 			}
@@ -430,10 +438,12 @@ func plotTracers(
 	hs []los.HaloProfiles, rbs [][]analyze.RingBuffer,
 	id, step, samples int, plotDir string,
 ) {
-	fname := path.Join(plotDir, fmt.Sprintf("trace_%dh.png", id))
+	varName := path.Join(plotDir, fmt.Sprintf("trace_h%d_var.png", id))
+	meanName := path.Join(plotDir, fmt.Sprintf("trace_h%d_mean.png", id))
 
 	// Set up the cumulative shell measures.
-	start, stop := 10, len(rbs)
+	start := 10
+	stop := len(rbs[0])
 	shells, ringCounts := [][]analyze.Shell{}, []int{}
 	for ih := range hs {
 		h := &hs[ih]
@@ -448,12 +458,18 @@ func plotTracers(
 	means, stds := analyze.CumulativeTracers(shells, samples)
 	n := len(means)
 
-	vols := make([]float64, n)
-	sas := make([]float64, n)
-	ixs := make([]float64, n)
-	iys := make([]float64, n)
-	izs := make([]float64, n)
+	vols, mvols := make([]float64, n), make([]float64, n)
+	sas, msas := make([]float64, n), make([]float64, n)
+	ixs, mixs := make([]float64, n), make([]float64, n)
+	iys, miys := make([]float64, n), make([]float64, n)
+	izs, mizs := make([]float64, n), make([]float64, n)
 	for i := 0; i < n; i++ {
+		mvols[i] = means[i].Vol
+		msas[i] = means[i].Sa
+		mixs[i] = means[i].Ix
+		miys[i] = means[i].Iy
+		mizs[i] = means[i].Iz
+
 		vols[i] = stds[i].Vol / means[i].Vol
 		sas[i] = stds[i].Sa / means[i].Sa
 		ixs[i] = stds[i].Ix / means[i].Ix
@@ -466,14 +482,34 @@ func plotTracers(
 
 	plt.Plot(ringCounts, vols, "r", plt.LW(3), plt.Label("Volume"))
 	plt.Plot(ringCounts, sas, "b", plt.LW(3), plt.Label("Surface Area"))
-	plt.Plot(ringCounts, ixs, "g", plt.LW(3), plt.Label(`$I_{\rm x}$`))
-	plt.Plot(ringCounts, iys, "purple", plt.LW(3), plt.Label(`$I_{\rm y}$`))
-	plt.Plot(ringCounts, izs, "orange", plt.LW(3), plt.Label(`$I_{\rm z}$`))
+	//plt.Plot(ringCounts, ixs, "g", plt.LW(3), plt.Label(`$I_{\rm x}$`))
+	//plt.Plot(ringCounts, iys, "purple", plt.LW(3), plt.Label(`$I_{\rm y}$`))
+	//plt.Plot(ringCounts, izs, "orange", plt.LW(3), plt.Label(`$I_{\rm z}$`))
+
+	plt.Legend()
 
 	plt.XLabel("Ring Count", plt.FontSize(16))
 	plt.YLabel(`${\rm std}(X) / {\rm mean}(X)$`)
-	
-	plt.SaveFig(fname)
+	plt.YLim(0, nil)
+
+	plt.SaveFig(varName)
+
+	plt.Figure(plt.Num(1), plt.FigSize(8, 8))
+	plt.InsertLine("plt.clf()")
+
+	plt.Plot(ringCounts, mvols, "r", plt.LW(3), plt.Label("Volume"))
+	plt.Plot(ringCounts, msas, "b", plt.LW(3), plt.Label("Surface Area"))
+	//plt.Plot(ringCounts, ixs, "g", plt.LW(3), plt.Label(`$I_{\rm x}$`))
+	//plt.Plot(ringCounts, iys, "purple", plt.LW(3), plt.Label(`$I_{\rm y}$`))
+	//plt.Plot(ringCounts, izs, "orange", plt.LW(3), plt.Label(`$I_{\rm z}$`))
+
+	plt.Legend()
+
+	plt.XLabel("Ring Count", plt.FontSize(16))
+	//plt.YLabel(`${\rm std}(X) / {\rm mean}(X)$`)
+	plt.YLim(0, nil)
+
+	plt.SaveFig(meanName)
 }
 
 func setXRange(xLow, xHigh float64) {
@@ -518,7 +554,7 @@ func intersectingSheets(
 }
 
 func printShellStats(shell analyze.Shell, ID, cIdx, samples int) {
-	c := colors[cIdx]
+	c := colors[cIdx % len(colors)]
 	v := shell.Volume(samples)
 	Ix, Iy, Iz := shell.Moments(samples)
 	sa := shell.SurfaceArea(samples)
