@@ -100,7 +100,7 @@ func CumulativeShells(
 	for rings := start; rings < stop; rings++ {
 		end := 0
 		for _, x := range xs[:rings] { end += len(x) }
-		cs := PennaCoeffs(fXs, fYs, fZs, I, J, 2)
+		cs := PennaCoeffs(fXs[:end], fYs[:end], fZs[:end], I, J, 2)
 		shells = append(shells, PennaFunc(cs, I, J, 2))
 		ringCounts = append(ringCounts, rings)
 	}
