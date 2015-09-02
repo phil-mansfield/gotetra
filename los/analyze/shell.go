@@ -132,7 +132,7 @@ func CumulativeTracers(
 			sums[ir].Iy += iy
 			sums[ir].Iz += iz
 
-			sqrs[ir].Vol += vol
+			sqrs[ir].Vol += vol*vol
 			sqrs[ir].Sa += sa*sa
 			sqrs[ir].Ix += ix*ix
 			sqrs[ir].Iy += iy*iy
@@ -141,7 +141,7 @@ func CumulativeTracers(
 	}
 	
 	means, stds = make([]Tracers, rings), make([]Tracers, rings)
-	n := float64(len(shells[0]))
+	n := float64(len(shells))
 	for i := range means {
 		means[i].Vol = sums[i].Vol / n
 		means[i].Sa =  sums[i].Sa  / n
