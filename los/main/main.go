@@ -33,8 +33,8 @@ const (
 	cutoff = 0.0
 
 	rings = 3
-	plotStart = 1033
-	plotCount = 5
+	plotStart = 1010
+	plotCount = 1
 
 	I, J = 5, 5
 	
@@ -52,12 +52,15 @@ var (
 	}
 	refRings = []int{
 		//10, 10, 10, 10, 10, 10,
-		50, 50, 50, 50, 50, 50,
-		50, 50, 50, 50, 50, 50,
-		50, 50, 50, 50, 50, 50,
-		50, 50, 50, 50, 50, 50,
-		50, 50, 50, 50, 50, 50,
-		//50, 50, 50, 50, 50, 50,
+		//20, 20, 20, 20, 20, 20,
+		//20, 20, 20, 20, 20, 20,
+		//20, 20, 20, 20, 20, 20,
+		//20, 20, 20, 20, 20, 20,
+		//20, 20, 20, 20, 20, 20,
+		40, 40, 40, 40, 40, 40,
+		40, 40, 40, 40, 40, 40,
+		40, 40, 40, 40, 40, 40,
+		40, 40, 40, 40, 40, 40,
 		//3, 4, 6, 10,
 	}
 	refHalos = len(refRings)
@@ -155,7 +158,10 @@ func main() {
 		}
 	}
 
-	for i := plotStart; i < plotStart + plotCount; i++ {
+	//for i := plotStart; i < plotStart + plotCount; i++ {
+	for _, i := range []int{
+		1001, 1006, 1008, 1009, 1014, 1017, 1018, 1033, 1047, 6006, 6030,
+	} {
 		fmt.Println("Loading")
 		if sf.HostCount(i) > 0 { 
 			fmt.Println("Ignoring halo with host.")
@@ -438,8 +444,8 @@ func plotTracers(
 	hs []los.HaloProfiles, rbs [][]analyze.RingBuffer,
 	id, step, samples int, plotDir string,
 ) {
-	varName := path.Join(plotDir, fmt.Sprintf("trace_h%d_var.png", id))
-	meanName := path.Join(plotDir, fmt.Sprintf("trace_h%d_mean.png", id))
+	linName := path.Join(plotDir, fmt.Sprintf("trace_h%d_lin.png", id))
+	logName := path.Join(plotDir, fmt.Sprintf("trace_h%d_log.png", id))
 
 	// Set up the cumulative shell measures.
 	start := 10
@@ -482,9 +488,9 @@ func plotTracers(
 
 	plt.Plot(ringCounts, vols, "r", plt.LW(3), plt.Label("Volume"))
 	plt.Plot(ringCounts, sas, "b", plt.LW(3), plt.Label("Surface Area"))
-	//plt.Plot(ringCounts, ixs, "g", plt.LW(3), plt.Label(`$I_{\rm x}$`))
-	//plt.Plot(ringCounts, iys, "purple", plt.LW(3), plt.Label(`$I_{\rm y}$`))
-	//plt.Plot(ringCounts, izs, "orange", plt.LW(3), plt.Label(`$I_{\rm z}$`))
+	plt.Plot(ringCounts, ixs, "g", plt.LW(3), plt.Label(`$I_{\rm x}$`))
+	plt.Plot(ringCounts, iys, "purple", plt.LW(3), plt.Label(`$I_{\rm y}$`))
+	plt.Plot(ringCounts, izs, "orange", plt.LW(3), plt.Label(`$I_{\rm z}$`))
 
 	plt.Legend()
 
@@ -492,24 +498,26 @@ func plotTracers(
 	plt.YLabel(`${\rm std}(X) / {\rm mean}(X)$`)
 	plt.YLim(0, nil)
 
-	plt.SaveFig(varName)
+	plt.SaveFig(linName)
 
 	plt.Figure(plt.Num(1), plt.FigSize(8, 8))
 	plt.InsertLine("plt.clf()")
 
-	plt.Plot(ringCounts, mvols, "r", plt.LW(3), plt.Label("Volume"))
-	plt.Plot(ringCounts, msas, "b", plt.LW(3), plt.Label("Surface Area"))
-	//plt.Plot(ringCounts, ixs, "g", plt.LW(3), plt.Label(`$I_{\rm x}$`))
-	//plt.Plot(ringCounts, iys, "purple", plt.LW(3), plt.Label(`$I_{\rm y}$`))
-	//plt.Plot(ringCounts, izs, "orange", plt.LW(3), plt.Label(`$I_{\rm z}$`))
+	plt.Plot(ringCounts, vols, "r", plt.LW(3), plt.Label("Volume"))
+	plt.Plot(ringCounts, sas, "b", plt.LW(3), plt.Label("Surface Area"))
+	plt.Plot(ringCounts, ixs, "g", plt.LW(3), plt.Label(`$I_{\rm x}$`))
+	plt.Plot(ringCounts, iys, "purple", plt.LW(3), plt.Label(`$I_{\rm y}$`))
+	plt.Plot(ringCounts, izs, "orange", plt.LW(3), plt.Label(`$I_{\rm z}$`))
 
 	plt.Legend()
 
 	plt.XLabel("Ring Count", plt.FontSize(16))
-	//plt.YLabel(`${\rm std}(X) / {\rm mean}(X)$`)
-	plt.YLim(0, nil)
+	plt.YLabel(`${\rm std}(X) / {\rm mean}(X)$`)
 
-	plt.SaveFig(meanName)
+	plt.XScale("log")
+	plt.YScale("log")
+
+	plt.SaveFig(logName)
 }
 
 func setXRange(xLow, xHigh float64) {
