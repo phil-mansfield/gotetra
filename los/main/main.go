@@ -123,7 +123,7 @@ func main() {
 	fmt.Println("Loaded headers")
 
 	// Find halos, subhalos, etc.
-	xs, ys, zs, ms, rs, err := halo.ReadRockstar(
+	rids, xs, ys, zs, ms, rs, err := halo.ReadRockstar(
 		haloFileName, rType, &hds[0].Cosmo,
 	)
 
@@ -162,7 +162,7 @@ func main() {
 	for _, i := range []int{
 		1001, 1006, 1008, 1009, 1014, 1017, 1018, 1033, 1047, 6006, 6030,
 	} {
-		fmt.Println("Loading")
+		fmt.Printf("Loading %d (%d)\n", i, rids[i])
 		if sf.HostCount(i) > 0 { 
 			fmt.Println("Ignoring halo with host.")
 			continue
