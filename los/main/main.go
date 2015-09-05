@@ -51,16 +51,16 @@ var (
 		"DarkViolet", "DeepPink", "DimGray",
 	}
 	refRings = []int{
-		10, 10, 10, 10, 10, 10,
+		//10, 10, 10, 10, 10, 10,
 		//20, 20, 20, 20, 20, 20,
 		//20, 20, 20, 20, 20, 20,
 		//20, 20, 20, 20, 20, 20,
 		//20, 20, 20, 20, 20, 20,
 		//20, 20, 20, 20, 20, 20,
-		//40, 40, 40, 40, 40, 40,
-		//40, 40, 40, 40, 40, 40,
-		//40, 40, 40, 40, 40, 40,
-		//40, 40, 40, 40, 40, 40,
+		40, 40, 40, 40, 40, 40,
+		40, 40, 40, 40, 40, 40,
+		40, 40, 40, 40, 40, 40,
+		40, 40, 40, 40, 40, 40,
 		//3, 4, 6, 10,
 	}
 	refHalos = len(refRings)
@@ -158,10 +158,19 @@ func main() {
 		}
 	}
 
+	idx := -1
+	for j, rid := range rids {
+		if rid == 166305652 { idx = j }
+	}
+	if idx == -1 {
+		panic("Couldn't find it.")
+	}
+
 	//for i := plotStart; i < plotStart + plotCount; i++ {
-	for _, i := range []int{
-		1001, 1006, 1008, 1009, 1014, 1017, 1018, 1033, 1047, 6006, 6030,
-	} {
+	//for _, i := range []int{
+	//	1001, 1006, 1008, 1009, 1014, 1017, 1018, 1033, 1047, 6006, 6030,
+	//} {
+	for _, i := range []int{idx} {
 		fmt.Printf("Loading %d (%d)\n", i, rids[i])
 		if sf.HostCount(i) > 0 { 
 			fmt.Println("Ignoring halo with host.")
