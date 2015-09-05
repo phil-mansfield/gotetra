@@ -8,15 +8,18 @@ import (
 
 const SCALE_FACTOR_MUL = 100000
 
-func HaloHistories(files []string, ids []int) (hs [][]ct.Halo, steps [][]int) {
-	hs, steps = make([][]ct.Halo, len(ids)), make([][]int, len(ids))
+func HaloHistories(files []string, roots []int) (ids [][]int, steps [][]int) {
+	ids, steps = make([][]int, len(roots)), make([][]int, len(roots))
 
 	for _, file := range files {
+		fmt.Println(file)
 		ct.ReadTree(file)
-		for i, id := range ids {
-			if hs[i] != nil { continue }
+		for i, id := range roots {
+			if ids[i] != nil { continue }
 			if idHs, idSteps, ok := findHalo(id); ok {
-				hs[i], steps[i] = idHs, idSteps
+				ids[i] = make([]int, len(idHs))
+				for j, h := range idHs { ids[i][j] = h.ID() }
+				steps[i] = idSteps
 			}
 		}
 		ct.DeleteTree()
@@ -24,28 +27,24 @@ func HaloHistories(files []string, ids []int) (hs [][]ct.Halo, steps [][]int) {
 
 	for i, idSteps := range steps {
 		if idSteps == nil {
-			panic(fmt.Sprintf("Halo %d not dound in given files.", ids[i]))
+			panic(fmt.Sprintf("Halo %d not found in given files.", roots[i]))
 		}
 	}
 
-	return hs, steps
-}
-
-func scaleStep(scale float64) int {
-	return ct.GetHaloTree().ScaleFactorConv(int(scale * SCALE_FACTOR_MUL))
+	return ids, steps
 }
 
 func findHalo(id int) ([]ct.Halo, []int, bool) {
 	list, ok := ct.FindClosestScale(1)
 	if !ok { panic("HaloTree doesn't contain scale-1 HaloList. Impossible.") }
-	if h, ok := ct.LookupHaloInList(list, id); ok {
+	if h, ok := ct.LookupHaloInList(list, id); !ok {
 		return nil, nil, false
 	} else {
-		hs, steps := []ct.Halo{ h }, []int{ scaleStep(h.Scale()) }
+		hs, steps := []ct.Halo{ h }, []int{ ct.LookupIndex(h.Scale()) }
 		for {
 			h, ok = h.Prog()
 			if !ok { break }
-			hs, steps = append(hs, h), append(steps, scaleStep(h.Scale()))
+			hs, steps = append(hs, h), append(steps, ct.LookupIndex(h.Scale()))
 		}
 		return hs, steps, true
 	}
