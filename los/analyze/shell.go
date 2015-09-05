@@ -79,6 +79,13 @@ func (s1 Shell) MaxDiff(s2 Shell, samples int) float64 {
 	return max
 }
 
+func (s Shell) Contains(x, y, z float64) bool {
+	r := math.Sqrt(x*x + y*y + z*z)
+	phi := math.Atan2(y, x)
+	theta := math.Acos(z / r)
+	return s(phi, theta) > r
+}
+
 func CumulativeShells(
 	xs, ys [][]float64, h *los.HaloProfiles,
 	I, J, start, stop, step int,
