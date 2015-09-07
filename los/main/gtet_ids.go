@@ -53,34 +53,43 @@ func main() {
 		log.Fatalf("Non-positive IDStart %d.")
 	}
 
+	idType, err := parseIDType(idTypeStr)
+	if err != nil { err.Error() }
+	if idType != Rockstar && snap == -1 {
+		log.Fatalf("Must set the Snap flag if using a non-default IDType.")
+	}
+
 	snapNum, err := snapNum()
 	if err != nil {
 		log.Fatalf(
 			"Error encountered when finding rockstar directory: %s",err.Error(),
 		)
-	} else if snap < 0 || snap >= snapNum {
+	} else if (snap < 1 && idType != Rockstar) || snap > snapNum {
 		log.Fatalf("Snap %d is out of bounds for %d snaps.", snap, snapNum)
 	}
 
 	// Get IDs and snapshots
 
 	rawIds := getIDs(idStart, idEnd, flag.Args())
-	idType, err := parseIDType(idTypeStr)
-	if err != nil { err.Error() }
-	if idType != Rockstar && snap == -1 {
-		log.Fatalf("ust set the Snap flag if using a non-default IDType.")
-	}
+	if len(rawIds) == 0 { return }
+
+	fmt.Println(rawIds)
 
 	var ids, snaps []int
 	switch idType {
 	case Rockstar:
-		snaps, err = findSnaps(rawIds)
+		if snap != -1 {
+			snaps = make([]int, len(rawIds))
+			for i := range snaps { snaps[i] = snap }
+		} else {
+			snaps, err = findSnaps(rawIds)
+		}
 		ids = rawIds
 		if err != nil { log.Fatalf(err.Error()) }
 	case M200m:
 		snaps = make([]int, len(rawIds))
 		for i := range snaps { snaps[i] = snap }
-		ids, err = convertSortedIDs(ids, snap)
+		ids, err = convertSortedIDs(rawIds, snap)
 		if err != nil { err.Error() }
 	default:
 		log.Fatal("Unsupported IDType for now. Sorry :3")
@@ -115,7 +124,7 @@ func getIDs(idStart, idEnd int, args []string) []int {
 	for _, str := range args {
 		i, err := strconv.Atoi(str)
 		if err != nil {
-			log.Fatal("Could not parse arg %d: '%s' is not an int.", i + 1, str)
+			log.Fatalf("Could not parse arg %d: '%s' is not an int.", i+1, str)
 		}
 		ids = append(ids, i)
 	}
@@ -132,7 +141,7 @@ func getSnapHaloList(i int) (name string, err error) {
 	rockstarDir := os.Getenv("GTET_ROCKSTAR_DIR")
 	infos, err := ioutil.ReadDir(rockstarDir)
 	if err != nil { return "", err }
-	return path.Join(rockstarDir, infos[i].Name()), nil
+	return path.Join(rockstarDir, infos[i - 1].Name()), nil
 }
 
 func findSnaps(ids []int) ([]int, error) {
