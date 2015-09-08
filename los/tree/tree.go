@@ -12,7 +12,6 @@ func HaloHistories(files []string, roots []int) (ids [][]int, steps [][]int) {
 	ids, steps = make([][]int, len(roots)), make([][]int, len(roots))
 
 	for _, file := range files {
-		fmt.Println(file)
 		ct.ReadTree(file)
 		for i, id := range roots {
 			if ids[i] != nil { continue }
