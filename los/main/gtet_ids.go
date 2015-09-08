@@ -74,8 +74,6 @@ func main() {
 	rawIds := getIDs(idStart, idEnd, flag.Args())
 	if len(rawIds) == 0 { return }
 
-	fmt.Println(rawIds)
-
 	var ids, snaps []int
 	switch idType {
 	case Rockstar:
@@ -154,8 +152,8 @@ func findSnaps(ids []int) ([]int, error) {
 	for _, info := range infos {
 		name := info.Name()
 		n := len(name)
-		if n > 4 && name[:5] == "tree_" && name[n-4:] == ".gtet" {
-			names = append(names, name)
+		if n > 4 && name[:5] == "tree_" && name[n-4:] == ".dat" {
+			names = append(names, path.Join(treeDir, name))
 		}
 	}
 
