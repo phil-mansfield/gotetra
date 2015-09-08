@@ -266,7 +266,7 @@ func printIds(ids []int, snaps []int, isSub []bool, mult int) {
 	rowFmt := fmt.Sprintf("%%%dd %%%dd\n", idWidth, snapWidth)
 	for i := range ids {
 		if isSub[i] { continue }
-		for i := 0; i < mult; i++ {
+		for j := 0; j < mult; j++ {
 			fmt.Printf(rowFmt, ids[i], snaps[i])
 		}
 		if mult > 1 { fmt.Printf(rowFmt, -1, -1) }
