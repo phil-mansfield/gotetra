@@ -14,17 +14,18 @@ func HaloHistories(
 
 	ids, snaps = make([][]int, len(roots)), make([][]int, len(roots))
 
+	foundCount := 0
 	for _, file := range files {
 		ct.ReadTree(file)
+		var ok bool
 		for i, id := range roots {
 			if ids[i] != nil { continue }
-			if idHs, idSnaps, ok := findHalo(id); ok {
-				ids[i] = make([]int, len(idHs))
-				for j, h := range idHs { ids[i][j] = h.ID() }
-				snaps[i] = idSnaps
+			if ids[i], snaps[i], ok = findHistory(id); ok {
+				foundCount++
 			}
 		}
 		ct.DeleteTree()
+		if foundCount == len(roots) { break }
 	}
 
 	for i, idSnaps := range snaps {
@@ -42,27 +43,18 @@ func HaloSnaps(files []string, ids []int) (snaps []int, err error) {
 	snaps = make([]int, len(ids))
 	for i := range snaps { snaps[i] = -1 }
 
-	tree := ct.GetHaloTree()
-
+	foundCount := 0
 	for _, file := range files {
 		ct.ReadTree(file)
 		for i, id := range ids {
-			if snaps[i] != -1 { continue }
-			for j := 0; j < tree.NumLists(); j++ {
-				list := tree.HaloLists(j)
-				if _, ok := ct.LookupHaloInList(list, id); ok {
-					snaps[i] = tree.NumLists() - j
-					break
-				}
+			if snaps[i] != 1 { continue }
+			if _, snap, ok := findHalo(id); ok {
+				snaps[i] = snap
+				foundCount++
 			}
 		}
-
 		ct.DeleteTree()
-		endSearch := true
-		for _, snap := range snaps {
-			if snap == -1 { endSearch = false }
-		}
-		if endSearch { break }
+		if foundCount == len(ids) { break }
 	}
 
 	for i, snap := range snaps {
@@ -76,18 +68,63 @@ func HaloSnaps(files []string, ids []int) (snaps []int, err error) {
 	return snaps, nil
 }
 
-func findHalo(id int) ([]ct.Halo, []int, bool) {
-	list, ok := ct.FindClosestScale(1)
-	if !ok { panic("HaloTree doesn't contain scale-1 HaloList. Impossible.") }
-	if h, ok := ct.LookupHaloInList(list, id); !ok {
-		return nil, nil, false
-	} else {
-		hs, steps := []ct.Halo{ h }, []int{ ct.LookupIndex(h.Scale()) }
-		for {
-			h, ok = h.Prog()
-			if !ok { break }
-			hs, steps = append(hs, h), append(steps, ct.LookupIndex(h.Scale()))
-		}
-		return hs, steps, true
+func findHalo(id int) (ct.Halo, int, bool) {
+	tree := ct.GetHaloTree()
+	for i := 0; i < tree.NumLists(); i++ {
+		list := tree.HaloLists(i)
+		h, ok := ct.LookupHaloInList(list, id)
+		if ok { return h, tree.NumLists() - i, true }
 	}
+	return ct.Halo{}, 0, false
+}
+
+func findHistory(id int) (ids, snaps []int, ok bool) {
+	h, snap, ok := findHalo(id)
+	if !ok { return nil, nil, false }
+	desc, descSnaps := descTree(h)
+	prog, progSnaps := progTree(h)
+
+	ids = combine(reverse(prog), []int{id}, desc)
+	snaps = combine(reverse(progSnaps), []int{snap}, descSnaps)
+	return ids, snaps, true
+}
+
+func descTree(h ct.Halo) (ids, snaps []int) {
+	ids, snaps = []int{}, []int{}
+	var ok bool
+	for {
+		h, ok = h.Desc()
+		if !ok { break }
+		ids = append(ids, h.ID())
+		snaps = append(snaps, ct.LookupIndex(h.Scale()))
+	}
+	return ids, snaps
+}
+
+func progTree(h ct.Halo) (ids, snaps []int) {
+	ids, snaps = []int{}, []int{}
+	var ok bool
+	for {
+		h, ok = h.Prog()
+		if !ok { break }
+		ids = append(ids, h.ID())
+		snaps = append(snaps, ct.LookupIndex(h.Scale()))
+	}
+	return ids, snaps
+}
+
+func reverse(xs []int) []int {
+	out := make([]int, len(xs))
+	for i := range xs {
+		out[i] = xs[len(xs) - 1 - i]
+	}
+	return out
+}
+
+func combine(slices ...[]int) []int {
+	out := []int{}
+	for _, slice := range slices {
+		out = append(out, slice...)
+	}
+	return out
 }
