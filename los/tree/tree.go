@@ -11,6 +11,7 @@ const SCALE_FACTOR_MUL = 100000
 func HaloHistories(
 	files []string, roots []int,
 ) (ids [][]int, snaps [][]int, err error) {
+	if len(roots) == 0 { return [][]int{}, [][]int{}, nil }
 
 	ids, snaps = make([][]int, len(roots)), make([][]int, len(roots))
 
@@ -40,6 +41,8 @@ func HaloHistories(
 }
 
 func HaloSnaps(files []string, ids []int) (snaps []int, err error) {
+	if len(ids) == 0 { return []int{}, nil }
+
 	snaps = make([]int, len(ids))
 	for i := range snaps { snaps[i] = -1 }
 
@@ -47,7 +50,7 @@ func HaloSnaps(files []string, ids []int) (snaps []int, err error) {
 	for _, file := range files {
 		ct.ReadTree(file)
 		for i, id := range ids {
-			if snaps[i] != 1 { continue }
+			if snaps[i] != -1 { continue }
 			if _, snap, ok := findHalo(id); ok {
 				snaps[i] = snap
 				foundCount++
@@ -64,7 +67,6 @@ func HaloSnaps(files []string, ids []int) (snaps []int, err error) {
 			)
 		}
 	}
-
 	return snaps, nil
 }
 
@@ -73,7 +75,9 @@ func findHalo(id int) (ct.Halo, int, bool) {
 	for i := 0; i < tree.NumLists(); i++ {
 		list := tree.HaloLists(i)
 		h, ok := ct.LookupHaloInList(list, id)
-		if ok { return h, tree.NumLists() - i, true }
+		if ok {
+			return h, tree.NumLists() - i, true
+		}
 	}
 	return ct.Halo{}, 0, false
 }
@@ -92,11 +96,12 @@ func findHistory(id int) (ids, snaps []int, ok bool) {
 func descTree(h ct.Halo) (ids, snaps []int) {
 	ids, snaps = []int{}, []int{}
 	var ok bool
+	numLists := ct.GetHaloTree().NumLists()
 	for {
 		h, ok = h.Desc()
 		if !ok { break }
 		ids = append(ids, h.ID())
-		snaps = append(snaps, ct.LookupIndex(h.Scale()))
+		snaps = append(snaps, numLists - ct.LookupIndex(h.Scale()))
 	}
 	return ids, snaps
 }
@@ -104,11 +109,12 @@ func descTree(h ct.Halo) (ids, snaps []int) {
 func progTree(h ct.Halo) (ids, snaps []int) {
 	ids, snaps = []int{}, []int{}
 	var ok bool
+	numLists := ct.GetHaloTree().NumLists()
 	for {
 		h, ok = h.Prog()
 		if !ok { break }
 		ids = append(ids, h.ID())
-		snaps = append(snaps, ct.LookupIndex(h.Scale()))
+		snaps = append(snaps, numLists - ct.LookupIndex(h.Scale()))
 	}
 	return ids, snaps
 }
