@@ -35,12 +35,13 @@ func main() {
 	// Parse command line
 	var (
 		idTypeStr string
-		idStart, idEnd, snap int
+		idStart, idEnd, snap, mult int
 		allowSubhalos bool
 	)
 
 	flag.StringVar(&idTypeStr, "IDType", "Rockstar",
 		"[Rockstar | M500c | M200c | M200m]")
+	flag.IntVar(&mult, "Mult", 1, "Number of times to print each ID.")
 	flag.IntVar(&snap, "Snap", -1, "The snapshot number.")
 	flag.IntVar(&idStart, "IDStart", -1, "ID start range (inclusive).")
 	flag.IntVar(&idEnd, "IDEnd", -1, "ID stop range (exclusive)")
@@ -53,6 +54,8 @@ func main() {
 	} else if idStart != idEnd && idStart <= 0 {
 		log.Fatalf("Non-positive IDStart %d.")
 	}
+
+	if mult <= 0 { log.Fatal("Mult must be positive.") }
 
 	idType, err := parseIDType(idTypeStr)
 	if err != nil { err.Error() }
@@ -104,7 +107,7 @@ func main() {
 	}
 
 	// Output
-	printIds(ids, snaps, isSub)
+	printIds(ids, snaps, isSub, mult)
 }
 
 func parseIDType(str string) (IDType, error) {
@@ -249,9 +252,9 @@ func findSubs(rawIDs, snaps []int) ([]bool, error) {
 	return isSub, nil
 }
 
-func printIds(ids []int, snaps []int, isSub []bool) {
+func printIds(ids []int, snaps []int, isSub []bool, mult int) {
 	// Find the maximum width of each column.
-	idWidth, snapWidth := 0, 0
+	idWidth, snapWidth := 2, 2
 	for i := range ids {
 		if isSub[i] { continue }
 		iWidth := len(fmt.Sprintf("%d", ids[i]))
@@ -263,6 +266,9 @@ func printIds(ids []int, snaps []int, isSub []bool) {
 	rowFmt := fmt.Sprintf("%%%dd %%%dd\n", idWidth, snapWidth)
 	for i := range ids {
 		if isSub[i] { continue }
-		fmt.Printf(rowFmt, ids[i], snaps[i])
+		for i := 0; i < mult; i++ {
+			fmt.Printf(rowFmt, ids[i], snaps[i])
+		}
+		if mult > 1 { fmt.Printf(rowFmt, -1, -1) }
 	}
 }
