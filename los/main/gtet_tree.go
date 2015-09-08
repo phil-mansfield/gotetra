@@ -30,10 +30,11 @@ func main() {
 
 	// Calculate and print trees.
 	inputIDs := append(cmdIDs, stdinIDs...)
-	treeFiles, err := treeFiles()
 	if err != nil { log.Fatal(err.Error()) }
 
-	idSets, snapSets, err := tree.HaloHistories(treeFiles, inputIDs)
+	trees, err := treeFiles()
+	if err != nil { log.Fatal(err.Error()) }
+	idSets, snapSets, err := tree.HaloHistories(trees, inputIDs)
 	if err != nil { log.Fatal(err.Error())}
 
 	ids, snaps := []int{}, []int{}
@@ -41,8 +42,10 @@ func main() {
 		ids = append(ids, idSets[i]...)
 		snaps = append(snaps, snapSets[i]...)
 		// Sentinels:
-		ids = append(ids, -1)
-		snaps = append(snaps, -1)
+		if i != len(idSets) - 1 {
+			ids = append(ids, -1)
+			snaps = append(snaps, -1)
+		}
 	}
 
 	printIDs(ids, snaps)
@@ -64,7 +67,7 @@ func parseCmdArgs(args []string) ([]int, error) {
 
 func parseStdinArgs(args []string) ([]int, error) {
 	IDs := make([]int, 0, len(args))
-	for i := range IDs {
+	for i := range args {
 		tokens := strings.Split(args[i], " ")
 		// This should be impossible, but whatever.
 		if len(tokens) == 0 { continue }
@@ -101,14 +104,11 @@ func treeFiles() ([]string, error) {
 }
 
 func readStdin() ([]string, error) {
-	info, err := os.Stdin.Stat()
+	bs, err := ioutil.ReadAll(os.Stdin)
 	if err != nil {
 		return nil, fmt.Errorf("Problem reading stdin: %s", err)
 	}
-	bs := make([]byte, info.Size())
-	os.Stdin.Read(bs)
 	text := string(bs)
-
 	lines := strings.Split(text, "\n")
 	fullLines := make([]string, 0, len(lines))
 	for _, line := range lines {
