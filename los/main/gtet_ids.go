@@ -12,6 +12,7 @@ import (
 
 	"github.com/phil-mansfield/gotetra/render/halo"
 	"github.com/phil-mansfield/gotetra/render/io"
+	"github.com/phil-mansfield/gotetra/los/tree"
 )
 
 type IDType int
@@ -145,9 +146,22 @@ func getSnapHaloList(i int) (name string, err error) {
 }
 
 func findSnaps(ids []int) ([]int, error) {
-	panic("NYI")
-	return ids, nil
+	treeDir := os.Getenv("GTET_TREE_DIR")
+	infos, err := ioutil.ReadDir(treeDir)
+	if err != nil { return nil, err }
+
+	names := []string{}
+	for _, info := range infos {
+		name := info.Name()
+		n := len(name)
+		if n > 4 && name[:5] == "tree_" && name[n-4:] == ".gtet" {
+			names = append(names, name)
+		}
+	}
+
+	return tree.HaloSnaps(names, ids)
 }
+
 
 // This funciton has side effects :(
 func convertSortedIDs(
