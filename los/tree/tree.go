@@ -42,17 +42,27 @@ func HaloSnaps(files []string, ids []int) (snaps []int, err error) {
 	snaps = make([]int, len(ids))
 	for i := range snaps { snaps[i] = -1 }
 
-	numLists := ct.GetHaloTree().NumLists()
+	tree := ct.GetHaloTree()
 
 	for _, file := range files {
 		ct.ReadTree(file)
 		for i, id := range ids {
 			if snaps[i] != -1 { continue }
-			if h, ok := ct.LookupHaloInList(ct.GetAllHalos(), id); ok {
-				snaps[i] = numLists - ct.LookupIndex(h.Scale()) + 1
+			for j := 0; j < tree.NumLists(); j++ {
+				list := tree.HaloLists(j)
+				if _, ok := ct.LookupHaloInList(list, id); ok {
+					snaps[i] = tree.NumLists() - j
+					break
+				}
 			}
 		}
+
 		ct.DeleteTree()
+		endSearch := true
+		for _, snap := range snaps {
+			if snap == -1 { endSearch = false }
+		}
+		if endSearch { break }
 	}
 
 	for i, snap := range snaps {
