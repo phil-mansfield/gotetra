@@ -39,7 +39,8 @@ func main() {
 	snapBins, idxBins := binBySnap(snaps, ids)
 	buf := make([]analyze.RingBuffer, p.Rings)
 	for i := range buf { buf[i].Init(p.Spokes, p.RBins) }
-	
+
+	var losBuf *los.Buffers
 	for snap, snapIDs := range snapBins {
 		idxs := idxBins[snap]
 
@@ -48,7 +49,7 @@ func main() {
 		// Bin halos
 		hds, files, err := readHeaders(snap)
 		if err != nil { err.Error() }
-		losBuf := los.NewBuffers(files[0], &hds[0])
+		if losBuf == nil { losBuf = los.NewBuffers(files[0], &hds[0]) }
 		halos := createHalos(&hds[0], snapIDs, p)
 		intrBins := binIntersections(hds, halos)
 		
