@@ -133,12 +133,18 @@ func ReadRockstarVals(
 	cols, err := table.ReadTable(file, colIdxs, nil)
 	if err != nil { return nil, nil, err }
 
+	ids = make([]int, len(cols[0]))
 	for i := range cols[0] {
 		ids[i] = int(cols[0][i])
 	}
-	return ids, cols[1:], nil
+
+	if len(cols) == 1 {
+		return ids, [][]float64{}, nil
+	} else {
+		return ids, cols[1:], nil
+	}
 }
 
 func init() {
-	if valNum != 61 { panic("Internal gotetra setup error.") }
+	if valNum != 62 { panic("Internal gotetra setup error.") }
 }
