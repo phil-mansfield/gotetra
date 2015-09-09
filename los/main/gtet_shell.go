@@ -146,7 +146,7 @@ func parseStdin() (ids, snaps []int, err error) {
 		snaps = append(snaps, snap)
 	}
 
-	return ids, snaps, err
+	return ids, snaps, nil
 }
 	
 func stdinLines() ([]string, error) {
@@ -204,18 +204,6 @@ func readHeaders(snap int) ([]io.SheetHeader, []string, error) {
 		return hds, files, nil
 	}
 	
-}
-
-func dirContents(dir string) ([]string, error) {
-	infos, err := ioutil.ReadDir(dir)
-	if err != nil { return nil, err }
-	
-	files := make([]string, len(infos))
-	for i := range infos {
-		files[i] = path.Join(dir, infos[i].Name())
-	}
-
-	return files, nil
 }
 
 func sheetNum(snap int) (int, error) {
