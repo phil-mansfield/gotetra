@@ -6,14 +6,19 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math"
+	"math/rand"
 	"os"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/phil-mansfield/gotetra/los"
+	"github.com/phil-mansfield/gotetra/los/geom"
 	"github.com/phil-mansfield/gotetra/los/analyze"
 	"github.com/phil-mansfield/gotetra/render/io"
+	"github.com/phil-mansfield/gotetra/render/halo"
 )
 
 type Params struct {
@@ -50,7 +55,8 @@ func main() {
 		hds, files, err := readHeaders(snap)
 		if err != nil { err.Error() }
 		if losBuf == nil { losBuf = los.NewBuffers(files[0], &hds[0]) }
-		halos := createHalos(&hds[0], snapIDs, p)
+		halos, err := createHalos(snap, &hds[0], snapIDs, p)
+		if err != nil { log.Fatal(err.Error()) }
 		intrBins := binIntersections(hds, halos)
 		
 		// Add densities. Done header by header to limit I/O time.
@@ -62,6 +68,7 @@ func main() {
 			)
 		}
 		
+		// Calculate Penna coefficients.
 		for i := range halos {
 			coeffs[idxs[i]] = calcCoeffs(&halos[i], buf, p)
 		}
@@ -233,8 +240,60 @@ func readHeadersFromSheet(snap int) ([]io.SheetHeader, []string, error) {
 	return hds, files, nil
 }
 
-func createHalos(hd *io.SheetHeader, ids []int, p *Params) []los.HaloProfiles {
-	return nil
+func createHalos(
+	snap int, hd *io.SheetHeader, ids []int, p *Params,
+) ([]los.HaloProfiles, error) {
+	// Read coordinates, radii and IDs of halos.
+	rockstarDir := os.Getenv("GTET_ROCKSTAR_DIR")
+	if rockstarDir == "" {
+		return nil, fmt.Errorf("$GTET_ROCKSTAR_DIR not set.")
+	} 
+
+	files, err := dirContents(rockstarDir)
+	if err != nil { return nil, err }
+	file := files[snap]
+
+	ids, vals, err := halo.ReadRockstarVals(
+		file, &hd.Cosmo, halo.X, halo.Y, halo.Z, halo.M200b,
+	)
+	if err != nil { return nil, err }
+
+	xs, ys, zs, ms := vals[1], vals[2], vals[3], vals[4]
+	halo.R200m.Radius(&hd.Cosmo, ms, ms)
+	rs := ms
+
+	// Initialize halos.
+	halos := make([]los.HaloProfiles, len(ids))
+	seenIDs := make(map[int]bool)
+	for i, id := range ids {
+		idx := sort.SearchInts(ids, id)
+		if ids[idx] !=  id {
+			return nil, fmt.Errorf("Halo ID %d not in halo catalog.", id)
+		}
+		
+		origin := &geom.Vec{
+			float32(xs[idx]), float32(ys[idx]), float32(zs[idx]),
+		}
+
+		// If we've already seen a halo once, randomize its orientation.
+		if seenIDs[id] {
+			halos[i].Init(
+				id, p.Rings, origin, rs[idx] * p.MinMult, rs[idx] * p.MaxMult,
+				p.RBins, p.Spokes, hd.TotalWidth, los.Log(true),
+				los.Rotate(float32(2 * math.Pi * rand.Float64()),
+                    float32(2 * math.Pi * rand.Float64()),
+                    float32(2 * math.Pi * rand.Float64())),
+			)
+		} else {
+			seenIDs[id] = true
+			halos[i].Init(
+				id, p.Rings, origin, rs[idx] * p.MinMult, rs[idx] * p.MaxMult,
+				p.RBins, p.Spokes, hd.TotalWidth, los.Log(true),
+			)
+		}
+	}
+
+	panic("NYI")
 }
 
 func binIntersections(
