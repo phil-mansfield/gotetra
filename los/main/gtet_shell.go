@@ -222,7 +222,16 @@ func createHalos(hd *io.SheetHeader, ids []int, p *Params) []los.HaloProfiles {
 func binIntersections(
 	hds []io.SheetHeader, halos []los.HaloProfiles,
 ) [][]*los.HaloProfiles {
-	return nil
+
+	bins := make([][]*los.HaloProfiles, len(hds))
+	for i := range hds {
+		for hi := range halos {
+			if (&halos[hi]).SheetIntersect(&hds[i]) {
+				bins[i] = append(bins[i], &halos[hi])
+			}
+		}
+	}
+	return bins
 }
 
 func addSheet(
