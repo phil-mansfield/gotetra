@@ -154,11 +154,11 @@ func unpackTetra(idxs *rGeom.TetraIdxs, xs []rGeom.Vec, t *geom.Tetra) {
 
 // WrapHalo updates the coordinates of a slice of HaloProfiles so that they
 // as close to the given sheet as periodic boundary conditions will allow.
-func WrapHalo(hps []HaloProfiles, hd *io.SheetHeader) {
+func WrapHalo(hps []*HaloProfiles, hd *io.SheetHeader) {
 	tw := float32(hd.TotalWidth)
 	newC := &geom.Vec{}
 	for i := range hps {
-		h := &hps[i]
+		h := hps[i]
 		for j := 0; j < 3; j++ {
 			if h.cCopy[j] + h.R < hd.Origin[j] {
 				newC[j] = h.cCopy[j] + tw

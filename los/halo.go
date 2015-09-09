@@ -522,12 +522,21 @@ func LoadDensities(
 	hs []HaloProfiles, hds []io.SheetHeader,
 	files []string, buf *Buffers,
 ) {
+	ptrs := make([]*HaloProfiles, len(hs))
+	for i := range ptrs { ptrs[i] = &hs[i] }
+	LoadPtrDensities(ptrs, hds, files, buf)
+}
+
+func LoadPtrDensities(
+	hs []*HaloProfiles, hds []io.SheetHeader,
+	files []string, buf *Buffers,
+) {
 	for i, file := range files {
 		hd := &hds[i]
 		WrapHalo(hs, hd)
 		buf.ParallelRead(file, hd)
 		for j := range hs {
-			buf.ParallelDensity(&hs[j])
+			buf.ParallelDensity(hs[j])
 		}
 	}
 }
