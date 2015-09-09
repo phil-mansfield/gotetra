@@ -353,3 +353,15 @@ func binBySnap(snaps, ids []int) (snapBins, idxBins map[int][]int) {
 	}
 	return snapBins, idxBins
 }
+
+func dirContents(dir string) ([]string, error) {
+	infos, err := ioutil.ReadDir(dir)
+	if err != nil { return nil, err }
+	
+	files := make([]string, len(infos))
+	for i := range infos {
+		files[i] = path.Join(dir, infos[i].Name())
+	}
+
+	return files, nil
+}
