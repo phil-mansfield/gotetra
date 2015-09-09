@@ -39,28 +39,33 @@ func main() {
 	snapBins, idxBins := binBySnap(snaps, ids)
 	buf := make([]analyze.RingBuffer, p.Rings)
 	for i := range buf { buf[i].Init(p.Spokes, p.RBins) }
-
+	
 	for snap, snapIDs := range snapBins {
 		idxs := idxBins[snap]
 
 		if snap == -1 { continue }
 
 		// Bin halos
-		hds, err := readHeaders(snap)
+		hds, files, err := readHeaders(snap)
 		if err != nil { err.Error() }
+		losBuf := los.NewBuffers(files[0], &hds[0])
 		halos := createHalos(&hds[0], snapIDs, p)
 		intrBins := binIntersections(hds, halos)
-
+		
 		// Add densities. Done header by header to limit I/O time.
 		for i := range hds {
-			addSheet(i, &hds[i], intrBins[i], p)
+			hdContainer := []io.SheetHeader{hds[i]}
+			fileContainer := []string{files[i]}
+			los.LoadPtrDensities(
+				intrBins[i], hdContainer, fileContainer, losBuf,
+			)
 		}
-
+		
 		for i := range halos {
 			coeffs[idxs[i]] = calcCoeffs(&halos[i], buf, p)
 		}
 	}
-
+	
 	printCoeffs(ids, snaps, coeffs)
 }
 
@@ -135,9 +140,9 @@ func parseStdin() (ids, snaps []int, err error) {
 
 	return ids, snaps, err
 }
-
+	
 func stdinLines() ([]string, error) {
-	bs, err := ioutil.ReadAll(os.Stdin)
+		bs, err := ioutil.ReadAll(os.Stdin)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"Error reading stdin: %s.", err.Error(),
@@ -148,41 +153,47 @@ func stdinLines() ([]string, error) {
 	return strings.Split(text, "\n"), nil
 }
 
-func readHeaders(snap int) ([]io.SheetHeader, error) {
+func readHeaders(snap int) ([]io.SheetHeader, []string, error) {
 	memoDir := os.Getenv("GTET_MEMO_DIR")
 	if memoDir == "" {
 		// You don't want to memoize? Fine. Deal with the consequences.
 		return readHeadersFromSheet(snap)
 	}
 	if _, err := os.Stat(memoDir); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	memoFile := path.Join(memoDir, fmt.Sprintf("hd_snap%d.dat", snap))
 
 	if _, err := os.Stat(memoFile); err != nil {
 		// File not written yet.
-		hds, err := readHeadersFromSheet(snap)
-		if err != nil { return nil, err }
+		hds, files, err := readHeadersFromSheet(snap)
+		if err != nil { return nil, nil, err }
 		
         f, err := os.Create(memoFile)
-        if err != nil { return nil, err }
+        if err != nil { return nil, nil, err }
         defer f.Close()
         binary.Write(f, binary.LittleEndian, hds)
 
-		return hds, nil
+		return hds, files, nil
 	} else {
 		// File exists: read from it instead.
 
 		f, err := os.Open(memoFile)
-        if err != nil { return nil, err }
+        if err != nil { return nil, nil, err }
         defer f.Close()
 		
 		n, err := sheetNum(snap)
-		if err != nil { return nil, err }
+		if err != nil { return nil, nil, err }
 		hds := make([]io.SheetHeader, n)
         binary.Read(f, binary.LittleEndian, hds) 
-		return hds, nil
+
+		gtetFmt := os.Getenv("GTET_FMT")
+		dir := fmt.Sprintf(gtetFmt, snap)
+		files, err := dirContents(dir)
+		if err != nil { return nil, nil, err }
+
+		return hds, files, nil
 	}
 	
 }
@@ -207,17 +218,18 @@ func sheetNum(snap int) (int, error) {
 	return len(files), nil
 }
 
-func readHeadersFromSheet(snap int) ([]io.SheetHeader, error) {
+func readHeadersFromSheet(snap int) ([]io.SheetHeader, []string, error) {
 	gtetFmt := os.Getenv("GTET_FMT")
 	dir := fmt.Sprintf(gtetFmt, snap)
 	files, err := dirContents(dir)
+	if err != nil { return nil, nil, err }
+
 	hds := make([]io.SheetHeader, len(files))
-	if err != nil { return nil, err }
 	for i := range files {
 		err = io.ReadSheetHeaderAt(files[i], &hds[i])
-		if err != nil { return nil, err }
+		if err != nil { return nil, nil, err }
 	}
-	return hds, nil
+	return hds, files, nil
 }
 
 func createHalos(hd *io.SheetHeader, ids []int, p *Params) []los.HaloProfiles {
@@ -237,11 +249,6 @@ func binIntersections(
 		}
 	}
 	return bins
-}
-
-func addSheet(
-	i int, hd *io.SheetHeader, halos []*los.HaloProfiles, p *Params,
-) {
 }
 
 func calcCoeffs(
