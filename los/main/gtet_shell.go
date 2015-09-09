@@ -1,11 +1,13 @@
 package main
 
 import (
+	"encoding/binary"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 
@@ -142,7 +144,75 @@ func stdinLines() ([]string, error) {
 }
 
 func readHeaders(snap int) ([]io.SheetHeader, error) {
-	return nil, nil
+	memoDir := os.Getenv("GTET_MEMO_DIR")
+	if memoDir == "" {
+		// You don't want to memoize? Fine. Deal with the consequences.
+		return readHeadersFromSheet(snap)
+	}
+	if _, err := os.Stat(memoDir); err != nil {
+		return nil, err
+	}
+
+	memoFile := path.Join(memoDir, fmt.Sprintf("hd_snap%d.dat", snap))
+
+	if _, err := os.Stat(memoFile); err != nil {
+		// File not written yet.
+		hds, err := readHeadersFromSheet(snap)
+		if err != nil { return nil, err }
+		
+        f, err := os.Create(memoFile)
+        if err != nil { return nil, err }
+        defer f.Close()
+        binary.Write(f, binary.LittleEndian, hds)
+
+		return hds, nil
+	} else {
+		// File exists: read from it instead.
+
+		f, err := os.Open(memoFile)
+        if err != nil { return nil, err }
+        defer f.Close()
+		
+		n, err := sheetNum(snap)
+		if err != nil { return nil, err }
+		hds := make([]io.SheetHeader, n)
+        binary.Read(f, binary.LittleEndian, hds) 
+		return hds, nil
+	}
+	
+}
+
+func dirContents(dir string) ([]string, error) {
+	infos, err := ioutil.ReadDir(dir)
+	if err != nil { return nil, err }
+	
+	files := make([]string, len(infos))
+	for i := range infos {
+		files[i] = path.Join(dir, infos[i].Name())
+	}
+
+	return files, nil
+}
+
+func sheetNum(snap int) (int, error) {
+	gtetFmt := os.Getenv("GTET_FMT")
+	dir := fmt.Sprintf(gtetFmt, snap)
+	files, err := dirContents(dir)
+	if err != nil { return 0, err }
+	return len(files), nil
+}
+
+func readHeadersFromSheet(snap int) ([]io.SheetHeader, error) {
+	gtetFmt := os.Getenv("GTET_FMT")
+	dir := fmt.Sprintf(gtetFmt, snap)
+	files, err := dirContents(dir)
+	hds := make([]io.SheetHeader, len(files))
+	if err != nil { return nil, err }
+	for i := range files {
+		err = io.ReadSheetHeaderAt(files[i], &hds[i])
+		if err != nil { return nil, err }
+	}
+	return hds, nil
 }
 
 func createHalos(hd *io.SheetHeader, ids []int, p *Params) []los.HaloProfiles {
