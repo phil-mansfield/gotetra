@@ -10,7 +10,7 @@ import (
 
 type Radius int
 const (
-	RVir Radius = iota
+	RVirial Radius = iota
 	R200c
 	R200m
 	R500c
@@ -22,13 +22,13 @@ func RadiusFromString(s string) (r Radius, ok bool) {
 	case "200m", "r200m":
 		return R200m, true
 	case "vir", "rvir":
-		return RVir, true
+		return RVirial, true
 	case "200c", "r200c":
 		return R200c, true
 	case "500c", "r500c":
 		return R500c, true
 	}
-	return RVir, false
+	return RVirial, false
 }
 
 func (r Radius) String() string {
@@ -39,7 +39,7 @@ func (r Radius) String() string {
 		return "R200c"
 	case R500c:
 		return "R500c"
-	case RVir:
+	case RVirial:
 		return "RVir"
 	}
 	panic(":3")
@@ -50,7 +50,7 @@ func (r Radius) Radius(c *io.CosmologyHeader, ms, out []float64) {
 	h0 := c.H100 * 100
 
 	switch r {
-	case RVir:
+	case RVirial:
 		rho = 177.653 * cosmo.RhoCritical(h0, c.OmegaM, c.OmegaL, c.Z)
 	case R200c:
 		rho = 200 * cosmo.RhoCritical(h0, c.OmegaM, c.OmegaL, c.Z)
@@ -73,7 +73,7 @@ func (r Radius) Mass(c *io.CosmologyHeader, rs, out []float64) {
 	h0 := c.H100 * 100
 
 	switch r {
-	case RVir:
+	case RVirial:
 		rho = 177.653 * cosmo.RhoCritical(h0, c.OmegaM, c.OmegaL, c.Z)
 	case R200c:
 		rho = 200 * cosmo.RhoCritical(h0, c.OmegaM, c.OmegaL, c.Z)
@@ -94,7 +94,7 @@ func (r Radius) Mass(c *io.CosmologyHeader, rs, out []float64) {
 
 func (r Radius) RockstarColumn() int {
 	switch r {
-	case RVir:
+	case RVirial:
 		return 11
 	case R200c:
 		return 37
@@ -108,7 +108,7 @@ func (r Radius) RockstarColumn() int {
 
 func (r Radius) RockstarMass() bool {
 	switch r {
-	case RVir:
+	case RVirial:
 		return false
 	case R200c, R200m, R500c:
 		return true

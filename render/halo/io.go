@@ -55,3 +55,90 @@ func ReadRockstar(
 	sort.Sort(sort.Reverse(&halos{ rids, xs, ys, zs, ms, rs }))
 	return rids, xs, ys, zs, ms, rs, nil
 }
+
+type Val int
+const (
+	Scale Val = iota
+	ID
+	DescScale
+	DescID
+	NumProg
+	PID
+	UPID
+	DescPID
+	Phantom
+	SAMMVir
+	MVir
+	RVir
+	Rs
+	Vrms
+	MMP
+	ScaleOfLastMMP
+	VMax
+	X
+	Y
+	Z
+	Vx
+	Vy
+	Vz
+	Jx
+	Jy
+	Jz
+	Spin
+	BreadthFirstID
+	DepthFirstID
+	TreeRootID
+	OrigHaloID
+	SnapNum
+	NextCoprogenitorDepthFirstID
+	LastProgenitorDepthFirstID
+	RsKylpin
+	MVirAll
+	M200b
+	M200c
+	M500c
+	M2500c
+	XOff
+	Voff
+	SpinBullock
+	BToA
+	CToA
+	Ax
+	Ay
+	Az
+	BToA500c
+	CToA500c
+	Ax500c
+	Ay500c
+	Az500c
+	TU
+	MAcc
+	MPeak
+	VAcc
+	VPeak
+	HalfmassScale
+	AccRateInst
+	AccRate100Myr
+	AccRateTdyn
+	valNum
+)
+
+func ReadRockstarVals(
+	file string, cosmo *io.CosmologyHeader, valFlags ...Val,
+) (ids []int, vals[][]float64, err error) {
+	colIdxs := []int{ int(ID) }
+	for _, val := range valFlags {
+		colIdxs = append(colIdxs, int(val))
+	}
+	cols, err := table.ReadTable(file, colIdxs, nil)
+	if err != nil { return nil, nil, err }
+
+	for i := range cols[0] {
+		ids[i] = int(cols[0][i])
+	}
+	return ids, cols[1:], nil
+}
+
+func init() {
+	if valNum != 61 { panic("Internal gotetra setup error.") }
+}
