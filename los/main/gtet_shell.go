@@ -22,7 +22,8 @@ type Params struct {
 	MaxMult, MinMult float64
 
 	// Splashback params
-	Order, Window int
+	Order, Window, Levels int
+	Cutoff float64
 }
 
 func main() {
@@ -81,6 +82,10 @@ func parseCmd() *Params {
 		"Order of the shell fitting function.")
 	flag.IntVar(&p.Window, "Window", 121,
 		"Number of bins within smoothign window. Must be odd.")
+	flag.IntVar(&p.Levels, "Levels", 4,
+		"The number of recurve max-finding levels used by the 2D edge finder.")
+	flag.Float64Var(&p.Cutoff, "Cutoff", 0.0,
+		"The shallowest slope that can be considered a splashback point.")
 	flag.Parse()
 	return p
 }
@@ -242,7 +247,13 @@ func addSheet(
 func calcCoeffs(
 	halo *los.HaloProfiles, buf []analyze.RingBuffer, p *Params,
 ) []float64 {
-	return []float64{1, 2, 3, 4, 5}
+	for i := range buf {
+		buf[i].Clear()
+		buf[i].Splashback(halo, i, p.Window, p.Cutoff)
+	}
+	pxs, pys := analyze.FilterPoints(buf, p.Levels)
+	cs, _ := analyze.PennaVolumeFit(pxs, pys, halo, p.Order, p.Order)
+	return cs
 }
 
 func printCoeffs(ids, snaps []int, coeffs [][]float64) {
