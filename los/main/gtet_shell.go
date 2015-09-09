@@ -29,6 +29,8 @@ func main() {
 	ids, snaps, err := parseStdin()
 	if err != nil { log.Fatal(err.Error()) }
 
+	if len(ids) == 0 { return }
+
 	// Compute coefficients.
 	coeffs := make([][]float64, len(ids))
 	snapBins, idxBins := binBySnap(snaps, ids)
@@ -110,7 +112,9 @@ func parseStdin() (ids, snaps []int, err error) {
 					i + 1, tokens[1],
 				)
 			} 
-
+		case 1:
+			if tokens[0] == "" { continue }
+			fallthrough
 		default:
 			return nil, nil, fmt.Errorf(
 				"Line %d of stdin has %d tokens, but 2 are required.",
@@ -138,33 +142,60 @@ func stdinLines() ([]string, error) {
 }
 
 func readHeaders(snap int) ([]io.SheetHeader, error) {
-	panic("NYI")
+	return nil, nil
 }
 
 func createHalos(hd *io.SheetHeader, ids []int, p *Params) []los.HaloProfiles {
-	panic("NYI")
+	return nil
 }
 
 func binIntersections(
 	hds []io.SheetHeader, halos []los.HaloProfiles,
 ) [][]*los.HaloProfiles {
-	panic("NYI")
+	return nil
 }
 
 func addSheet(
 	i int, hd *io.SheetHeader, halos []*los.HaloProfiles, p *Params,
 ) {
-	panic("NYI")
 }
 
 func calcCoeffs(
 	halo *los.HaloProfiles, buf []analyze.RingBuffer, p *Params,
 ) []float64 {
-	panic("NYI")
+	return []float64{1, 2, 3, 4, 5}
 }
 
 func printCoeffs(ids, snaps []int, coeffs [][]float64) {
-	panic("NYI")
+	idWidth, snapWidth := 0, 0
+	coeffWidths := make([]int, len(coeffs[0]))
+	for i := range ids {
+		iWidth := len(fmt.Sprintf("%d", ids[i]))
+		sWidth := len(fmt.Sprintf("%d", snaps[i]))
+		if iWidth > idWidth { idWidth = iWidth }
+		if sWidth > snapWidth { snapWidth = sWidth }
+		for j := range coeffs[i] {
+			width := len(fmt.Sprintf("%.5g", coeffs[i][j]))
+			if width > coeffWidths[j] { coeffWidths[j] = width }
+		}
+	}
+
+	rowFmt := fmt.Sprintf("%%%dd %%%dd", idWidth, snapWidth)
+	coefFmts := make([]string, len(coeffs[0]))
+	for i := range coefFmts {
+		rowFmt += fmt.Sprintf(" %%%d.5g", coeffWidths[i])
+	}
+	rowFmt += "\n"
+	for i := range ids {
+		args := append([]interface{}{ids[i], snaps[i]}, intr(coeffs[i])...)
+		fmt.Printf(rowFmt, args...)
+	}
+}
+
+func intr(xs []float64) []interface{} {
+	is := make([]interface{}, len(xs))
+	for i, x := range xs { is[i] = x }
+	return is
 }
 
 func binBySnap(snaps, ids []int) (snapBins, idxBins map[int][]int) {
