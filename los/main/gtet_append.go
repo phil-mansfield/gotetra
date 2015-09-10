@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"path"
-	"sort"
 	"strconv"
 	"strings"
 	
@@ -228,7 +227,8 @@ func readSnapVals(
 
 	files, err := dirContents(rockstarDir)
 	if err != nil { return nil, err }
-	hlist := files[snap]
+	// Can't have a halo at the 0th snapshot.
+	hlist := files[snap - 1]
 
 	// Read in SheetHeader
 	gtetFmt := os.Getenv("GTET_FMT")
@@ -241,22 +241,31 @@ func readSnapVals(
 	if err != nil { return nil, err }
 
 	// Read in values and search for them.
-	ids, vals, err := halo.ReadRockstarVals(hlist, &hd.Cosmo, valFlags...)
+	rids, vals, err := halo.ReadRockstarVals(hlist, &hd.Cosmo, valFlags...)
 	if err != nil { return nil, err }
 
 	outVals := make([][]float64, len(ids))
 	for i := range outVals {
 		outVals[i] = make([]float64, len(valFlags))
 	}
+
 	for i, id := range ids {
-		idx := sort.SearchInts(ids, id)
-		if ids[idx] != id {
+		// TODO: benchmark at what point sorting the list is important.
+		idx := -1
+		for j, rid := range rids {
+			if rid == id {
+				idx = j
+				break
+			}
+		}
+		if idx == -1 {
 			return nil, fmt.Errorf("ID %d, %d, not found in hlist.", i+1, id)
 		}
 		for j := range outVals[i] {
-			outVals[i][j] = vals[j][i]
+			outVals[i][j] = vals[j][idx]
 		}
 	}
+
 	return outVals, nil
 }
 
@@ -274,7 +283,10 @@ func dirContents(dir string) ([]string, error) {
 
 
 func printVals(ids, snaps []int, inVals, vals [][]float64) {
-	vals = append(inVals, vals...)
+	for i := range inVals {
+		inVals[i] = append(inVals[i], vals[i]...)
+	}
+	vals = inVals
 
 	idWidth, snapWidth := 0, 0
 	valWidths := make([]int, len(vals[0]))
@@ -284,7 +296,7 @@ func printVals(ids, snaps []int, inVals, vals [][]float64) {
 		if iWidth > idWidth { idWidth = iWidth }
 		if sWidth > snapWidth { snapWidth = sWidth }
 		for j := range vals[i] {
-			width := len(fmt.Sprintf("%g", vals[i][j]))
+			width := len(fmt.Sprintf("%.10g", vals[i][j]))
 			if width > valWidths[j] { valWidths[j] = width }
 		}
 	}
@@ -292,7 +304,7 @@ func printVals(ids, snaps []int, inVals, vals [][]float64) {
 	rowFmt := fmt.Sprintf("%%%dd %%%dd", idWidth, snapWidth)
 	valFmts := make([]string, len(vals[0]))
 	for i := range valFmts {
-		rowFmt += fmt.Sprintf(" %%%dg", valWidths[i])
+		rowFmt += fmt.Sprintf(" %%%d.10g", valWidths[i])
 	}
 	rowFmt += "\n"
 	for i := range ids {
