@@ -10,7 +10,6 @@ import (
 	"math/rand"
 	"os"
 	"path"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -58,9 +57,10 @@ func main() {
 		halos, err := createHalos(snap, &hds[0], snapIDs, p)
 		if err != nil { log.Fatal(err.Error()) }
 		intrBins := binIntersections(hds, halos)
-		
+
 		// Add densities. Done header by header to limit I/O time.
 		for i := range hds {
+			if len(intrBins[i]) == 0 { continue }
 			hdContainer := []io.SheetHeader{hds[i]}
 			fileContainer := []string{files[i]}
 			los.LoadPtrDensities(
@@ -72,8 +72,8 @@ func main() {
 		for i := range halos {
 			coeffs[idxs[i]] = calcCoeffs(&halos[i], buf, p)
 		}
+		
 	}
-	
 	printCoeffs(ids, snaps, coeffs)
 }
 
@@ -239,14 +239,15 @@ func createHalos(
 
 	files, err := dirContents(rockstarDir)
 	if err != nil { return nil, err }
-	file := files[snap]
+	// There are no halos in the 0th snapshot
+	file := files[snap - 1]
 
-	ids, vals, err := halo.ReadRockstarVals(
+	rids, vals, err := halo.ReadRockstarVals(
 		file, &hd.Cosmo, halo.X, halo.Y, halo.Z, halo.M200b,
 	)
 	if err != nil { return nil, err }
 
-	xs, ys, zs, ms := vals[1], vals[2], vals[3], vals[4]
+	xs, ys, zs, ms := vals[0], vals[1], vals[2], vals[3]
 	halo.R200m.Radius(&hd.Cosmo, ms, ms)
 	rs := ms
 
@@ -254,8 +255,16 @@ func createHalos(
 	halos := make([]los.HaloProfiles, len(ids))
 	seenIDs := make(map[int]bool)
 	for i, id := range ids {
-		idx := sort.SearchInts(ids, id)
-		if ids[idx] !=  id {
+		idx := -1
+		// TODO: Sort first if the ID count is large enough.
+		for j, rid := range rids {
+			if rid == id { 
+				idx = j
+				break
+			}
+		}
+
+		if idx == -1 {
 			return nil, fmt.Errorf("Halo ID %d not in halo catalog.", id)
 		}
 		
@@ -281,7 +290,7 @@ func createHalos(
 		}
 	}
 
-	panic("NYI")
+	return halos, nil
 }
 
 func binIntersections(
