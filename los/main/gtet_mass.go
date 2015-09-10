@@ -13,7 +13,9 @@ import (
 
 	"github.com/phil-mansfield/gotetra/render/io"
 	"github.com/phil-mansfield/gotetra/render/halo"
+	rgeom "github.com/phil-mansfield/gotetra/render/geom"
 	"github.com/phil-mansfield/gotetra/los/geom"
+	"github.com/phil-mansfield/gotetra/los/analyze"
 )
 
 type Params struct {
@@ -39,11 +41,18 @@ func main() {
 
 		intrBins := binIntersections(hds, hBounds)
 
+		xs := []rgeom.Vec{}
 		for i := range hds {
 			if len(intrBins[i]) == 0 { continue }
+			hd := &hds[i]
+
+			n := hd.SegmentWidth*hd.SegmentWidth*hd.SegmentWidth
+			if len(xs) == 0 { xs = make([]rgeom.Vec, n) }
+			io.ReadSheetPositionsAt(files[i], xs)
+
 			for j := range idxs {
 				masses[idxs[j]] += massContained(
-					&hds[i], files[i], snapCoeffs[j], hBounds[j],
+					&hds[i], xs, snapCoeffs[j], hBounds[j],
 				)
 			}
 		}
@@ -277,10 +286,32 @@ func boundingSpheres(
 	return spheres, nil
 }
 
+func findOrder(coeffs []float64) int {
+	i := 1
+	for {
+		if i*i == len(coeffs) {
+			return i
+		} else if i*i > len(coeffs) {
+			panic("Impossible")
+		}
+		i++
+	}
+}
+
 func massContained(
-	hd *io.SheetHeader, file string, coeffs []float64, sphere geom.Sphere,
+	hd *io.SheetHeader, xs []rgeom.Vec, coeffs []float64, sphere geom.Sphere,
 ) float64 {
-	panic("NYI")
+	sum := 0.0
+	ptMass := hd.Mass
+
+	order := findOrder(coeffs)
+	shell := analyze.PennaFunc(coeffs, order, order, 2)
+
+	for i := range xs {
+		x, y, z := float64(xs[i][0]), float64(xs[i][1]), float64(xs[i][2])
+		if shell.Contains(x, y, z) { sum += ptMass }
+	}
+	return sum
 }
 
 func printMasses(ids, snaps []int, masses []float64) {
