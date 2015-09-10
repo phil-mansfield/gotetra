@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/phil-mansfield/gotetra/render/io"
+	"github.com/phil-mansfield/gotetra/render/halo"
 	"github.com/phil-mansfield/gotetra/los/geom"
 )
 
@@ -34,7 +35,7 @@ func main() {
 
 		hds, files, err := readHeaders(snap)
 		if err != nil { err.Error() }
-		hBounds, err := boundingSpheres(snap, snapIDs, p)
+		hBounds, err := boundingSpheres(snap, &hds[0], snapIDs, p)
 
 		intrBins := binIntersections(hds, hBounds)
 
@@ -252,8 +253,28 @@ func binIntersections(
 	return bins
 }
 
-func boundingSpheres(snap int, ids []int, p *Params) ([]geom.Sphere, error) {
-	panic("NYI")
+func boundingSpheres(
+	snap int, hd *io.SheetHeader, ids []int, p *Params,
+) ([]geom.Sphere, error) {
+	rockstarDir := os.Getenv("GTET_ROCKSTAR_DIR")
+	if rockstarDir == "" { 
+		return nil, fmt.Errorf("$GTET_ROCKSTAR_DIR not set.")
+	}
+	
+	hlists, err := dirContents(rockstarDir)
+	if err != nil { return nil, err }
+	rids, vals, err := halo.ReadRockstarVals(
+		hlists[snap - 1], &hd.Cosmo, halo.X, halo.Y, halo.Z, halo.Rad200b,
+	)
+	xs, ys, zs, rs := vals[0], vals[1], vals[2], vals[3]
+
+	spheres := make([]geom.Sphere, len(rids))
+	for i := range spheres {
+		spheres[i].C = geom.Vec{float32(xs[i]), float32(ys[i]), float32(zs[i])}
+		spheres[i].R = float32(rs[i])
+	}
+
+	return spheres, nil
 }
 
 func massContained(
