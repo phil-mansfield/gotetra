@@ -93,7 +93,6 @@ func (buf *Buffers) chanRead(
 
 func (buf *Buffers) ParallelDensity(h *HaloProfiles) {
 	workers := runtime.NumCPU()
-	workers = 10
 	out := make(chan int, workers)
 
 	for id := 0; id < workers - 1; id++ {
