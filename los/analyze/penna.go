@@ -78,7 +78,7 @@ func PennaCoeffs(xs, ys, zs []float64, I, J, K int) []float64 {
 	return cs
 }
 
-func PennaFunc(cs []float64, I, J, K int) func(phi, th float64) float64 {
+func PennaFunc(cs []float64, I, J, K int) Shell {
 	return func(phi, th float64) float64 {
 		idx, sum := 0, 0.0
 		sinPhi, cosPhi := math.Sincos(phi)
