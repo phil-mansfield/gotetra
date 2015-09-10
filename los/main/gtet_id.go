@@ -164,6 +164,22 @@ func findSnaps(ids []int) ([]int, error) {
 }
 
 
+func readHeader(snap int) (*io.SheetHeader, error) {
+	gtetFmt := os.Getenv("GTET_FMT")
+	if gtetFmt == "" {
+		return nil, fmt.Errorf("$GTET_FMT not set.")
+	}
+
+	gtetDir := fmt.Sprintf(gtetFmt, snap)
+	gtetFiles, err := dirContents(gtetDir)
+	if err != nil { return nil, err }
+
+	hd := &io.SheetHeader{}
+	err = io.ReadSheetHeaderAt(gtetFiles[0], hd)
+	if err != nil { return nil, err }
+	return hd, nil
+}
+
 // This funciton has side effects :(
 func convertSortedIDs(
 	rawIDs []int, snap int,
@@ -171,10 +187,7 @@ func convertSortedIDs(
 	list, err := getSnapHaloList(snap)
 	if err != nil { return nil, err }
 
-	gtetFmt := os.Getenv("GTET_FMT")
-	gtetName := fmt.Sprintf(gtetFmt, snap, 0, 0, 0)
-	hd := &io.SheetHeader{}
-	err = io.ReadSheetHeaderAt(gtetName, hd)
+	hd, err := readHeader(snap)
 	if err != nil { return nil, err }
 	cosmo := &hd.Cosmo
 
@@ -191,10 +204,7 @@ func findSubs(rawIDs, snaps []int) ([]bool, error) {
 
 	// Handle the case where we're indexing by sorted mass ID.
 	if xs != nil {
-		gtetFmt := os.Getenv("GTET_FMT")
-		gtetName := fmt.Sprintf(gtetFmt, snaps[0], 0, 0, 0)
-		hd := &io.SheetHeader{}
-		err := io.ReadSheetHeaderAt(gtetName, hd)
+		hd, err := readHeader(snaps[0])
 		if err != nil { return nil, err }
 
 		g := halo.NewGrid(finderCells, hd.TotalWidth, len(xs))
@@ -221,10 +231,7 @@ func findSubs(rawIDs, snaps []int) ([]bool, error) {
 
 	// Load each snapshot.
 	for snap, group := range snapGroups {
-		gtetFmt := os.Getenv("GTET_FMT")
-		gtetName := fmt.Sprintf(gtetFmt, snap, 0, 0, 0)
-		hd := &io.SheetHeader{}
-		err := io.ReadSheetHeaderAt(gtetName, hd)
+		hd, err := readHeader(snap)
 		if err != nil { return nil, err }
 
 		list, err := getSnapHaloList(snap)
@@ -271,4 +278,16 @@ func printIds(ids []int, snaps []int, isSub []bool, mult int) {
 		}
 		if mult > 1 { fmt.Printf(rowFmt, -1, -1) }
 	}
+}
+
+func dirContents(dir string) ([]string, error) {
+	infos, err := ioutil.ReadDir(dir)
+	if err != nil { return nil, err }
+	
+	files := make([]string, len(infos))
+	for i := range infos {
+		files[i] = path.Join(dir, infos[i].Name())
+	}
+
+	return files, nil
 }
