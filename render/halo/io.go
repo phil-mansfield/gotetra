@@ -121,6 +121,11 @@ const (
 	AccRate100Myr
 	AccRateTdyn
 	valNum
+	RadVir
+	Rad200b
+	Rad200c
+	Rad500c
+	Rad2500c
 )
 
 func ReadRockstarVals(
@@ -128,7 +133,15 @@ func ReadRockstarVals(
 ) (ids []int, vals[][]float64, err error) {
 	colIdxs := []int{ int(ID) }
 	for _, val := range valFlags {
-		colIdxs = append(colIdxs, int(val))
+		switch val {
+		case RadVir: colIdxs = append(colIdxs, int(MVir))
+		case Rad200b: colIdxs = append(colIdxs, int(M200b))
+		case Rad200c: colIdxs = append(colIdxs, int(M200c))
+		case Rad500c: colIdxs = append(colIdxs, int(M500c))
+		case Rad2500c: colIdxs = append(colIdxs, int(M2500c))
+		default:
+			colIdxs = append(colIdxs, int(val))
+		}
 	}
 	cols, err := table.ReadTable(file, colIdxs, nil)
 	if err != nil { return nil, nil, err }
@@ -136,6 +149,16 @@ func ReadRockstarVals(
 	ids = make([]int, len(cols[0]))
 	for i := range cols[0] {
 		ids[i] = int(cols[0][i])
+	}
+
+	for i, val := range valFlags {
+		switch val {
+		case RadVir: RVirial.Radius(cosmo, vals[i], vals[i])
+		case Rad200b: R200m.Radius(cosmo, vals[i], vals[i])
+		case Rad200c: R200c.Radius(cosmo, vals[i], vals[i])
+		case Rad500c: R500c.Radius(cosmo, vals[i], vals[i])
+		case Rad2500c: R2500c.Radius(cosmo, vals[i], vals[i])
+		}
 	}
 
 	if len(cols) == 1 {
