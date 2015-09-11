@@ -112,7 +112,10 @@ func (buf *Buffers) ParallelDensity(h *HaloProfiles) {
 func (buf *Buffers) chanDensity(
 	h *HaloProfiles, id, workers int, out chan <- int,
 ) {
-	for ri := id; ri < len(h.rs); ri += workers {
+	bufLen := len(buf.ts) / workers
+	bufStart, bufEnd := id * bufLen, (id + 1) * bufLen
+	if id == workers - 1 { bufEnd = len(buf.ts) }
+	for ri := bufStart; ri < bufEnd; ri++ {
 		r := &h.rs[ri]
 		for ti := 0; ti < len(buf.ts); ti++ {
 			if buf.intr[ti] { r.Density(&buf.ts[ti], buf.rhos[ti]) }
