@@ -12,7 +12,10 @@ import (
 	"strings"
 
 	"github.com/phil-mansfield/gotetra/render/io"
+	"github.com/phil-mansfield/gotetra/render/halo"
+	rgeom "github.com/phil-mansfield/gotetra/render/geom"
 	"github.com/phil-mansfield/gotetra/los/geom"
+	"github.com/phil-mansfield/gotetra/los/analyze"
 )
 
 type Params struct {
@@ -34,15 +37,22 @@ func main() {
 
 		hds, files, err := readHeaders(snap)
 		if err != nil { err.Error() }
-		hBounds, err := boundingSpheres(snap, snapIDs, p)
+		hBounds, err := boundingSpheres(snap, &hds[0], snapIDs, p)
 
 		intrBins := binIntersections(hds, hBounds)
 
+		xs := []rgeom.Vec{}
 		for i := range hds {
 			if len(intrBins[i]) == 0 { continue }
+			hd := &hds[i]
+
+			n := hd.SegmentWidth*hd.SegmentWidth*hd.SegmentWidth
+			if len(xs) == 0 { xs = make([]rgeom.Vec, n) }
+			io.ReadSheetPositionsAt(files[i], xs)
+
 			for j := range idxs {
 				masses[idxs[j]] += massContained(
-					&hds[i], files[i], snapCoeffs[j], hBounds[j],
+					&hds[i], xs, snapCoeffs[j], hBounds[j],
 				)
 			}
 		}
@@ -256,14 +266,56 @@ func binIntersections(
 	return bins
 }
 
-func boundingSpheres(snap int, ids []int, p *Params) ([]geom.Sphere, error) {
-	panic("NYI")
+func boundingSpheres(
+	snap int, hd *io.SheetHeader, ids []int, p *Params,
+) ([]geom.Sphere, error) {
+	rockstarDir := os.Getenv("GTET_ROCKSTAR_DIR")
+	if rockstarDir == "" { 
+		return nil, fmt.Errorf("$GTET_ROCKSTAR_DIR not set.")
+	}
+	
+	hlists, err := dirContents(rockstarDir)
+	if err != nil { return nil, err }
+	rids, vals, err := halo.ReadRockstarVals(
+		hlists[snap - 1], &hd.Cosmo, halo.X, halo.Y, halo.Z, halo.Rad200b,
+	)
+	xs, ys, zs, rs := vals[0], vals[1], vals[2], vals[3]
+
+	spheres := make([]geom.Sphere, len(rids))
+	for i := range spheres {
+		spheres[i].C = geom.Vec{float32(xs[i]), float32(ys[i]), float32(zs[i])}
+		spheres[i].R = float32(rs[i])
+	}
+
+	return spheres, nil
+}
+
+func findOrder(coeffs []float64) int {
+	i := 1
+	for {
+		if i*i == len(coeffs) {
+			return i
+		} else if i*i > len(coeffs) {
+			panic("Impossible")
+		}
+		i++
+	}
 }
 
 func massContained(
-	hd *io.SheetHeader, file string, coeffs []float64, sphere geom.Sphere,
+	hd *io.SheetHeader, xs []rgeom.Vec, coeffs []float64, sphere geom.Sphere,
 ) float64 {
-	panic("NYI")
+	sum := 0.0
+	ptMass := hd.Mass
+
+	order := findOrder(coeffs)
+	shell := analyze.PennaFunc(coeffs, order, order, 2)
+
+	for i := range xs {
+		x, y, z := float64(xs[i][0]), float64(xs[i][1]), float64(xs[i][2])
+		if shell.Contains(x, y, z) { sum += ptMass }
+	}
+	return sum
 }
 
 func printMasses(ids, snaps []int, masses []float64) {
