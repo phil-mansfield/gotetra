@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/phil-mansfield/gotetra/cosmo"
 	"github.com/phil-mansfield/gotetra/render/io"
 	"github.com/phil-mansfield/gotetra/render/halo"
 	rgeom "github.com/phil-mansfield/gotetra/render/geom"
@@ -31,14 +32,15 @@ func main() {
 	masses := make([]float64, len(ids))
 
 	for snap, snapIDs := range snapBins {
+		log.Println(snap)
 		idxs := idxBins[snap]
 		snapCoeffs := coeffBins[snap]
 		if snap == -1 { continue }
 
 		hds, files, err := readHeaders(snap)
-		if err != nil { err.Error() }
+		if err != nil { log.Fatal(err.Error()) }
 		hBounds, err := boundingSpheres(snap, &hds[0], snapIDs, p)
-
+		if err != nil { log.Fatal(err.Error()) }
 		intrBins := binIntersections(hds, hBounds)
 
 		xs := []rgeom.Vec{}
@@ -46,15 +48,17 @@ func main() {
 			if len(intrBins[i]) == 0 { continue }
 			hd := &hds[i]
 
-			n := hd.SegmentWidth*hd.SegmentWidth*hd.SegmentWidth
+			n := hd.GridWidth*hd.GridWidth*hd.GridWidth
 			if len(xs) == 0 { xs = make([]rgeom.Vec, n) }
-			io.ReadSheetPositionsAt(files[i], xs)
+			err := io.ReadSheetPositionsAt(files[i], xs)
+			if err != nil { log.Fatal(err.Error()) }
 
 			for j := range idxs {
 				masses[idxs[j]] += massContained(
 					&hds[i], xs, snapCoeffs[j], hBounds[j],
 				)
 			}
+			log.Printf("%.3g\n", masses)
 		}
 	}
 
@@ -281,10 +285,22 @@ func boundingSpheres(
 	)
 	xs, ys, zs, rs := vals[0], vals[1], vals[2], vals[3]
 
-	spheres := make([]geom.Sphere, len(rids))
+	spheres := make([]geom.Sphere, len(ids))
 	for i := range spheres {
-		spheres[i].C = geom.Vec{float32(xs[i]), float32(ys[i]), float32(zs[i])}
-		spheres[i].R = float32(rs[i])
+		j := -1
+		for idx := range xs {
+			if rids[idx] == ids[i] {
+				j = idx
+				break
+			}
+		}
+
+		if j == -1 {
+			return nil, fmt.Errorf("Halo %d not found in snap %d.",
+				ids[i], snap)
+		}
+		spheres[i].C = geom.Vec{float32(xs[j]), float32(ys[j]), float32(zs[j])}
+		spheres[i].R = float32(rs[j])
 	}
 
 	return spheres, nil
@@ -293,27 +309,54 @@ func boundingSpheres(
 func findOrder(coeffs []float64) int {
 	i := 1
 	for {
-		if i*i == len(coeffs) {
+		if 2*i*i == len(coeffs) {
 			return i
-		} else if i*i > len(coeffs) {
+		} else if 2*i*i > len(coeffs) {
 			panic("Impossible")
 		}
 		i++
 	}
 }
 
+func wrap(x, tw2 float32) float32 {
+	if x > tw2 {
+		return x - tw2
+	} else if x < -tw2 {
+		return x + tw2
+	}
+	return x
+}
+
+func coords(idx, cells int64) (x, y, z int64) {
+    x = idx % cells
+    y = (idx % (cells * cells)) / cells
+    z = idx / (cells * cells)
+    return x, y, z
+}
+
 func massContained(
 	hd *io.SheetHeader, xs []rgeom.Vec, coeffs []float64, sphere geom.Sphere,
 ) float64 {
-	sum := 0.0
-	ptMass := hd.Mass
+	c := &hd.Cosmo
+	rhoM := cosmo.RhoAverage(c.H100 * 100, c.OmegaM, c.OmegaL, c.Z )
+	dx := hd.TotalWidth / float64(hd.CountWidth) / (1 + c.Z)
+	ptMass := rhoM * (dx*dx*dx)
+	tw2 := float32(hd.TotalWidth) / 2
 
 	order := findOrder(coeffs)
 	shell := analyze.PennaFunc(coeffs, order, order, 2)
 
-	for i := range xs {
-		x, y, z := float64(xs[i][0]), float64(xs[i][1]), float64(xs[i][2])
-		if shell.Contains(x, y, z) { sum += ptMass }
+	sum := 0.0
+	sw := hd.SegmentWidth
+	for si := int64(0); si < sw*sw*sw; si++ {
+		xi, yi, zi := coords(si, hd.SegmentWidth)
+		i := xi + yi*sw + zi*sw*sw
+		x, y, z := xs[i][0], xs[i][1], xs[i][2]
+		x, y, z = x - sphere.C[0], y - sphere.C[1], z - sphere.C[2]
+		x = wrap(x, tw2)
+		y = wrap(y, tw2)
+		z = wrap(z, tw2)
+		if shell.Contains(float64(x), float64(y), float64(z)) { sum += ptMass }
 	}
 	return sum
 }
