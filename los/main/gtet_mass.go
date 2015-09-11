@@ -56,7 +56,11 @@ func parseStdin() (ids, snaps []int, coeffs [][]float64, err error) {
 	lines, err := stdinLines()
 	if err != nil { return nil, nil, nil, err }
 	for i, line := range lines {
-		tokens := strings.Split(line, " ")
+		rawTokens := strings.Split(line, " ")
+		tokens := make([]string, 0, len(rawTokens))
+		for _, tok := range rawTokens {
+			if len(tok) != 0 { tokens = append(tokens, tok) }
+		}
 
 		var (
 			id, snap int

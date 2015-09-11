@@ -68,7 +68,11 @@ func parseCmdArgs(args []string) ([]int, error) {
 func parseStdinArgs(args []string) ([]int, error) {
 	IDs := make([]int, 0, len(args))
 	for i := range args {
-		tokens := strings.Split(args[i], " ")
+		rawTokens := strings.Split(args[i], " ")
+		tokens := make([]string, 0, len(rawTokens))
+		for _, tok := range rawTokens {
+			if len(tok) != 0 { tokens = append(tokens, tok) }
+		}
 		// This should be impossible, but whatever.
 		if len(tokens) == 0 { continue }
 		id, err := strconv.Atoi(tokens[0])
