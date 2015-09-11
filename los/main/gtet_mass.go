@@ -346,6 +346,10 @@ func massContained(
 	order := findOrder(coeffs)
 	shell := analyze.PennaFunc(coeffs, order, order, 2)
 
+	// This prevents excess calls to the shell function:
+	low, high := shell.RadialRange(10 * 1000)
+	low2, high2 := float32(low*low), float32(high*high)
+
 	sum := 0.0
 	sw := hd.SegmentWidth
 	for si := int64(0); si < sw*sw*sw; si++ {
@@ -356,7 +360,13 @@ func massContained(
 		x = wrap(x, tw2)
 		y = wrap(y, tw2)
 		z = wrap(z, tw2)
-		if shell.Contains(float64(x), float64(y), float64(z)) { sum += ptMass }
+
+		r2 := x*x + y*y +z*z
+
+		if r2 < low2 || ( r2 < high2 &&
+			shell.Contains(float64(x), float64(y), float64(z))) {
+			sum += ptMass
+		}
 	}
 	return sum
 }

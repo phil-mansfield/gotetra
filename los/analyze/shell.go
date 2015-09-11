@@ -79,6 +79,19 @@ func (s1 Shell) MaxDiff(s2 Shell, samples int) float64 {
 	return max
 }
 
+func (s Shell) RadialRange(samples int) (low, high float64) {
+	phi, theta := randomAngle()
+	low = s(phi, theta)
+	high = low
+	for i := 0; i < samples; i++ {
+		phi, theta := randomAngle()
+		r := s(phi, theta)
+		if r > high { high = r }
+		if r < low { low = r }
+	}
+	return low, high
+}
+
 func (s Shell) Contains(x, y, z float64) bool {
 	r := math.Sqrt(x*x + y*y + z*z)
 	phi := math.Atan2(y, x)
