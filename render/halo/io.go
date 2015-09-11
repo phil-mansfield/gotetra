@@ -2,7 +2,6 @@ package halo
 
 import (
 	"sort"
-
 	"github.com/phil-mansfield/gotetra/render/io"
 	"github.com/phil-mansfield/table"
 )
@@ -143,12 +142,12 @@ func ReadRockstarVals(
 			colIdxs = append(colIdxs, int(val))
 		}
 	}
-	cols, err := table.ReadTable(file, colIdxs, nil)
+	vals, err = table.ReadTable(file, colIdxs, nil)
 	if err != nil { return nil, nil, err }
 
-	ids = make([]int, len(cols[0]))
-	for i := range cols[0] {
-		ids[i] = int(cols[0][i])
+	ids = make([]int, len(vals[0]))
+	for i := range vals[0] {
+		ids[i] = int(vals[0][i])
 	}
 
 	for i, val := range valFlags {
@@ -161,10 +160,10 @@ func ReadRockstarVals(
 		}
 	}
 
-	if len(cols) == 1 {
+	if len(vals) == 1 {
 		return ids, [][]float64{}, nil
 	} else {
-		return ids, cols[1:], nil
+		return ids, vals[1:], nil
 	}
 }
 
