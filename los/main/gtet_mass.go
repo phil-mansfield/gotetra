@@ -32,7 +32,6 @@ func main() {
 	masses := make([]float64, len(ids))
 
 	for snap, snapIDs := range snapBins {
-		log.Println(snap)
 		idxs := idxBins[snap]
 		snapCoeffs := coeffBins[snap]
 		if snap == -1 { continue }
@@ -58,7 +57,6 @@ func main() {
 					&hds[i], xs, snapCoeffs[j], hBounds[j],
 				)
 			}
-			log.Printf("%.3g\n", masses)
 		}
 	}
 

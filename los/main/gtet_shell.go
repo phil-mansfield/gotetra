@@ -46,7 +46,6 @@ func main() {
 
 	var losBuf *los.Buffers
 	for snap, snapIDs := range snapBins {
-		log.Println(snap)
 		idxs := idxBins[snap]
 
 		if snap == -1 { continue }
