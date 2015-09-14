@@ -5,11 +5,20 @@ import (
 	"github.com/phil-mansfield/gotetra/math/mat"
 )
 
+// Kernel is a 1D smoothing kernel corresponding to some smoothing strategy
+// and some window width.
 type Kernel struct {
 	cs []float64
 	center int
 }
 
+// BoundaryCondition is a flag representing the rule used when the smoothing
+// window extends outside the data range.
+//
+// Ideally iy would be good to apply a fit of the appropriate shape to the
+// bounadary points, atificially extend the sequence that way, then remove
+// those points after the smoothing. If you don't want to do that, Extension
+// is a pretty good default.
 type BoundaryCondition int
 const (
 	Periodic BoundaryCondition = iota
@@ -64,6 +73,8 @@ func (b BoundaryCondition) negGet(xs []float64, i int) float64 {
 
 // Convolve convolves a 1d data set according to the filter f. Boundary
 // conditions are specified with b.
+//
+// Make sure that xs corresponds to some uniformly-spaced sequence.
 func (k *Kernel) Convolve(xs []float64, b BoundaryCondition) []float64 {
 	out := make([]float64, len(xs))
 	k.ConvolveAt(xs, b, out)
@@ -129,6 +140,8 @@ func (k *Kernel) normalize() {
 	for i := range k.cs { k.cs[i] /= sum }
 }
 
+// NewGaussianKernel creates a Gaussian kernel, exp(-(x - x0)^2 / (2 sigma))
+// with the given window width, width, and point separation, dx.
 func NewGaussianKernel(width int, sigma, dx float64) *Kernel {
 	if width % 2 != 1 { panic("Kernel width must be odd.") }
 
@@ -149,6 +162,7 @@ func NewGaussianKernel(width int, sigma, dx float64) *Kernel {
 	return k
 }
 
+// NewTophatKernel creates a constant smoothing kernel of the given width.
 func NewTophatKernel(width int) *Kernel {
 	if width % 2 != 1 { panic("Kernel width must be odd.") }
 	
@@ -162,6 +176,9 @@ func NewTophatKernel(width int) *Kernel {
 	return k
 }
 
+// NewSavGolKernel creates a smoothing kernel using the Savitzky-Golay
+// scheme. WIndow width is given by width and polynomial order is given by
+// order.
 func NewSavGolKernel(order, width int) *Kernel {
 	if width % 2 != 1 {
 		panic("Kernel width must be odd.")
@@ -177,6 +194,17 @@ func NewSavGolKernel(order, width int) *Kernel {
 	return k
 }
 
+// NewSavGOlDerivKernel creates a kernel which evaluates to the analytic (as
+// opposed to numeric) derivative of the function created via Savitzky-Golay
+// smoothing. The separation between points is given by d and the window width
+// is given by width. The derivative and polynomial orders are given by dOrder
+// and pOrder, respectively.
+//
+// For good results, try to ensure that dOrder + 3 <= pOrder
+//
+// You should never use these smoothing filters for non-uniformly spaced points,
+// but you should *definitely* never use this particular kernel on non-uniformly
+// spaced points.
 func NewSavGolDerivKernel(dx float64, dOrder, pOrder, width int) *Kernel {
 	if width % 2 != 1 {
 		panic("Kernel width must be odd.")

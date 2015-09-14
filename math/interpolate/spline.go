@@ -1,3 +1,6 @@
+/*package interpolate provides routines for creating smooth analytic funcitons
+through sparse or noisy data.
+*/
 package interpolate
 
 import (
@@ -42,6 +45,9 @@ func NewSpline(xs, ys []float64) *Spline {
 	return sp
 }
 
+// Init reinitializes a spline to use a new sequence of points without doing
+// any additional heap allocations. |xs| and |ys| must be the same as the
+// previous point set.
 func (sp *Spline) Init(xs, ys []float64) {
 	if len(xs) != len(sp.xs) || len(ys) != len(sp.ys) {
 		panic("Length of input arrays do not equal internal spline arrays.")
@@ -113,6 +119,7 @@ func (sp *Spline) Deriv(x float64, order int) float64 {
 	}
 }
 
+// Integrate integrates the spline from lo to hi.
 func (sp *Spline) Integrate(lo, hi float64) float64 {
 	if lo > hi { return -sp.Integrate(hi, lo) }
 	if lo < sp.xs[0] == sp.incr || lo > sp.xs[len(sp.xs)-1] == sp.incr {
