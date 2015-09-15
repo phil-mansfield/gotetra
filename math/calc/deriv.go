@@ -1,3 +1,5 @@
+/*package calc provides some basic calculus routines.
+*/
 package calc
 
 type derivParams struct { out []float64 }
@@ -13,7 +15,8 @@ func (p *derivParams) loadOptions(opts []DerivOption) {
 	for _, opt := range opts { opt(p) }
 }
 
-// Deriv computes the numerical derivative of a a sequence of (x, y) points.
+// Deriv computes the numerical derivative of a a sequence of (x, y) points. The
+// points do not need to be uniformly spaced.
 //
 // The only supported orders are 2 and 4.
 func Deriv(xs, ys []float64, order int, opts ...DerivOption) []float64 {
