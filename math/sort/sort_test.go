@@ -166,6 +166,47 @@ func BenchmarkGo10000(b *testing.B) {
 	}
 }
 
+func BenchmarkMedian10(b *testing.B) {
+	xs := randSlice(10)
+	buf := make([]float64, len(xs))
+	n := len(xs) / 2
+	for i := 0; i < b.N; i++ {
+		NthLargest(xs, n, buf)
+	}
+}
+
+
+func BenchmarkMedian100(b *testing.B) {
+	xs := randSlice(100)
+	buf := make([]float64, len(xs))
+	n := len(xs) / 2
+	for i := 0; i < b.N; i++ {
+		NthLargest(xs, n, buf)
+	}
+}
+
+
+func BenchmarkMedian1000(b *testing.B) {
+	xs := randSlice(1000)
+	buf := make([]float64, len(xs))
+	n := len(xs) / 2
+	for i := 0; i < b.N; i++ {
+		NthLargest(xs, n, buf)
+	}
+}
+
+
+func BenchmarkMedian10000(b *testing.B) {
+	xs := randSlice(10000)
+	buf := make([]float64, len(xs))
+	n := len(xs) / 2
+	for i := 0; i < b.N; i++ {
+		NthLargest(xs, n, buf)
+	}
+}
+
+// Tests
+
 func TestShell(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		xs := randSlice(1000)
@@ -182,6 +223,28 @@ func TestQuick(t *testing.T) {
 		Quick(xs)
 		if !sort.Float64sAreSorted(xs) {
 			t.Errorf("Failed to sort.")
+		}
+	}
+}
+
+
+func TestMedian(t *testing.T) {
+	buf := make([]float64, 1000)
+	for i := 0; i < 10; i++ {
+		xs := randSlice(len(buf))
+		Quick(xs)
+
+		perm := rand.Perm(len(buf))
+		mixed := make([]float64, len(buf))
+		for j := range mixed {
+			mixed[j] = xs[perm[j]]
+		}
+		
+		for j := 1; j <= len(buf); j++ {
+			val := NthLargest(mixed, j, buf)
+			if val != xs[len(xs) - j] {
+				t.Errorf("Failed to find NthLargest.")
+			}
 		}
 	}
 }
