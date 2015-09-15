@@ -35,23 +35,6 @@ func sort3(x, y, z float64) (max, mid, min float64) {
 // Quick sorts an array in place via quicksort (and returns the result for
 // convenience.)
 func Quick(xs []float64) []float64 {
-/*	switch len(xs) {
-	case 0: return xs
-	case 1: return xs
-	case 2:
-		if xs[0] > xs[1] { xs[0], xs[1] = xs[1], xs[0] }
-		return xs		
-	case 3:
-		high, mid, low := sort3(xs[0], xs[1], xs[2])
-		xs[0], xs[1], xs[2] = low, mid, high
-		return xs
-	default:
-		pivIdx := partition(xs)
-		Quick(xs[0: pivIdx])
-		Quick(xs[pivIdx: len(xs)])
-		return xs
-	}
-*/
 	if len(xs) < manualLen {
 		return Shell(xs)
 	} else {
@@ -70,7 +53,7 @@ func partition(xs []float64) int {
 	n, n2 := len(xs), len(xs) / 2
 	// Take three values. The median will be the pivot, the other two will
 	// be sentinel values so that we cna avoid bounds checks.
-	max, mid, min := sort3(xs[0], xs[1], xs[n-1])
+	max, mid, min := sort3(xs[0], xs[n2], xs[n-1])
 	xs[0], xs[n2], xs[n-1] = min, mid, max
 	xs[1], xs[n2] = xs[n2], xs[1]
 
