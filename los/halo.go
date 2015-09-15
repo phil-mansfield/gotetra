@@ -9,6 +9,7 @@ import (
 	"github.com/phil-mansfield/gotetra/render/io"
 	"github.com/phil-mansfield/gotetra/los/geom"
 	"github.com/phil-mansfield/gotetra/math/mat"
+	"github.com/phil-mansfield/gotetra/math/sort"
 )
 
 type haloRing struct {
@@ -539,4 +540,32 @@ func LoadPtrDensities(
 			buf.ParallelDensity(hs[j])
 		}
 	}
+}
+
+func (h *HaloProfiles) MedianProfile() []float64 {
+	// Read Densities
+	rhoBufs := make([][]float64, h.n * len(h.rs))
+	for i := range rhoBufs {
+		rhoBufs[i] = make([]float64, h.bins)
+	}
+	
+	idx := 0
+	for ring := range h.rs {
+		for prof := 0; prof < h.n; prof++ {
+			h.GetRhos(ring, prof, rhoBufs[idx])
+			idx++
+		}
+	}
+	
+	// Find median of each radial bin.
+	medBuf := make([]float64, h.n * len(h.rs))
+	out := make([]float64, h.bins)
+	for j := 0; j < h.bins; j++ {
+		for i := range medBuf {
+			medBuf[i] = rhoBufs[j][i]
+		}
+		out[j] = sort.Median(medBuf)
+	}
+	
+	return out
 }
