@@ -77,6 +77,10 @@ var valMap = map[string]halo.Val {
     "accrateinst":halo.AccRateInst,
     "accrate100myr":halo.AccRate100Myr,
     "accratetdyn":halo.AccRateTdyn,
+    "rad200b":halo.Rad200b,
+    "rad200c":halo.Rad200c,
+    "rad500c":halo.Rad500c,
+    "rad2500c":halo.Rad2500c,
 }
 
 func main() {
