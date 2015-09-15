@@ -28,6 +28,9 @@ type Params struct {
 	// Splashback params
 	Order, Window, Levels int
 	Cutoff float64
+
+	// Alternate modes
+	MedianProfile bool
 }
 
 func main() {
@@ -39,7 +42,7 @@ func main() {
 	if len(ids) == 0 { return }
 
 	// Compute coefficients.
-	coeffs := make([][]float64, len(ids))
+	out := make([][]float64, len(ids))
 	snapBins, idxBins := binBySnap(snaps, ids)
 	buf := make([]analyze.RingBuffer, p.Rings)
 	for i := range buf { buf[i].Init(p.Spokes, p.RBins) }
@@ -68,13 +71,20 @@ func main() {
 			)
 		}
 		
-		// Calculate Penna coefficients.
-		for i := range halos {
-			coeffs[idxs[i]] = calcCoeffs(&halos[i], buf, p)
+		if p.MedianProfile {
+			// Calculate median profile.
+			for i := range halos {
+				out[idxs[i]] = calcMedian(&halos[i], p)
+			}
+		} else {
+			// Calculate Penna coefficients.
+			for i := range halos {
+				out[idxs[i]] = calcCoeffs(&halos[i], buf, p)
+			}
 		}
 		
 	}
-	printCoeffs(ids, snaps, coeffs)
+	printCoeffs(ids, snaps, out)
 }
 
 func parseCmd() *Params {
@@ -99,6 +109,9 @@ func parseCmd() *Params {
 		"The number of recurve max-finding levels used by the 2D edge finder.")
 	flag.Float64Var(&p.Cutoff, "Cutoff", 0.0,
 		"The shallowest slope that can be considered a splashback point.")
+	flag.BoolVar(&p.MedianProfile, "MedianProfile", false,
+		"Compute the median halo profile instead of the shell. " + 
+			"KILL THIS OPTION.")
 	flag.Parse()
 	return p
 }
@@ -323,6 +336,14 @@ func calcCoeffs(
 	cs, _ := analyze.PennaVolumeFit(pxs, pys, halo, p.Order, p.Order)
 	return cs
 }
+
+func calcMedian(halo *los.HaloProfiles, p *Params) []float64 {
+	rs := make([]float64, p.RBins)
+	halo.GetRs(rs)
+	rhos := halo.MedianProfile()
+	return append(rs, rhos...)
+}
+
 
 func printCoeffs(ids, snaps []int, coeffs [][]float64) {
 	idWidth, snapWidth := 0, 0
