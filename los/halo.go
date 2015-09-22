@@ -91,8 +91,7 @@ func (hr *haloRing) insert(t *geom.Tetra, rho float64) {
 	hr.t.Translate(&hr.dr)
 	hr.t.Rotate(&hr.rot)
 	hr.pt.Init(&hr.t) // This is slower than it has to be by a lot!
-	
-	
+
 	var rSqrMin, rSqrMax float32
 	if hr.log {
 		rMin, rMax := float32(math.Exp(hr.lowR)), float32(math.Exp(hr.highR))
@@ -103,7 +102,9 @@ func (hr *haloRing) insert(t *geom.Tetra, rho float64) {
 	if hr.t.ZPlaneSlice(&hr.pt, 0, &hr.poly) {
 		// Stop early if possible.
 		rSqrTMin, rSqrTMax := hr.poly.RSqrMinMax()
-		if rSqrTMin > rSqrMax || rSqrTMax < rSqrMin { return }
+		if rSqrTMin > rSqrMax || rSqrTMax < rSqrMin {
+			return
+		}
 
 		// Find the intersected LoS range and check each line in it for
 		// intersection distance.
@@ -562,9 +563,9 @@ func (h *HaloProfiles) MedianProfile() []float64 {
 	out := make([]float64, h.bins)
 	for j := 0; j < h.bins; j++ {
 		for i := range medBuf {
-			medBuf[i] = rhoBufs[j][i]
+			medBuf[i] = rhoBufs[i][j]
 		}
-		out[j] = sort.Median(medBuf)
+		out[j] = sort.Median(medBuf, medBuf)
 	}
 	
 	return out
