@@ -41,6 +41,23 @@ func (g *Grid) Length(idx int) int {
 func (g *Grid) Insert(xs, ys, zs []float64) {
 	for i := range xs {
 		x, y, z := xs[i], ys[i], zs[i]
+		if x > g.Width {
+			x -= g.Width
+		} else if x < 0 {
+			x += g.Width
+		}
+		if y > g.Width {
+			y -= g.Width
+		} else if y < 0 {
+			y += g.Width
+		}
+		if z > g.Width {
+			z -= g.Width
+		} else if z < 0 {
+			z += g.Width
+		}
+				
+
 		ix, iy, iz := int(x/g.cw), int(y/g.cw), int(z/g.cw)
 		idx := ix + iy * g.Cells + iz * g.Cells * g.Cells
 
