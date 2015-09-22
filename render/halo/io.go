@@ -1,6 +1,8 @@
 package halo
 
 import (
+	"encoding/binary"
+	"os"
 	"sort"
 
 	"github.com/phil-mansfield/gotetra/render/io"
@@ -128,8 +130,40 @@ const (
 	Rad2500c
 )
 
+func RockstarConvert(inFile, outFile string) error {
+	allIdxs := make([]int, valNum)
+	for i := range allIdxs { allIdxs[i] = i }
+	cols, err := table.ReadTable(inFile, allIdxs, nil)
+	if err != nil { return err }
+	
+	f, err := os.Create(outFile)
+	if err != nil { return err }
+	defer f.Close()
+
+	err = binary.Write(f, binary.LittleEndian, int64(len(cols[0])))
+	if err != nil { return err }
+	for _, col := range cols {
+		err := binary.Write(f, binary.LittleEndian, col)
+		if err != nil { return err }
+	}
+
+	return nil
+}
+
+func ReadBinaryRockstarVals(
+	file string, cosmo *io.CosmologyHeader, valFlags ...Val,
+) (ids []int, vals[][]float64, err error) {
+	return readRockstarVals(file, cosmo, valFlags, binaryColGetter)
+}
+
 func ReadRockstarVals(
 	file string, cosmo *io.CosmologyHeader, valFlags ...Val,
+) (ids []int, vals[][]float64, err error) {
+	return readRockstarVals(file, cosmo, valFlags, asciiColGetter)
+}
+
+func readRockstarVals(
+	file string, cosmo *io.CosmologyHeader, valFlags []Val, getter colGetter,
 ) (ids []int, vals[][]float64, err error) {
 	colIdxs := []int{ int(ID) }
 	for _, val := range valFlags {
@@ -143,7 +177,8 @@ func ReadRockstarVals(
 			colIdxs = append(colIdxs, int(val))
 		}
 	}
-	vals, err = table.ReadTable(file, colIdxs, nil)
+
+	vals, err = getter(file, colIdxs)
 	if err != nil { return nil, nil, err }
 
 	ids = make([]int, len(vals[0]))
@@ -166,6 +201,27 @@ func ReadRockstarVals(
 	} else {
 		return ids, vals[1:], nil
 	}
+}
+
+type colGetter func(file string, colIdxs []int) ([][]float64, error)
+func asciiColGetter(file string, colIdxs []int) ([][]float64, error) {
+	return table.ReadTable(file, colIdxs, nil)
+}
+func binaryColGetter(file string, colIdxs []int) ([][]float64, error) {
+	f, err := os.Open(file)
+	if err != nil { return nil, err }
+
+	n := 0
+	err = binary.Read(f, binary.LittleEndian, &n)
+	if err != nil { return nil, err }
+	cols := make([][]float64, valNum)
+
+	for col := range cols {
+		cols[col] = make([]float64, n)
+		err = binary.Read(f, binary.LittleEndian, cols[col])
+		if err != nil { return nil, err }
+	}
+	return cols, nil
 }
 
 func init() {

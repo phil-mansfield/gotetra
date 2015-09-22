@@ -1,3 +1,5 @@
+/*package geom provides routines and types for dealing with an array of
+geometry-related tasks.*/
 package geom
 
 import (
@@ -24,12 +26,17 @@ type Tetra struct {
 	volumeValid, baryValid bool
 }
 
+// TetraIdxs are the indices of particles whichare the corners of a tetrahedron.
 type TetraIdxs [4]int64
 
+// volumeBuffer contains buffer spaces used when calculating tetrahedron volumes
+// so that extra allocations do not need to be done.
 type volumeBuffer struct {
 	buf1, buf2, buf3 Vec
 }
 
+// sampleBuffer contains buffers spaces used when randomly sampling a
+// tetrahedron so the extra allocation does not need to be done.
 type sampleBuffer struct {
 	d, c [4]Vec
 }
@@ -44,7 +51,7 @@ const (
 )
 
 var (
-	// Yeah, this one was fun to figure out.
+	// Yeah, this one was super fun to figure out.
 	dirs = [TetraDirCount][2][3]int64{
 		{{1, 0, 0}, {1, 1, 0}},
 		{{1, 0, 0}, {1, 0, 1}},
@@ -106,7 +113,9 @@ func compressCoords(x, y, z, dx, dy, dz, countWidth int64) int64 {
 	return newX + newY*countWidth + newZ*countWidth*countWidth
 }
 
-func compressCoordsCheck(x, y, z, dx, dy, dz, countWidth int64) (idx int64, ok bool) {
+func compressCoordsCheck(
+	x, y, z, dx, dy, dz, countWidth int64,
+) (idx int64, ok bool) {
 	newX := x + dx
 	newY := y + dy
 	newZ := z + dz
@@ -122,6 +131,8 @@ func compressCoordsCheck(x, y, z, dx, dy, dz, countWidth int64) (idx int64, ok b
 	return newX + newY*countWidth + newZ*countWidth*countWidth, true
 }
 
+// InitCartesian works the same as Init, but doesn't take periodic boundaries
+// into account for some reason.
 func (idxs *TetraIdxs) InitCartesian(
 	x, y, z, countWidth int64, dir int,
 ) *TetraIdxs {
@@ -166,7 +177,10 @@ func (idxs *TetraIdxs) Init(idx, countWidth, skip int64, dir int) *TetraIdxs {
 	return idxs
 }
 
-func (idxs *TetraIdxs) InitCentered(idx, countWidth, skip int64, dir int) (ti *TetraIdxs, ok bool) {
+// I have no idea what this function does.
+func (idxs *TetraIdxs) InitCentered(
+	idx, countWidth, skip int64, dir int,
+) (ti *TetraIdxs, ok bool) {
 	if dir < 0 || dir >= 8 { 
 		log.Fatalf("Unknown direciton %d for TetraIdxs.InitCentered()", dir)
 	}
@@ -446,12 +460,15 @@ func (t *Tetra) Barycenter() *Vec {
 	return &t.bary
 }
 
+// CellBounds returns the smallest enclosing set of cell bounds around a
+// tetrahedron.
 func (t *Tetra) CellBounds(cellWidth float64) *CellBounds {
 	cb := &CellBounds{}
 	t.CellBoundsAt(cellWidth, cb)
 	return cb
 }
 
+// CellBoundsAt is the same as CellBounds, but is done in-place.
 func (t *Tetra) CellBoundsAt(cellWidth float64, cb *CellBounds) {
 	mins := &t.sb.d[0]
 	maxes := &t.sb.d[1]
