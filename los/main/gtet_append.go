@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	
@@ -190,7 +191,16 @@ func parseStdin() (ids, snaps []int, inVals [][]float64, err error) {
 func readVals(ids, snaps []int, valFlags []halo.Val) ([][]float64, error) {
 	snapBins, idxBins := binBySnap(snaps, ids)
 	vals := make([][]float64, len(ids))
-	for snap, idSet := range snapBins {
+
+	sortedSnaps := []int{}
+	for snap := range snapBins {
+		sortedSnaps = append(sortedSnaps, snap)
+	}
+	sort.Ints(sortedSnaps)
+
+	log.Println("gtet_append")
+	for _, snap := range sortedSnaps {
+		idSet := snapBins[snap]
 		idxSet := idxBins[snap]
 		var (
 			snapVals [][]float64

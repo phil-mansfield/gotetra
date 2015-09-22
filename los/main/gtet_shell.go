@@ -10,6 +10,8 @@ import (
 	"math/rand"
 	"os"
 	"path"
+	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -18,6 +20,10 @@ import (
 	"github.com/phil-mansfield/gotetra/los/analyze"
 	"github.com/phil-mansfield/gotetra/render/io"
 	"github.com/phil-mansfield/gotetra/render/halo"
+)
+
+const (
+	minSnap = 50
 )
 
 type Params struct {
@@ -47,11 +53,27 @@ func main() {
 	buf := make([]analyze.RingBuffer, p.Rings)
 	for i := range buf { buf[i].Init(p.Spokes, p.RBins) }
 
+	sortedSnaps := []int{}
+	for snap := range snapBins {
+		sortedSnaps = append(sortedSnaps, snap)
+	}
+	sort.Ints(sortedSnaps)
+
+	ms := &runtime.MemStats{}
+
 	var losBuf *los.Buffers
-	for snap, snapIDs := range snapBins {
+	for _, snap := range sortedSnaps { 
+		runtime.ReadMemStats(ms)
+		log.Println("Snap", snap)
+		snapIDs := snapBins[snap]
 		idxs := idxBins[snap]
 
-		if snap == -1 { continue }
+		if snap < minSnap {
+			for i := range snapIDs {
+				out[idxs[i]] = make([]float64, p.Order * p.Order * 2)
+			}
+			continue
+		}
 
 		// Bin halos
 		hds, files, err := readHeaders(snap)
@@ -347,8 +369,9 @@ func calcMedian(halo *los.HaloProfiles, p *Params) []float64 {
 
 func printCoeffs(ids, snaps []int, coeffs [][]float64) {
 	idWidth, snapWidth := 0, 0
-	coeffWidths := make([]int, len(coeffs[0]))
+	coeffWidths := make([]int, len(coeffs[len(coeffs) - 1]))
 	for i := range ids {
+		if snaps[i] < minSnap { continue }
 		iWidth := len(fmt.Sprintf("%d", ids[i]))
 		sWidth := len(fmt.Sprintf("%d", snaps[i]))
 		if iWidth > idWidth { idWidth = iWidth }
