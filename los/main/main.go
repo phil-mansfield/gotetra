@@ -32,7 +32,7 @@ const (
 	window = 121
 	cutoff = 0.0
 
-	rings = 3
+	rings = 10
 	plotStart = 1006
 	plotCount = 1
 
@@ -51,22 +51,22 @@ var (
 		"DarkViolet", "DeepPink", "DimGray",
 	}
 	refRings = []int{
-		//10, 10, 10, 10, 10, 10,
+		10, //10, 10, 10, 10, 10,
 		//20, 20, 20, 20, 20, 20,
 		//20, 20, 20, 20, 20, 20,
 		//20, 20, 20, 20, 20, 20,
 		//20, 20, 20, 20, 20, 20,
 		//20, 20, 20, 20, 20, 20,
-		40, 40, 40, 40, 40, 40,
-		40, 40, 40, 40, 40, 40,
-		40, 40, 40, 40, 40, 40,
-		40, 40, 40, 40, 40, 40,
+		//40, 40, 40, 40, 40, 40,
+		//40, 40, 40, 40, 40, 40,
+		//40, 40, 40, 40, 40, 40,
+		//40, 40, 40, 40, 40, 40,
 		//3, 4, 6, 10,
 	}
 	refHalos = len(refRings)
 	visProfs = []int{
 		rand.Intn(n), rand.Intn(n), rand.Intn(n),
-		rand.Intn(n), rand.Intn(n), rand.Intn(n),
+	//	rand.Intn(n), rand.Intn(n), rand.Intn(n),
 	}
 )
 
@@ -158,18 +158,20 @@ func main() {
 		}
 	}
 
-	idx := -1
-	for j, rid := range rids {
-		if rid == 166305652 { idx = j }
-	}
-	if idx == -1 {
-		panic("Couldn't find it.")
-	}
+	//idx := -1
+	//for j, rid := range rids {
+	//	if rid == 166305652 { idx = j }
+	//}
+	//if idx == -1 {
+	//	panic("Couldn't find it.")
+	//}
 
 	//for i := plotStart; i < plotStart + plotCount; i++ {
 	//for _, i := range []int{
 	//	1001, 1006, 1008, 1009, 1014, 1017, 1018, 1033, 1047, 6006, 6030,
 	//} {
+
+	idx := 1006
 	for _, i := range []int{idx} {
 		fmt.Printf("Loading %d (%d)\n", i, rids[i])
 		if sf.HostCount(i) > 0 { 
@@ -206,12 +208,16 @@ func main() {
 		fmt.Println("Single Fit")
 		pShells := make([]analyze.ProjectedShell, len(hRefs))
 		shells := make([]analyze.Shell, len(hRefs))
+		
 		for j := range pShells {
 			pxs, pys := analyze.FilterPoints(rbRefs[j], 4) 
 			cs, pShell := analyze.PennaPlaneFit(pxs, pys, &hRefs[j], I, J)
 			shell := analyze.PennaFunc(cs, I, J, 2)
 			pShells[j], shells[j] = pShell, shell
 		}
+		pxs, pys := analyze.FilterPoints(rbs, 4) 
+		cs, _ := analyze.PennaPlaneFit(pxs, pys, h, I, J)
+		_ = cs
 
 		for j, shell := range shells {
 			printShellStats(shell, h.ID(), j, 10 * 1000)
@@ -228,7 +234,7 @@ func main() {
 			plotPlane(h, &rbs[ring], ms[i], h.ID(),
 				ring, pShells, plotDir, textDir)
 			_, _ = plotRhos, plotRs
-			//plotExampleProfiles(h, ms[i], ring, plotRs, plotRhos, plotDir)
+			plotExampleProfiles(h, ms[i], ring, plotRs, plotRhos, plotDir)
 			//plotExampleDerivs(h, ms[i], ring, plotRs, plotRhos, plotDir)
 		}
 	}
@@ -274,21 +280,23 @@ func plotExampleProfiles(
 				rawRs, rawRhos, window,
 			)
 			if !ok { continue }
-			plt.Plot(rawRs, smoothRhos, plt.LW(3),
-				plt.C(colors[cIdx % len(colors)]))
+			//plt.Plot(rawRs, smoothRhos, plt.LW(3),
+			//	plt.C(colors[cIdx % len(colors)]))
+			plt.Plot(rawRs, rawRhos, plt.LW(3), plt.C(colors[cIdx % len(colors)]))
 			r, ok := analyze.SplashbackRadius(rawRs, smoothRhos, smoothDerivs)
 			if !ok { continue }
-			plt.Plot([]float64{r, r}, []float64{1e5, 0.01},
-				plt.C(colors[cIdx % len(colors)]))
+			_ = r
+			//plt.Plot([]float64{r, r}, []float64{1e5, 0.01},
+			//	plt.C(colors[cIdx % len(colors)]), plt.LW(3))
 		}
 	}
 
 	// Plot specifications.
-	plt.Title(fmt.Sprintf(
-		`Halo %d: $M_{\rm 200m}$ = %.3g $M_\odot/h$`, hp.ID(), m),
-	)
-	plt.XLabel(`$R$ $[{\rm Mpc}/h]$`, plt.FontSize(16))
-	plt.YLabel(`$\rho$ [$\rho_m$]`, plt.FontSize(16))
+	//plt.Title(fmt.Sprintf(
+	//	`Halo %d: $M_{\rm 200m}$ = %.3g $M_\odot/h$`, hp.ID(), m),
+	//)
+	plt.XLabel(`$R$ $[{\rm Mpc}/h]$`, plt.FontSize(19))
+	plt.YLabel(`$\rho$ [$\rho_m$]`, plt.FontSize(19))
 
 	plt.XScale("log")
 
@@ -376,6 +384,7 @@ func plotPlane(
 	pShells []analyze.ProjectedShell, plotDir, textDir string,
 ) {
 	pName := path.Join(plotDir, fmt.Sprintf("plane_h%d_r%d.png", id, ring))
+	tName := 
 	xs, ys := make([]float64, 0, r.N), make([]float64, 0, r.N)
 	rs, phis := make([]float64, 0, r.N), make([]float64, 0, r.N)
 
