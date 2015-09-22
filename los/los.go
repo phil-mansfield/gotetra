@@ -1,6 +1,7 @@
 package los
 
 import (
+	"math"
 	"runtime"
 
 	"github.com/phil-mansfield/gotetra/render/io"
@@ -101,28 +102,28 @@ func (buf *Buffers) ParallelDensity(h *HaloProfiles) {
 	buf.chanIntersect(h, workers - 1, workers, out)
 	for i := 0; i < workers; i++ { <-out }
 
-	idxs, ok := splits(buf.intr, workers)
-	if ! ok { return }
-
 	if workers > len(h.rs) { workers = len(h.rs) }
 	for id := 0; id < workers - 1; id++ {
-		go buf.chanDensity(h, idxs[id], idxs[id+1], out)
+		go buf.chanDensity(h, id, workers, out)
 	}
-	buf.chanDensity(h, idxs[workers-1], idxs[workers], out)
+	buf.chanDensity(h, workers - 1, workers, out)
 	for i := 0; i < workers; i++ { <-out }
 }
 
 func (buf *Buffers) chanDensity(
-	h *HaloProfiles, start, end int, out chan <- int,
+	h *HaloProfiles, id, workers int, out chan <- int,
 ) {
-	for ri := start; ri < end; ri++ {
+	for ri := id; ri < len(h.rs); ri += workers {
 		r := &h.rs[ri]
 		for ti := 0; ti < len(buf.ts); ti++ {
+			if math.IsNaN(buf.rhos[ti]) || math.IsInf(buf.rhos[ti], 0) {
+				continue
+			}
+
 			if buf.intr[ti] { r.Density(&buf.ts[ti], buf.rhos[ti]) }
 		}
 	}
-
-	out <- 0
+	out <- id
 }
 
 func (buf *Buffers) chanIntersect(
