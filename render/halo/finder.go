@@ -4,15 +4,20 @@ import (
 	"sort"
 )
 
+// SubhaloFinder computes which halos in a collection are subhalos of other
+// halos in that collection based purely off of position information.
 type SubhaloFinder struct {
 	g *Grid
 	subhaloStarts, subhalos []int
 }
 
+// Bounds is a cell-aligned bounding box.
 type Bounds struct {
 	Origin, Span [3]int
 }
 
+// SphereBounds creates a cell-aligned bounding box around a non-aligned
+// sphere within a box with periodic boundary conditions.
 func (b *Bounds) SphereBounds(pos [3]float64, r, cw, width float64) {
 	for i := 0; i < 3; i++ {
 		min, max := pos[i] - r, pos[i] + r
@@ -24,6 +29,7 @@ func (b *Bounds) SphereBounds(pos [3]float64, r, cw, width float64) {
 	}
 }
 
+// ConvertIndices converts non-periodic indices to periodic indices.
 func (b *Bounds) ConvertIndices(x, y, z, width int) (bx, by, bz int) {
 	bx = x - b.Origin[0]
 	if bx < 0 { bx += width }
@@ -34,6 +40,8 @@ func (b *Bounds) ConvertIndices(x, y, z, width int) (bx, by, bz int) {
 	return bx, by, bz
 }
 
+// Inside returns true if the given value is within the bounding box along the
+// given dimension. The periodic box width is given by width.
 func (b *Bounds) Inside(val int, width int, dim int) bool {
 	lo, hi := b.Origin[dim], b.Origin[dim] + b.Span[dim]
 	if val >= hi {
@@ -44,6 +52,8 @@ func (b *Bounds) Inside(val int, width int, dim int) bool {
 	return val < hi && val >= lo
 }
 
+// NewSubhaloFinder creates a new subhalo finder corresponding to the given
+// Grid.
 func NewSubhaloFinder(g *Grid) *SubhaloFinder {
 	i := &SubhaloFinder{
 		g: g,
@@ -54,6 +64,7 @@ func NewSubhaloFinder(g *Grid) *SubhaloFinder {
 	return i
 }
 
+// FindSubhalos computes.
 func (sf *SubhaloFinder) FindSubhalos(
 	xs, ys, zs, rs []float64, mult float64,
 ) {
