@@ -50,7 +50,7 @@ func main() {
 	flag.Parse()
 
 	if idStart > idEnd {
-		log.Fatalf("IDStart, %d, is larger than IDEnd, %d.")
+		log.Fatalf("IDStart, %d, is larger than IDEnd, %d.", idStart, idEnd)
 	} else if idStart != idEnd && idStart <= 0 {
 		log.Fatalf("Non-positive IDStart %d.")
 	}
