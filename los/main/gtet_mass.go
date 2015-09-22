@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"log"
 	"io/ioutil"
+	"math"
 	"os"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -17,6 +19,10 @@ import (
 	rgeom "github.com/phil-mansfield/gotetra/render/geom"
 	"github.com/phil-mansfield/gotetra/los/geom"
 	"github.com/phil-mansfield/gotetra/los/analyze"
+)
+
+const (
+	minSnap = 30
 )
 
 type Params struct {
@@ -30,11 +36,22 @@ func main() {
 	snapBins, coeffBins, idxBins := binBySnap(snaps, ids, coeffs)
 
 	masses := make([]float64, len(ids))
+	rads := make([]float64, len(ids))
 
-	for snap, snapIDs := range snapBins {
-		idxs := idxBins[snap]
+	sortedSnaps := []int{}
+	for snap := range snapBins {
+		sortedSnaps = append(sortedSnaps, snap)
+	}
+	sort.Ints(sortedSnaps)
+
+	log.Println("gtet_mass")
+	for _, snap := range sortedSnaps {
+		log.Println("Snap", snap)
+		snapIDs := snapBins[snap]
 		snapCoeffs := coeffBins[snap]
-		if snap == -1 { continue }
+		idxs := idxBins[snap]
+
+		if snap < minSnap { continue }
 
 		hds, files, err := readHeaders(snap)
 		if err != nil { log.Fatal(err.Error()) }
@@ -58,9 +75,13 @@ func main() {
 				)
 			}
 		}
+
+		for j := range idxs {
+			rads[idxs[j]] = rSp(&hds[0], snapCoeffs[j])
+		}
 	}
 
-	printMasses(ids, snaps, masses)
+	printMasses(ids, snaps, masses, rads)
 }
 
 func parseStdin() (ids, snaps []int, coeffs [][]float64, err error) {
@@ -332,6 +353,15 @@ func coords(idx, cells int64) (x, y, z int64) {
     return x, y, z
 }
 
+func rSp(hd *io.SheetHeader, coeffs []float64) float64 {
+	order := findOrder(coeffs)
+	shell := analyze.PennaFunc(coeffs, order, order, 2)
+	vol := shell.Volume(10 * 1000)
+
+	r := math.Pow(vol / (math.Pi * 4 / 3), 0.33333)
+	return r
+}
+
 func massContained(
 	hd *io.SheetHeader, xs []rgeom.Vec, coeffs []float64, sphere geom.Sphere,
 ) float64 {
@@ -369,18 +399,20 @@ func massContained(
 	return sum
 }
 
-func printMasses(ids, snaps []int, masses []float64) {
-	idWidth, snapWidth, massWidth := 0, 0, 0
+func printMasses(ids, snaps []int, masses, rads []float64) {
+	idWidth, snapWidth, massWidth, radWidth := 0, 0, 0, 0
 	for i := range ids {
 		iWidth := len(fmt.Sprintf("%d", ids[i]))
 		sWidth := len(fmt.Sprintf("%d", snaps[i]))
 		mWidth := len(fmt.Sprintf("%.5g", masses[i]))
+		rWidth := len(fmt.Sprintf("%.5g", rads[i]))
 		if iWidth > idWidth { idWidth = iWidth }
 		if sWidth > snapWidth { snapWidth = sWidth }
 		if mWidth > massWidth { massWidth = mWidth }
+		if rWidth > radWidth { radWidth = rWidth }
 	}
 
-	rowFmt := fmt.Sprintf("%%%dd %%%dd %%%d.5g\n",
-		idWidth, snapWidth, massWidth)
-	for i := range ids { fmt.Printf(rowFmt, ids[i], snaps[i], masses[i]) }
+	rowFmt := fmt.Sprintf("%%%dd %%%dd %%%d.5g %%%d.5g\n",
+		idWidth, snapWidth, massWidth, radWidth)
+	for i := range ids { fmt.Printf(rowFmt, ids[i], snaps[i], masses[i], rads[i]) }
 }
