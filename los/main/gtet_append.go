@@ -13,6 +13,8 @@ import (
 	
 	"github.com/phil-mansfield/gotetra/render/halo"
 	"github.com/phil-mansfield/gotetra/render/io"
+
+	util "github.com/phil-mansfield/gotetra/los/main/gtet_util"
 )
 
 var valMap = map[string]halo.Val {
@@ -202,6 +204,7 @@ func readVals(ids, snaps []int, valFlags []halo.Val) ([][]float64, error) {
 	for _, snap := range sortedSnaps {
 		idSet := snapBins[snap]
 		idxSet := idxBins[snap]
+
 		var (
 			snapVals [][]float64
 			err error
@@ -212,7 +215,8 @@ func readVals(ids, snaps []int, valFlags []halo.Val) ([][]float64, error) {
 				snapVals[i] = make([]float64, len(valFlags))
 			}
 		} else {
-			snapVals, err = readSnapVals(idSet, snap, valFlags)
+			//snapVals, err = readSnapVals(idSet, snap, valFlags)
+			snapVals, err = util.ReadRockstar(snap, idSet, valFlags...)
 			if err != nil { return nil, err }
 		}
 
@@ -259,6 +263,7 @@ func readSnapVals(
 	if err != nil { return nil, err }
 
 	// Read in values and search for them.
+
 	rids, vals, err := halo.ReadRockstarVals(hlist, &hd.Cosmo, valFlags...)
 	if err != nil { return nil, err }
 
@@ -283,7 +288,6 @@ func readSnapVals(
 			outVals[i][j] = vals[j][idx]
 		}
 	}
-
 	return outVals, nil
 }
 
