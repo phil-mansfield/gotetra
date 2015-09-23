@@ -12,26 +12,46 @@ import (
 const (
 	rockstarMemoDir = "rockstar"
 	rockstarMemoFile = "halo_%d.dat"
+	rockstarShortMemoFile = "halo_short_%d.dat"
 )
 
 // This function does fairly large heap allocations even when it doesn't need
 // to. Consider passing it a buffer.
-func ReadRockstar(snap int, ids []int, valFlags ...halo.Val,) ([][]float64,error) {
+func ReadRockstar(
+	snap int, ids []int, valFlags ...halo.Val,
+) ([][]float64, error) {
 	// Find binFile.
 	memoDir, err := MemoDir()
 	if err != nil { return nil, err }
 	dir := path.Join(memoDir, rockstarMemoDir)
 	if !PathExists(dir) { os.Mkdir(dir, 0777) }
-	binFile := path.Join(dir, fmt.Sprintf(rockstarMemoFile, snap))
 
+	binFile := path.Join(dir, fmt.Sprintf(rockstarMemoFile, snap))
+	shortBinFile := path.Join(dir, fmt.Sprintf(rockstarShortMemoFile, snap))
+
+	// This wastes a read the first time it's called. You need to decide if you
+	// care. (Answer: probably.)
+	vals, err := readRockstar(shortBinFile, 10 * 1000, snap, ids, valFlags)
+	if err == nil { return vals, err }
+	return readRockstar(binFile, -1, snap, ids, valFlags)
+}
+
+func readRockstar(
+	binFile string, n, snap int, ids []int, valFlags []halo.Val,
+) ([][]float64, error) {
 	// If binFile doesn't exist, create it.
 	if !PathExists(binFile) {
 		rockstarDir, err := RockstarDir()
 		if err != nil { return nil, err }
 		hlists, err := DirContents(rockstarDir)
 		if err != nil { return nil, err }
-		err = halo.RockstarConvert(hlists[snap - 1], binFile)
-		if err != nil { return nil, err }
+		if n == -1 {
+			err = halo.RockstarConvert(hlists[snap - 1], binFile)
+			if err != nil { return nil, err }
+		} else {
+			err = halo.RockstarConvertTopN(hlists[snap - 1], binFile, n)
+			if err != nil { return nil, err}
+		}
 	}
 
 	// Get cosmo header.
@@ -41,7 +61,6 @@ func ReadRockstar(snap int, ids []int, valFlags ...halo.Val,) ([][]float64,error
 	hd := &io.SheetHeader{}
 	err = io.ReadSheetHeaderAt(files[0], hd)
 
-	// THe actual read happens here :)
 	rids, rvals, err := halo.ReadBinaryRockstarVals(
 		binFile, &hd.Cosmo, valFlags...,
 	)
