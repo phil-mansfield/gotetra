@@ -131,9 +131,9 @@ const (
 )
 
 func RockstarConvert(inFile, outFile string) error {
-	allIdxs := make([]int, valNum)
-	for i := range allIdxs { allIdxs[i] = i }
-	cols, err := table.ReadTable(inFile, allIdxs, nil)
+	valIdxs := make([]int, valNum)
+	for i := range valIdxs { valIdxs[i] = i }
+	cols, err := table.ReadTable(inFile, valIdxs, nil)
 	if err != nil { return err }
 	
 	f, err := os.Create(outFile)
@@ -143,6 +143,63 @@ func RockstarConvert(inFile, outFile string) error {
 	err = binary.Write(f, binary.LittleEndian, int64(len(cols[0])))
 	if err != nil { return err }
 	for _, col := range cols {
+		err := binary.Write(f, binary.LittleEndian, col)
+		if err != nil { return err }
+	}
+
+	return nil
+}
+
+type idxSet struct {
+	xs []float64
+	idxs []int
+}
+
+func (set idxSet) Less(i, j int) bool { return set.xs[i] < set.xs[j] }
+func (set idxSet) Len() int { return len(set.xs) }
+func (set idxSet) Swap(i, j int) {
+	set.xs[i], set.xs[j] = set.xs[j], set.xs[i]
+	set.idxs[i], set.idxs[j] = set.idxs[j], set.idxs[i]
+}
+
+func idxSort(xs []float64) []int {
+	xsCopy := make([]float64, len(xs))
+	copy(xsCopy, xs) 
+	idxs := make([]int, len(xs))
+	for i := range idxs { idxs[i] = i }
+
+	set := idxSet{}
+	set.idxs = idxs
+	set.xs = xsCopy
+	sort.Sort(set)
+	return idxs
+}
+
+func RockstarConvertTopN(inFile, outFile string, n int) error {
+	valIdxs := make([]int, valNum)
+	for i := range valIdxs { valIdxs[i] = i }
+	cols, err := table.ReadTable(inFile, valIdxs, nil)
+	if err != nil { return err }
+
+	if n > len(cols[0]) { n = len(cols[0]) }
+	idxs := idxSort(cols[M200b])
+
+	outCols := make([][]float64, len(cols))
+	for i := range cols { outCols[i] = make([]float64, len(cols[0])) }
+
+	for j := range cols {
+		for i, idx := range idxs {
+			outCols[j][i] = cols[j][idx]
+		}
+	}
+
+	f, err := os.Create(outFile)
+	if err != nil { return err }
+	defer f.Close()
+
+	err = binary.Write(f, binary.LittleEndian, int64(len(cols[0])))
+	if err != nil { return err }
+	for _, col := range outCols {
 		err := binary.Write(f, binary.LittleEndian, col)
 		if err != nil { return err }
 	}
