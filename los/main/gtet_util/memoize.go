@@ -21,7 +21,7 @@ func ReadRockstar(snap int, ids []int, valFlags ...halo.Val,) ([][]float64,error
 	memoDir, err := MemoDir()
 	if err != nil { return nil, err }
 	dir := path.Join(memoDir, rockstarMemoDir)
-	if !PathExists(dir) { os.Mkdir(dir, os.ModeDir) }
+	if !PathExists(dir) { os.Mkdir(dir, 0777) }
 	binFile := path.Join(dir, fmt.Sprintf(rockstarMemoFile, snap))
 
 	// If binFile doesn't exist, create it.
@@ -30,8 +30,8 @@ func ReadRockstar(snap int, ids []int, valFlags ...halo.Val,) ([][]float64,error
 		if err != nil { return nil, err }
 		hlists, err := DirContents(rockstarDir)
 		if err != nil { return nil, err }
-		asciiFile := path.Join(rockstarDir, hlists[snap - 1])
-		halo.RockstarConvert(asciiFile, binFile)
+		err = halo.RockstarConvert(hlists[snap - 1], binFile)
+		if err != nil { return nil, err }
 	}
 
 	// Get cosmo header.
