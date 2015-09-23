@@ -218,8 +218,9 @@ func readVals(ids, snaps []int, valFlags []halo.Val) ([][]float64, error) {
 			//snapVals, err = readSnapVals(idSet, snap, valFlags)
 			log.Println("Start")
 			snapVals, err = util.ReadRockstar(snap, idSet, valFlags...)
-			log.Println("End")
 			if err != nil { return nil, err }
+			log.Println(snapVals)
+			log.Println("End")
 		}
 
 		for i := range idSet {

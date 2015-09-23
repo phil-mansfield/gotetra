@@ -2,6 +2,7 @@ package gtet_util
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path"
 	
@@ -45,6 +46,9 @@ func ReadRockstar(snap int, ids []int, valFlags ...halo.Val,) ([][]float64,error
 	rids, rvals, err := halo.ReadBinaryRockstarVals(
 		binFile, &hd.Cosmo, valFlags...,
 	)
+	log.Println(rids[:100])
+	log.Println(rvals[0][:100])
+	log.Println(rvals[1][:100])
 	if err != nil { return nil, err }
 	
 	// Select out only the IDs we want.
@@ -66,7 +70,7 @@ func ReadRockstar(snap int, ids []int, valFlags ...halo.Val,) ([][]float64,error
 
 	for i := range found {
 		if !found[i] {
-			return nil, fmt.Errorf("")
+			return nil, fmt.Errorf("Could not find ID %d.", ids[i])
 		}
 	}
 
