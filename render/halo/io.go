@@ -274,6 +274,7 @@ func binaryColGetter(file string, colIdxs []int) ([][]float64, error) {
 
 	jump := n * 8
 	cols := make([][]float64, len(colIdxs))
+	for i := range cols { cols[i] = make([]float64, n) }
 	for i, colIdx := range colIdxs {
 		if colIdx > int(valNum) { panic("Impossibly large colIdx.") }
 		_, err = f.Seek(8 + jump * int64(colIdx), 0)
@@ -281,7 +282,6 @@ func binaryColGetter(file string, colIdxs []int) ([][]float64, error) {
 		err = binary.Read(f, binary.LittleEndian, cols[i])
 		if err != nil { return nil, err }
 	}
-	
 	return cols, nil
 }
 
