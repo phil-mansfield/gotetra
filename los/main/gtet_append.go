@@ -200,7 +200,6 @@ func readVals(ids, snaps []int, valFlags []halo.Val) ([][]float64, error) {
 	}
 	sort.Ints(sortedSnaps)
 
-	log.Println("gtet_append")
 	for _, snap := range sortedSnaps {
 		idSet := snapBins[snap]
 		idxSet := idxBins[snap]
@@ -216,11 +215,8 @@ func readVals(ids, snaps []int, valFlags []halo.Val) ([][]float64, error) {
 			}
 		} else {
 			//snapVals, err = readSnapVals(idSet, snap, valFlags)
-			log.Println("Start")
 			snapVals, err = util.ReadRockstar(snap, idSet, valFlags...)
 			if err != nil { return nil, err }
-			log.Println(snapVals)
-			log.Println("End")
 		}
 
 		for i := range idSet {
