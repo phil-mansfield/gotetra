@@ -53,15 +53,19 @@ func main() {
 
 		if snap < minSnap { continue }
 
+		log.Println("readHeaders")
 		hds, files, err := readHeaders(snap)
 		if err != nil { log.Fatal(err.Error()) }
+		log.Println("boundingSpheres")
 		hBounds, err := boundingSpheres(snap, &hds[0], snapIDs, p)
 		if err != nil { log.Fatal(err.Error()) }
+		log.Println("binIntersections")
 		intrBins := binIntersections(hds, hBounds)
 
 		xs := []rgeom.Vec{}
 		for i := range hds {
 			if len(intrBins[i]) == 0 { continue }
+			log.Println("Header", i)
 			hd := &hds[i]
 
 			n := hd.GridWidth*hd.GridWidth*hd.GridWidth
@@ -80,6 +84,8 @@ func main() {
 			rads[idxs[j]] = rSp(&hds[0], snapCoeffs[j])
 		}
 	}
+
+	log.Println("gtet_mass end")
 
 	printMasses(ids, snaps, masses, rads)
 }
@@ -299,27 +305,15 @@ func boundingSpheres(
 	
 	hlists, err := dirContents(rockstarDir)
 	if err != nil { return nil, err }
-	rids, vals, err := halo.ReadRockstarVals(
-		hlists[snap - 1], &hd.Cosmo, halo.X, halo.Y, halo.Z, halo.Rad200b,
-	)
+	vals := util.ReadRockstar(snap, ids, halo.X, halo.Y, halo.Z, halo.Rad200b)
 	xs, ys, zs, rs := vals[0], vals[1], vals[2], vals[3]
 
 	spheres := make([]geom.Sphere, len(ids))
 	for i := range spheres {
-		j := -1
-		for idx := range xs {
-			if rids[idx] == ids[i] {
-				j = idx
-				break
-			}
+		spheres[i].C = geom.Vec{
+			float32(xs[i]), float32(ys[i]), float32(zs[i]),
 		}
-
-		if j == -1 {
-			return nil, fmt.Errorf("Halo %d not found in snap %d.",
-				ids[i], snap)
-		}
-		spheres[i].C = geom.Vec{float32(xs[j]), float32(ys[j]), float32(zs[j])}
-		spheres[i].R = float32(rs[j])
+		spheres[i].R = float32(rs[i])
 	}
 
 	return spheres, nil
