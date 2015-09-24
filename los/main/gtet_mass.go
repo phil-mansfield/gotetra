@@ -9,6 +9,7 @@ import (
 	"math"
 	"os"
 	"path"
+	"runtime/pprof"
 	"sort"
 	"strconv"
 	"strings"
@@ -19,6 +20,8 @@ import (
 	rgeom "github.com/phil-mansfield/gotetra/render/geom"
 	"github.com/phil-mansfield/gotetra/los/geom"
 	"github.com/phil-mansfield/gotetra/los/analyze"
+	util "github.com/phil-mansfield/gotetra/los/main/gtet_util"
+	
 )
 
 const (
@@ -30,6 +33,12 @@ type Params struct {
 }
 
 func main() {
+	prof, err := os.Create("prof.out")
+	if err != nil { log.Fatal(err.Error()) }
+	err = pprof.StartCPUProfile(prof)
+	if err != nil { log.Fatal(err.Error()) }
+	defer pprof.StopCPUProfile()
+
 	p := parseCmd()
 	ids, snaps, coeffs, err := parseStdin()
 	if err != nil { log.Fatal(err.Error()) }
@@ -53,14 +62,19 @@ func main() {
 
 		if snap < minSnap { continue }
 
-		log.Println("readHeaders")
 		hds, files, err := readHeaders(snap)
 		if err != nil { log.Fatal(err.Error()) }
-		log.Println("boundingSpheres")
 		hBounds, err := boundingSpheres(snap, &hds[0], snapIDs, p)
 		if err != nil { log.Fatal(err.Error()) }
-		log.Println("binIntersections")
 		intrBins := binIntersections(hds, hBounds)
+
+		rLows := make([]float64, len(snapCoeffs))
+		rHighs := make([]float64, len(snapCoeffs))
+		for i := range snapCoeffs {
+			order := findOrder(snapCoeffs[i])
+			shell := analyze.PennaFunc(snapCoeffs[i], order, order, 2)
+			rLows[i], rHighs[i] = shell.RadialRange(10 * 1000)
+		}
 
 		xs := []rgeom.Vec{}
 		for i := range hds {
@@ -75,7 +89,8 @@ func main() {
 
 			for j := range idxs {
 				masses[idxs[j]] += massContained(
-					&hds[i], xs, snapCoeffs[j], hBounds[j],
+					&hds[i], xs, snapCoeffs[j],
+					hBounds[j], rLows[j], rHighs[j],
 				)
 			}
 		}
@@ -298,14 +313,11 @@ func binIntersections(
 func boundingSpheres(
 	snap int, hd *io.SheetHeader, ids []int, p *Params,
 ) ([]geom.Sphere, error) {
-	rockstarDir := os.Getenv("GTET_ROCKSTAR_DIR")
-	if rockstarDir == "" { 
-		return nil, fmt.Errorf("$GTET_ROCKSTAR_DIR not set.")
-	}
-	
-	hlists, err := dirContents(rockstarDir)
+	vals, err := util.ReadRockstar(
+		snap, ids, halo.X, halo.Y, halo.Z, halo.Rad200b,
+	)
+
 	if err != nil { return nil, err }
-	vals := util.ReadRockstar(snap, ids, halo.X, halo.Y, halo.Z, halo.Rad200b)
 	xs, ys, zs, rs := vals[0], vals[1], vals[2], vals[3]
 
 	spheres := make([]geom.Sphere, len(ids))
@@ -357,7 +369,8 @@ func rSp(hd *io.SheetHeader, coeffs []float64) float64 {
 }
 
 func massContained(
-	hd *io.SheetHeader, xs []rgeom.Vec, coeffs []float64, sphere geom.Sphere,
+	hd *io.SheetHeader, xs []rgeom.Vec, coeffs []float64,
+	sphere geom.Sphere, rLow, rHigh float64,
 ) float64 {
 	c := &hd.Cosmo
 	rhoM := cosmo.RhoAverage(c.H100 * 100, c.OmegaM, c.OmegaL, c.Z )
@@ -369,8 +382,7 @@ func massContained(
 	shell := analyze.PennaFunc(coeffs, order, order, 2)
 
 	// This prevents excess calls to the shell function:
-	low, high := shell.RadialRange(10 * 1000)
-	low2, high2 := float32(low*low), float32(high*high)
+	low2, high2 := float32(rLow*rLow), float32(rHigh*rHigh)
 
 	sum := 0.0
 	sw := hd.SegmentWidth
