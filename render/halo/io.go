@@ -182,10 +182,10 @@ func RockstarConvertTopN(inFile, outFile string, n int) error {
 	if err != nil { return err }
 
 	if n > len(cols[0]) { n = len(cols[0]) }
-	idxs := idxSort(cols[M200b])
+	idxs := idxSort(cols[M200b])[len(cols[0]) - n:]
 
 	outCols := make([][]float64, len(cols))
-	for i := range cols { outCols[i] = make([]float64, len(cols[0])) }
+	for i := range cols { outCols[i] = make([]float64, len(idxs)) }
 
 	for j := range cols {
 		for i, idx := range idxs {
@@ -197,7 +197,7 @@ func RockstarConvertTopN(inFile, outFile string, n int) error {
 	if err != nil { return err }
 	defer f.Close()
 
-	err = binary.Write(f, binary.LittleEndian, int64(len(cols[0])))
+	err = binary.Write(f, binary.LittleEndian, int64(n))
 	if err != nil { return err }
 	for _, col := range outCols {
 		err := binary.Write(f, binary.LittleEndian, col)
