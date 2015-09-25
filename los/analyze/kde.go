@@ -61,27 +61,6 @@ func NewKDETree(rs, phis []float64, splits int) *KDETree {
 
 	kt.growTrees(rs, phis, splits)
 	kt.findMaxes()
-
-	/*
-	plt.Reset()
-	pltRs := make([]float64, 200)
-	vals := make([]float64, 200)
-	pltDr := (kt.high - kt.low) / float64(len(pltRs))
-	for i := range pltRs { pltRs[i] = pltDr * (float64(i) + 0.5) }
-	cs := []string{"r", "b", "g", "m", "k"}
-	for i, sps := range kt.spTree {
-		for j, sp := range sps {
-			for k := range vals { vals[k] = sp.Eval(pltRs[k]) }
-			plt.Plot(pltRs, vals, plt.Color(cs[i]))
-
-			pltMaxRs := kt.maxesTree[i][j]
-			pltMaxes := make([]float64, len(pltMaxRs))
-			for i := range pltMaxes { pltMaxes[i] = sp.Eval(pltMaxRs[i]) }
-			plt.Plot(pltMaxRs, pltMaxes, "o", plt.Color(cs[i]))
-		}
-	}
-	plt.Show()
-*/
 	kt.connectMaxes()
 
 	return kt
