@@ -71,7 +71,6 @@ func main() {
 		xs := []rgeom.Vec{}
 		for i := range hds {
 			if len(intrBins[i]) == 0 { continue }
-			log.Println("Header", i)
 			hd := &hds[i]
 
 			n := hd.GridWidth*hd.GridWidth*hd.GridWidth
