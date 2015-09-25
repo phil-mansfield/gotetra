@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/phil-mansfield/gotetra/los/tree"
+	util "github.com/phil-mansfield/gotetra/los/main/gtet_util"
 )
 
 var usage = "gtet_tree halo_id_1 [halo]  or  gtet_ids ... | gtet_tree"
@@ -88,18 +89,16 @@ func parseStdinArgs(args []string) ([]int, error) {
 }
 
 func treeFiles() ([]string, error) {
-	treeDir := os.Getenv("GTET_TREE_DIR")
+	treeDir, err := util.TreeDir()
+	if err != nil { return nil, err }
 	infos, err := ioutil.ReadDir(treeDir)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"Problem reading GTET_TREE_DIR: %s", err.Error(),
-		)
-	}
+	if err != nil { return nil, err }
 
 	names := []string{}
 	for _, info := range infos {
 		name := info.Name()
 		n := len(name)
+		// This is pretty hacky.
 		if n > 4 && name[:5] == "tree_" && name[n-4:] == ".dat" {
 			names = append(names, path.Join(treeDir, name))
 		}

@@ -5,7 +5,6 @@ import (
 	"flag"
 	"io/ioutil"
 	"log"
-	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -135,20 +134,23 @@ func getIDs(idStart, idEnd int, args []string) []int {
 }
 
 func snapNum() (int, error) {
-	rockstarDir := os.Getenv("GTET_ROCKSTAR_DIR")
+	rockstarDir, err := util.RockstarDir()
+	if err != nil { return 0, err }
 	infos, err := ioutil.ReadDir(rockstarDir)
 	return len(infos), err
 }
 
 func getSnapHaloList(i int) (name string, err error) {
-	rockstarDir := os.Getenv("GTET_ROCKSTAR_DIR")
+	rockstarDir, err := util.RockstarDir()
+	if err != nil { return "", err }
 	infos, err := ioutil.ReadDir(rockstarDir)
 	if err != nil { return "", err }
 	return path.Join(rockstarDir, infos[i - 1].Name()), nil
 }
 
 func findSnaps(ids []int) ([]int, error) {
-	treeDir := os.Getenv("GTET_TREE_DIR")
+	treeDir, err := util.TreeDir()
+	if err != nil { return nil, err }
 	infos, err := ioutil.ReadDir(treeDir)
 	if err != nil { return nil, err }
 
@@ -166,13 +168,11 @@ func findSnaps(ids []int) ([]int, error) {
 
 
 func readHeader(snap int) (*io.SheetHeader, error) {
-	gtetFmt := os.Getenv("GTET_FMT")
-	if gtetFmt == "" {
-		return nil, fmt.Errorf("$GTET_FMT not set.")
-	}
+	gtetFmt, err := util.GtetFmt()
+	if err != nil { return nil, err }
 
 	gtetDir := fmt.Sprintf(gtetFmt, snap)
-	gtetFiles, err := dirContents(gtetDir)
+	gtetFiles, err := util.DirContents(gtetDir)
 	if err != nil { return nil, err }
 
 	hd := &io.SheetHeader{}
@@ -276,16 +276,4 @@ func printIds(ids []int, snaps []int, isSub []bool, mult int) {
 		}
 		if mult > 1 { fmt.Printf(rowFmt, -1, -1) }
 	}
-}
-
-func dirContents(dir string) ([]string, error) {
-	infos, err := ioutil.ReadDir(dir)
-	if err != nil { return nil, err }
-	
-	files := make([]string, len(infos))
-	for i := range infos {
-		files[i] = path.Join(dir, infos[i].Name())
-	}
-
-	return files, nil
 }

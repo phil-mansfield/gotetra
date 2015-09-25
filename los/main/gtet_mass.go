@@ -189,7 +189,8 @@ func binBySnap(
 }
 
 func readHeaders(snap int) ([]io.SheetHeader, []string, error) {
-	memoDir := os.Getenv("GTET_MEMO_DIR")
+	memoDir, err := util.MemoDir()
+	if err != nil { return nil, nil, err }
 	if memoDir == "" {
 		// You don't want to memoize? Fine. Deal with the consequences.
 		return readHeadersFromSheet(snap)
@@ -222,10 +223,11 @@ func readHeaders(snap int) ([]io.SheetHeader, []string, error) {
 		if err != nil { return nil, nil, err }
 		hds := make([]io.SheetHeader, n)
         binary.Read(f, binary.LittleEndian, hds) 
-
-		gtetFmt := os.Getenv("GTET_FMT")
+		
+		gtetFmt, err := util.GtetFmt()
+		if err != nil { return nil, nil, err }
 		dir := fmt.Sprintf(gtetFmt, snap)
-		files, err := dirContents(dir)
+		files, err := util.DirContents(dir)
 		if err != nil { return nil, nil, err }
 
 		return hds, files, nil
@@ -233,17 +235,19 @@ func readHeaders(snap int) ([]io.SheetHeader, []string, error) {
 }
 
 func sheetNum(snap int) (int, error) {
-	gtetFmt := os.Getenv("GTET_FMT")
+	gtetFmt, err := util.GtetFmt()
+	return 0, nil
 	dir := fmt.Sprintf(gtetFmt, snap)
-	files, err := dirContents(dir)
+	files, err := util.DirContents(dir)
 	if err != nil { return 0, err }
 	return len(files), nil
 }
 
 func readHeadersFromSheet(snap int) ([]io.SheetHeader, []string, error) {
-	gtetFmt := os.Getenv("GTET_FMT")
+	gtetFmt, err := util.GtetFmt()
+	if err != nil { return nil, nil, err }
 	dir := fmt.Sprintf(gtetFmt, snap)
-	files, err := dirContents(dir)
+	files, err := util.DirContents(dir)
 	if err != nil { return nil, nil, err }
 
 	hds := make([]io.SheetHeader, len(files))
@@ -252,18 +256,6 @@ func readHeadersFromSheet(snap int) ([]io.SheetHeader, []string, error) {
 		if err != nil { return nil, nil, err }
 	}
 	return hds, files, nil
-}
-
-func dirContents(dir string) ([]string, error) {
-	infos, err := ioutil.ReadDir(dir)
-	if err != nil { return nil, err }
-	
-	files := make([]string, len(infos))
-	for i := range infos {
-		files[i] = path.Join(dir, infos[i].Name())
-	}
-
-	return files, nil
 }
 
 func wrapDist(x1, x2, width float32) float32 {
