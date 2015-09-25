@@ -13,6 +13,8 @@ const (
 	rockstarMemoDir = "rockstar"
 	rockstarMemoFile = "halo_%d.dat"
 	rockstarShortMemoFile = "halo_short_%d.dat"
+
+	RockstarShortMemoNum = 10 * 1000
 )
 
 // This function does fairly large heap allocations even when it doesn't need
@@ -31,7 +33,9 @@ func ReadRockstar(
 
 	// This wastes a read the first time it's called. You need to decide if you
 	// care. (Answer: probably.)
-	vals, err := readRockstar(shortBinFile, 10 * 1000, snap, ids, valFlags)
+	vals, err := readRockstar(
+		shortBinFile, RockstarShortMemoNum, snap, ids, valFlags,
+	)
 	if err == nil { return vals, err }
 	return readRockstar(binFile, -1, snap, ids, valFlags)
 }
