@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"sort"
 	
 	"github.com/phil-mansfield/gotetra/render/halo"
 	"github.com/phil-mansfield/gotetra/render/io"
@@ -16,6 +17,57 @@ const (
 
 	RockstarShortMemoNum = 10 * 1000
 )
+
+func ReadSortedRockstarIDs(snap, maxID int, flag halo.Val) ([]int, error) {
+	memoDir, err := MemoDir()
+	if err != nil { return nil, err }
+	dir := path.Join(memoDir, rockstarMemoDir)
+	if !PathExists(dir) { os.Mkdir(dir, 0777) }
+
+	var vals [][]float64
+	if maxID >= RockstarShortMemoNum {
+		file := path.Join(dir, fmt.Sprintf(rockstarMemoFile, snap))
+		vals, err = readRockstar(
+			file, RockstarShortMemoNum, snap, nil, halo.ID, flag,
+		)
+		if err != nil { return nil, err }
+	} else {
+		file := path.Join(dir, fmt.Sprintf(rockstarShortMemoFile, snap))
+		vals, err = readRockstar(file, -1, snap, nil, halo.ID, flag)
+		if err != nil { return nil, err }
+	}
+	
+	fids, ms := vals[0], vals[1]
+	ids := make([]int, len(fids))
+	for i := range ids { ids[i] = int(fids[i]) }
+
+	if len(ids) < maxID {
+		return nil, fmt.Errorf(
+			"ID %d too large for snapshot %d", maxID, snap,
+		)
+	}
+
+	sortRockstar(ids, ms)
+	return ids[:maxID+1], nil
+}
+
+type massSet struct {
+	ids []int
+	ms []float64
+}
+
+func (set massSet) Len() int { return len(set.ids) }
+// We're reverse sorting.
+func (set massSet) Less(i, j int) bool { return set.ms[i] > set.ms[j] }
+func (set massSet) Swap(i, j int) {
+	set.ms[i], set.ms[j] = set.ms[j], set.ms[i]
+	set.ids[i], set.ids[j] = set.ids[j], set.ids[i]
+}
+
+func sortRockstar(ids []int, ms []float64) {
+	set := massSet{ ids, ms }
+	sort.Sort(set)
+}
 
 // This function does fairly large heap allocations even when it doesn't need
 // to. Consider passing it a buffer.
@@ -34,14 +86,14 @@ func ReadRockstar(
 	// This wastes a read the first time it's called. You need to decide if you
 	// care. (Answer: probably.)
 	vals, err := readRockstar(
-		shortBinFile, RockstarShortMemoNum, snap, ids, valFlags,
+		shortBinFile, RockstarShortMemoNum, snap, ids, valFlags...,
 	)
 	if err == nil { return vals, err }
-	return readRockstar(binFile, -1, snap, ids, valFlags)
+	return readRockstar(binFile, -1, snap, ids, valFlags...)
 }
 
 func readRockstar(
-	binFile string, n, snap int, ids []int, valFlags []halo.Val,
+	binFile string, n, snap int, ids []int, valFlags ...halo.Val,
 ) ([][]float64, error) {
 	// If binFile doesn't exist, create it.
 	if !PathExists(binFile) {
@@ -72,6 +124,8 @@ func readRockstar(
 	
 	// Select out only the IDs we want.
 	vals := make([][]float64, len(rvals))
+	if ids == nil { return vals, nil }
+
 	found := make([]bool, len(ids))
 	for i := range vals { vals[i] = make([]float64, len(ids)) }
 	// I think this looping strategy has better cache properties. But it will
