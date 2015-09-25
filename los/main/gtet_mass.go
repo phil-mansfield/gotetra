@@ -1,14 +1,12 @@
 package main
 
 import (
-	"encoding/binary"
 	"flag"
 	"fmt"
 	"log"
 	"io/ioutil"
 	"math"
 	"os"
-	"path"
 	"runtime"
 	"sort"
 	"strconv"
@@ -56,7 +54,7 @@ func main() {
 
 		if snap < minSnap { continue }
 
-		hds, files, err := readHeaders(snap)
+		hds, files, err := util.ReadHeaders(snap)
 		if err != nil { log.Fatal(err.Error()) }
 		hBounds, err := boundingSpheres(snap, &hds[0], snapIDs, p)
 		if err != nil { log.Fatal(err.Error()) }
@@ -186,76 +184,6 @@ func binBySnap(
 		idxBins[snap] = append(idxBins[snap], i)
 	}
 	return snapBins, coeffBins, idxBins
-}
-
-func readHeaders(snap int) ([]io.SheetHeader, []string, error) {
-	memoDir, err := util.MemoDir()
-	if err != nil { return nil, nil, err }
-	if memoDir == "" {
-		// You don't want to memoize? Fine. Deal with the consequences.
-		return readHeadersFromSheet(snap)
-	}
-	if _, err := os.Stat(memoDir); err != nil {
-		return nil, nil, err
-	}
-
-	memoFile := path.Join(memoDir, fmt.Sprintf("hd_snap%d.dat", snap))
-
-	if _, err := os.Stat(memoFile); err != nil {
-		// File not written yet.
-		hds, files, err := readHeadersFromSheet(snap)
-		if err != nil { return nil, nil, err }
-		
-        f, err := os.Create(memoFile)
-        if err != nil { return nil, nil, err }
-        defer f.Close()
-        binary.Write(f, binary.LittleEndian, hds)
-
-		return hds, files, nil
-	} else {
-		// File exists: read from it instead.
-
-		f, err := os.Open(memoFile)
-        if err != nil { return nil, nil, err }
-        defer f.Close()
-		
-		n, err := sheetNum(snap)
-		if err != nil { return nil, nil, err }
-		hds := make([]io.SheetHeader, n)
-        binary.Read(f, binary.LittleEndian, hds) 
-		
-		gtetFmt, err := util.GtetFmt()
-		if err != nil { return nil, nil, err }
-		dir := fmt.Sprintf(gtetFmt, snap)
-		files, err := util.DirContents(dir)
-		if err != nil { return nil, nil, err }
-
-		return hds, files, nil
-	}
-}
-
-func sheetNum(snap int) (int, error) {
-	gtetFmt, err := util.GtetFmt()
-	return 0, nil
-	dir := fmt.Sprintf(gtetFmt, snap)
-	files, err := util.DirContents(dir)
-	if err != nil { return 0, err }
-	return len(files), nil
-}
-
-func readHeadersFromSheet(snap int) ([]io.SheetHeader, []string, error) {
-	gtetFmt, err := util.GtetFmt()
-	if err != nil { return nil, nil, err }
-	dir := fmt.Sprintf(gtetFmt, snap)
-	files, err := util.DirContents(dir)
-	if err != nil { return nil, nil, err }
-
-	hds := make([]io.SheetHeader, len(files))
-	for i := range files {
-		err = io.ReadSheetHeaderAt(files[i], &hds[i])
-		if err != nil { return nil, nil, err }
-	}
-	return hds, files, nil
 }
 
 func wrapDist(x1, x2, width float32) float32 {

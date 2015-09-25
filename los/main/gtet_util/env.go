@@ -29,3 +29,12 @@ func GtetFmt() (string, error) {
 	// In theory, I could manually check that the format is valid.
 	return str, nil
 }
+
+func SheetNum(snap int) (int, error) {
+    gtetFmt, err := GtetFmt()
+    if err != nil { return 0, err }
+    dir := fmt.Sprintf(gtetFmt, snap)
+    files, err := DirContents(dir)
+    if err != nil { return 0, err }
+    return len(files), nil
+}

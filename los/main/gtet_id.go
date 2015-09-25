@@ -166,7 +166,6 @@ func findSnaps(ids []int) ([]int, error) {
 	return tree.HaloSnaps(names, ids)
 }
 
-
 func readHeader(snap int) (*io.SheetHeader, error) {
 	gtetFmt, err := util.GtetFmt()
 	if err != nil { return nil, err }

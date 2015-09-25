@@ -1,6 +1,7 @@
 package gtet_util
 
 import (
+	"encoding/binary"
 	"fmt"
 	"os"
 	"path"
@@ -148,4 +149,62 @@ func readRockstar(
 	}
 
 	return vals, nil
+}
+
+func readHeadersFromSheet(snap int) ([]io.SheetHeader, []string, error) {
+	gtetFmt, err := GtetFmt()
+	if err != nil { return nil, nil, err }
+	dir := fmt.Sprintf(gtetFmt, snap)
+	files, err := DirContents(dir)
+	if err != nil { return nil, nil, err }
+
+	hds := make([]io.SheetHeader, len(files))
+	for i := range files {
+		err = io.ReadSheetHeaderAt(files[i], &hds[i])
+		if err != nil { return nil, nil, err }
+	}
+	return hds, files, nil
+}
+
+
+func ReadHeaders(snap int) ([]io.SheetHeader, []string, error) {
+	memoDir, err := MemoDir()
+	if err != nil { return nil, nil, err }
+	if _, err := os.Stat(memoDir); err != nil {
+		return nil, nil, err
+	}
+
+	memoFile := path.Join(memoDir, fmt.Sprintf("hd_snap%d.dat", snap))
+
+	if _, err := os.Stat(memoFile); err != nil {
+		// File not written yet.
+		hds, files, err := readHeadersFromSheet(snap)
+		if err != nil { return nil, nil, err }
+		
+        f, err := os.Create(memoFile)
+        if err != nil { return nil, nil, err }
+        defer f.Close()
+        binary.Write(f, binary.LittleEndian, hds)
+
+		return hds, files, nil
+	} else {
+		// File exists: read from it instead.
+
+		f, err := os.Open(memoFile)
+        if err != nil { return nil, nil, err }
+        defer f.Close()
+		
+		n, err := SheetNum(snap)
+		if err != nil { return nil, nil, err }
+		hds := make([]io.SheetHeader, n)
+        binary.Read(f, binary.LittleEndian, hds) 
+
+		gtetFmt, err := GtetFmt()
+		if err != nil { return nil, nil, err }
+		dir := fmt.Sprintf(gtetFmt, snap)
+		files, err := DirContents(dir)
+		if err != nil { return nil, nil, err }
+
+		return hds, files, nil
+	}
 }
