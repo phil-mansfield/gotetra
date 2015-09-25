@@ -13,6 +13,7 @@ import (
 	"github.com/phil-mansfield/gotetra/render/halo"
 	"github.com/phil-mansfield/gotetra/render/io"
 	"github.com/phil-mansfield/gotetra/los/tree"
+	util "github.com/phil-mansfield/gotetra/los/main/gtet_util"
 )
 
 type IDType int
@@ -180,20 +181,17 @@ func readHeader(snap int) (*io.SheetHeader, error) {
 	return hd, nil
 }
 
-// This funciton has side effects :(
 func convertSortedIDs(
 	rawIDs []int, snap int,
 ) ([]int, error) {
-	list, err := getSnapHaloList(snap)
-	if err != nil { return nil, err }
+	maxID := 0
+	for _, id := range rawIDs {
+		if id > maxID { maxID = id }
+	}
 
-	hd, err := readHeader(snap)
-	if err != nil { return nil, err }
-	cosmo := &hd.Cosmo
+	rids, err := util.ReadSortedRockstarIDs(snap, maxID, halo.M200b)
+	if err != nil { return nil, err }	
 
-	rids, xs, ys, zs, ms, rs, err = halo.ReadRockstar(list, halo.R200m, cosmo)
-	if err != nil { return nil, err }
-	
 	ids := make([]int, len(rawIDs))
 	for i := range ids { ids[i] = rids[rawIDs[i]] }
 	return ids, nil

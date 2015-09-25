@@ -12,7 +12,6 @@ import (
 	"strings"
 	
 	"github.com/phil-mansfield/gotetra/render/halo"
-	"github.com/phil-mansfield/gotetra/render/io"
 
 	util "github.com/phil-mansfield/gotetra/los/main/gtet_util"
 )
@@ -214,7 +213,6 @@ func readVals(ids, snaps []int, valFlags []halo.Val) ([][]float64, error) {
 				snapVals[i] = make([]float64, len(valFlags))
 			}
 		} else {
-			//snapVals, err = readSnapVals(idSet, snap, valFlags)
 			snapVals, err = util.ReadRockstar(snap, idSet, valFlags...)
 			if err != nil { return nil, err }
 			snapVals = flipAxis(snapVals)
@@ -236,59 +234,6 @@ func binBySnap(snaps, ids []int) (snapBins, idxBins map[int][]int) {
 		idxBins[snap] = append(idxBins[snap], i)
 	}
 	return snapBins, idxBins
-}
-
-func readSnapVals(
-	ids []int, snap int, valFlags []halo.Val,
-) ([][]float64, error) {
-	// Read in Rockstar catalog.
-	rockstarDir := os.Getenv("GTET_ROCKSTAR_DIR")
-	if rockstarDir == "" {
-		return nil, fmt.Errorf("$GTET_ROCKSTAR_DIR not set.")
-	} 
-
-	files, err := dirContents(rockstarDir)
-	if err != nil { return nil, err }
-	// Can't have a halo at the 0th snapshot.
-	hlist := files[snap - 1]
-
-	// Read in SheetHeader
-	gtetFmt := os.Getenv("GTET_FMT")
-	if gtetFmt == "" {
-		return nil, fmt.Errorf("$GTET_FMT not set.")
-	}
-	files, err = dirContents(fmt.Sprintf(gtetFmt, snap))
-	hd := &io.SheetHeader{}
-	err = io.ReadSheetHeaderAt(files[0], hd)
-	if err != nil { return nil, err }
-
-	// Read in values and search for them.
-
-	rids, vals, err := halo.ReadRockstarVals(hlist, &hd.Cosmo, valFlags...)
-	if err != nil { return nil, err }
-
-	outVals := make([][]float64, len(ids))
-	for i := range outVals {
-		outVals[i] = make([]float64, len(valFlags))
-	}
-
-	for i, id := range ids {
-		// TODO: benchmark at what point sorting the list is important.
-		idx := -1
-		for j, rid := range rids {
-			if rid == id {
-				idx = j
-				break
-			}
-		}
-		if idx == -1 {
-			return nil, fmt.Errorf("ID %d, %d, not found in hlist.", i+1, id)
-		}
-		for j := range outVals[i] {
-			outVals[i][j] = vals[j][idx]
-		}
-	}
-	return outVals, nil
 }
 
 func dirContents(dir string) ([]string, error) {

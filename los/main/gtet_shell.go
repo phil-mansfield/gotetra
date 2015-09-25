@@ -18,6 +18,7 @@ import (
 	"github.com/phil-mansfield/gotetra/los"
 	"github.com/phil-mansfield/gotetra/los/geom"
 	"github.com/phil-mansfield/gotetra/los/analyze"
+	util "github.com/phil-mansfield/gotetra/los/main/gtet_util"
 	"github.com/phil-mansfield/gotetra/render/io"
 	"github.com/phil-mansfield/gotetra/render/halo"
 )
@@ -270,51 +271,25 @@ func readHeadersFromSheet(snap int) ([]io.SheetHeader, []string, error) {
 func createHalos(
 	snap int, hd *io.SheetHeader, ids []int, p *Params,
 ) ([]los.HaloProfiles, error) {
-	// Read coordinates, radii and IDs of halos.
-	rockstarDir := os.Getenv("GTET_ROCKSTAR_DIR")
-	if rockstarDir == "" {
-		return nil, fmt.Errorf("$GTET_ROCKSTAR_DIR not set.")
-	} 
-
-	files, err := dirContents(rockstarDir)
-	if err != nil { return nil, err }
-	// There are no halos in the 0th snapshot
-	file := files[snap - 1]
-
-	rids, vals, err := halo.ReadRockstarVals(
-		file, &hd.Cosmo, halo.X, halo.Y, halo.Z, halo.M200b,
+	vals, err := util.ReadRockstar(
+		snap, ids, halo.X, halo.Y, halo.Z, halo.Rad200b,
 	)
 	if err != nil { return nil, err }
 
-	xs, ys, zs, ms := vals[0], vals[1], vals[2], vals[3]
-	halo.R200m.Radius(&hd.Cosmo, ms, ms)
-	rs := ms
+	xs, ys, zs, rs := vals[0], vals[1], vals[2], vals[3]
 
 	// Initialize halos.
 	halos := make([]los.HaloProfiles, len(ids))
 	seenIDs := make(map[int]bool)
 	for i, id := range ids {
-		idx := -1
-		// TODO: Sort first if the ID count is large enough.
-		for j, rid := range rids {
-			if rid == id { 
-				idx = j
-				break
-			}
-		}
-
-		if idx == -1 {
-			return nil, fmt.Errorf("Halo ID %d not in halo catalog.", id)
-		}
-		
 		origin := &geom.Vec{
-			float32(xs[idx]), float32(ys[idx]), float32(zs[idx]),
+			float32(xs[i]), float32(ys[i]), float32(zs[i]),
 		}
 
 		// If we've already seen a halo once, randomize its orientation.
 		if seenIDs[id] {
 			halos[i].Init(
-				id, p.Rings, origin, rs[idx] * p.MinMult, rs[idx] * p.MaxMult,
+				id, p.Rings, origin, rs[i] * p.MinMult, rs[i] * p.MaxMult,
 				p.RBins, p.Spokes, hd.TotalWidth, los.Log(true),
 				los.Rotate(float32(2 * math.Pi * rand.Float64()),
                     float32(2 * math.Pi * rand.Float64()),
@@ -323,7 +298,7 @@ func createHalos(
 		} else {
 			seenIDs[id] = true
 			halos[i].Init(
-				id, p.Rings, origin, rs[idx] * p.MinMult, rs[idx] * p.MaxMult,
+				id, p.Rings, origin, rs[i] * p.MinMult, rs[i] * p.MaxMult,
 				p.RBins, p.Spokes, hd.TotalWidth, los.Log(true),
 			)
 		}
