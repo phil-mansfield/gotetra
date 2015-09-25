@@ -89,16 +89,5 @@ func readRockstar(
 		}
 	}
 
-	return flipAxis(vals), nil
-}
-
-func flipAxis(vals [][]float64) [][]float64 {
-	out := make([][]float64, len(vals[0]))
-	for i := range out { out[i] = make([]float64, len(vals)) }
-	for i := range out {
-		for j := range vals {
-			out[i][j] = vals[j][i]
-		}
-	}
-	return out
+	return vals, nil
 }

@@ -217,6 +217,7 @@ func readVals(ids, snaps []int, valFlags []halo.Val) ([][]float64, error) {
 			//snapVals, err = readSnapVals(idSet, snap, valFlags)
 			snapVals, err = util.ReadRockstar(snap, idSet, valFlags...)
 			if err != nil { return nil, err }
+			snapVals = flipAxis(snapVals)
 		}
 
 		for i := range idSet {
@@ -332,6 +333,17 @@ func printVals(ids, snaps []int, inVals, vals [][]float64) {
 		args := append([]interface{}{ids[i], snaps[i]}, intr(vals[i])...)
 		fmt.Printf(rowFmt, args...)
 	}
+}
+
+func flipAxis(vals [][]float64) [][]float64 {
+    out := make([][]float64, len(vals[0]))
+    for i := range out { out[i] = make([]float64, len(vals)) }
+    for i := range out {
+        for j := range vals {
+            out[i][j] = vals[j][i]
+        }
+    }
+    return out
 }
 
 func intr(xs []float64) []interface{} {
