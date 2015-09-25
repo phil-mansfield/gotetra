@@ -9,7 +9,7 @@ import (
 	"math"
 	"os"
 	"path"
-	"runtime/pprof"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -33,12 +33,6 @@ type Params struct {
 }
 
 func main() {
-	prof, err := os.Create("prof.out")
-	if err != nil { log.Fatal(err.Error()) }
-	err = pprof.StartCPUProfile(prof)
-	if err != nil { log.Fatal(err.Error()) }
-	defer pprof.StopCPUProfile()
-
 	p := parseCmd()
 	ids, snaps, coeffs, err := parseStdin()
 	if err != nil { log.Fatal(err.Error()) }
@@ -372,6 +366,37 @@ func massContained(
 	hd *io.SheetHeader, xs []rgeom.Vec, coeffs []float64,
 	sphere geom.Sphere, rLow, rHigh float64,
 ) float64 {
+	sw := hd.SegmentWidth
+
+	
+	cpu := runtime.NumCPU()
+	workers := int64(runtime.GOMAXPROCS(cpu))
+	n := (sw*sw*sw) / workers
+	outChan := make(chan float64, workers)
+	for i := int64(0); i < workers - 1; i++ {
+		go massContainedChan(
+			hd, xs, coeffs, sphere, rLow, rHigh, n*i, n*(i+1), outChan,
+		)
+	}
+
+	massContainedChan(
+		hd, xs, coeffs, sphere, rLow, rHigh,
+		n*(workers - 1), sw*sw*sw, outChan,
+	)
+
+	sum := 0.0
+	for i := int64(0); i < workers; i++ {
+		sum += <-outChan
+	}
+	
+	return sum
+}
+
+func massContainedChan(
+	hd *io.SheetHeader, xs []rgeom.Vec, coeffs []float64,
+	sphere geom.Sphere, rLow, rHigh float64,
+	start, end int64, out chan float64,
+) {
 	c := &hd.Cosmo
 	rhoM := cosmo.RhoAverage(c.H100 * 100, c.OmegaM, c.OmegaL, c.Z )
 	dx := hd.TotalWidth / float64(hd.CountWidth) / (1 + c.Z)
@@ -380,13 +405,11 @@ func massContained(
 
 	order := findOrder(coeffs)
 	shell := analyze.PennaFunc(coeffs, order, order, 2)
-
-	// This prevents excess calls to the shell function:
 	low2, high2 := float32(rLow*rLow), float32(rHigh*rHigh)
 
 	sum := 0.0
 	sw := hd.SegmentWidth
-	for si := int64(0); si < sw*sw*sw; si++ {
+	for si := start; si < end; si++ {
 		xi, yi, zi := coords(si, hd.SegmentWidth)
 		i := xi + yi*sw + zi*sw*sw
 		x, y, z := xs[i][0], xs[i][1], xs[i][2]
@@ -402,7 +425,7 @@ func massContained(
 			sum += ptMass
 		}
 	}
-	return sum
+	out <- sum
 }
 
 func printMasses(ids, snaps []int, masses, rads []float64) {
