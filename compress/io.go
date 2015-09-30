@@ -10,7 +10,7 @@ import (
 )
 
 func GetBase(dir string) string {
-	return path.Join(dir, "sheet_%d%d%d.dat")
+	return path.Join(dir, "sheet%d%d%d.dat")
 }
 
 // Super wasteful with IO operations.
@@ -22,18 +22,22 @@ func ReadLine(
 	for i := int64(0); i < 8; i++ {
 		var ix, iy, iz int64
 		if x == -1 { ix, iy, iz = i, y / hd.GridWidth, z / hd.GridWidth }
-		if x == -1 { ix, iy, iz = x / hd.GridWidth, i, z / hd.GridWidth }
-		if x == -1 { ix, iy, iz = x / hd.GridWidth, y / hd.GridWidth, i }
-		err := io.ReadSheetPositionsAt(fmt.Sprintf(base, ix, iy, iz), xs)
+		if y == -1 { ix, iy, iz = x / hd.GridWidth, i, z / hd.GridWidth }
+		if z == -1 { ix, iy, iz = x / hd.GridWidth, y / hd.GridWidth, i }
+		fname := fmt.Sprintf(base, iz, iy, ix)
+		err := io.ReadSheetPositionsAt(fname, xs)
 		if err != nil { return nil, err }
 
+		err = io.ReadSheetHeaderAt(fname, hd)
+		//fmt.Println(hd.Origin, fname)
+		
 		for j := int64(0); j < hd.SegmentWidth; j++ {
 			var jx, jy, jz int64
-			if x == -1 { jx, jx, jz = j, y % hd.GridWidth, z % hd.GridWidth }
-			if y == -1 { jx, jx, jz = x % hd.GridWidth, j, z % hd.GridWidth }
-			if z == -1 { jx, jx, jz = x % hd.GridWidth, y % hd.GridWidth, j }
-			idx := jx + jy * hd.SegmentWidth +
-				jz * hd.SegmentWidth * hd.SegmentWidth
+			if x == -1 { jx, jy, jz = j, y % hd.GridWidth, z % hd.GridWidth }
+			if y == -1 { jx, jy, jz = x % hd.GridWidth, j, z % hd.GridWidth }
+			if z == -1 { jx, jy, jz = x % hd.GridWidth, y % hd.GridWidth, j }
+			idx := jz + jy * hd.GridWidth +
+				jx * hd.GridWidth * hd.GridWidth
 			vs = append(vs, xs[idx])
 		}
 	}
