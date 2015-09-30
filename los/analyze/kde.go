@@ -37,7 +37,7 @@ type KDETree struct {
 	spRs []float64
 }
 
-func NewKDETree(rs, phis []float64, splits int) *KDETree {
+func NewKDETree(rs, phis []float64, splits int) (*KDETree, bool) {
 	kt := new(KDETree)
 
 	hFactor := 5.0
@@ -63,7 +63,7 @@ func NewKDETree(rs, phis []float64, splits int) *KDETree {
 	kt.findMaxes()
 	kt.connectMaxes()
 
-	return kt
+	return kt, true
 }
 
 func (kt *KDETree) PlotLevel(level int, opts ...interface{}) {
@@ -151,7 +151,7 @@ func (kt *KDETree) connectMaxes() {
 			nodePrevMax := prevMaxes[node / 2]
 			
 			var connMax float64
-			if math.IsNaN(nodePrevMax) {
+			if math.IsNaN(nodePrevMax) || len(nodeMaxes) == 0 {
 				connMax = math.NaN()
 			} else {
 				connIdx, minDist := -1, math.Inf(+1)

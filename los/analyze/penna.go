@@ -149,7 +149,7 @@ func PennaPlaneFit(
 
 func FilterPoints(
 	rs []RingBuffer, levels int,
-) (pxs, pys [][]float64) {
+) (pxs, pys [][]float64, ok bool) {
 	pxs, pys = [][]float64{}, [][]float64{}
 	for ri := range rs {
 		r := &rs[ri]
@@ -171,7 +171,8 @@ func FilterPoints(
 			}
 		}
 		
-		kt := NewKDETree(validRs, validPhis, levels)		
+		kt, ok := NewKDETree(validRs, validPhis, levels)		
+		if !ok { return nil, nil, false }
 		fRs, fThs, _ := kt.FilterNearby(validRs, validPhis, levels, kt.H() / 2)
 		fXs, fYs := make([]float64, len(fRs)), make([]float64, len(fRs))
 		for i := range fRs {
@@ -181,5 +182,5 @@ func FilterPoints(
 
 		pxs, pys = append(pxs, fXs), append(pys, fYs)
 	}
-	return pxs, pys
+	return pxs, pys, true
 }
