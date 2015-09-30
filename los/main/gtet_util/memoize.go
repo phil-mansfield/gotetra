@@ -29,12 +29,14 @@ func ReadSortedRockstarIDs(snap, maxID int, flag halo.Val) ([]int, error) {
 	if maxID >= RockstarShortMemoNum {
 		file := path.Join(dir, fmt.Sprintf(rockstarMemoFile, snap))
 		vals, err = readRockstar(
-			file, RockstarShortMemoNum, snap, nil, halo.ID, flag,
+			file, -1, snap, nil, halo.ID, flag,
 		)
 		if err != nil { return nil, err }
 	} else {
 		file := path.Join(dir, fmt.Sprintf(rockstarShortMemoFile, snap))
-		vals, err = readRockstar(file, -1, snap, nil, halo.ID, flag)
+		vals, err = readRockstar(
+			file, RockstarShortMemoNum, snap, nil, halo.ID, flag,
+		)
 		if err != nil { return nil, err }
 	}
 	
@@ -117,16 +119,17 @@ func readRockstar(
 	files, err := DirContents(fmt.Sprintf(gtetFmt, snap))
 	hd := &io.SheetHeader{}
 	err = io.ReadSheetHeaderAt(files[0], hd)
-
+	
 	rids, rvals, err := halo.ReadBinaryRockstarVals(
 		binFile, &hd.Cosmo, valFlags...,
 	)
+	
 	if err != nil { return nil, err }
 	
 	// Select out only the IDs we want.
+	if ids == nil { return rvals, nil }
 	vals := make([][]float64, len(rvals))
-	if ids == nil { return vals, nil }
-
+	
 	found := make([]bool, len(ids))
 	for i := range vals { vals[i] = make([]float64, len(ids)) }
 	// I think this looping strategy has better cache properties. But it will

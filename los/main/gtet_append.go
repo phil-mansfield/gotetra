@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -85,7 +86,7 @@ var valMap = map[string]halo.Val {
 }
 
 func main() {
-	valFlags, err := parseCmd()
+	valFlags, prevs, err := parseCmd()
 	if err != nil { log.Fatal(err.Error()) }
 	if len(valFlags) == 0 {
 		err = printStdin()
@@ -101,18 +102,25 @@ func main() {
 }
 
 
-func parseCmd() ([]halo.Val, error) {
+func parseCmd() ([]halo.Val, []bool, error) {
 	flag.Parse()
 	args := flag.Args()
 	vals := make([]halo.Val, len(args))
+	prevs := make([]bool, len(args))
 	var ok bool
 	for i, arg := range args {
+		if strings.Contains(strings.ToLower(arg), "prev") {
+			arg = arg[4:]
+			prevs[i] = true
+		}
 		vals[i], ok = valMap[strings.ToLower(arg)]
 		if !ok {
-			return nil, fmt.Errorf("Flag %d, %s, not recognized.", i+1, arg)
+			return nil, nil, fmt.Errorf(
+				"Flag %d, %s, not recognized.", i+1, arg,
+			)
 		}
 	}
-	return vals, nil
+	return vals, prevs, nil
 }
 
 func printStdin() error {
@@ -283,3 +291,20 @@ func intr(xs []float64) []interface{} {
 	return is
 }
 
+func treeFiles() ([]string, error) {
+	treeDir, err := util.TreeDir()
+	if err != nil { return nil, err }
+	infos, err := ioutil.ReadDir(treeDir)
+	if err != nil { return nil, err }
+
+	names := []string{}
+	for _, info := range infos {
+		name := info.Name()
+		n := len(name)
+		// This is pretty hacky.
+		if n > 4 && name[:5] == "tree_" && name[n-4:] == ".dat" {
+			names = append(names, path.Join(treeDir, name))
+		}
+	}
+	return names, nil
+}

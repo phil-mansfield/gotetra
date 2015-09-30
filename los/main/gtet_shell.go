@@ -1,3 +1,4 @@
+
 package main
 
 import (
@@ -8,7 +9,6 @@ import (
 	"math"
 	"math/rand"
 	"os"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -19,10 +19,6 @@ import (
 	util "github.com/phil-mansfield/gotetra/los/main/gtet_util"
 	"github.com/phil-mansfield/gotetra/render/io"
 	"github.com/phil-mansfield/gotetra/render/halo"
-)
-
-const (
-	minSnap = 50
 )
 
 type Params struct {
@@ -40,6 +36,7 @@ type Params struct {
 
 func main() {
 	// Parse.
+	log.Println("gtet_shell")
 	p := parseCmd()
 	ids, snaps, err := parseStdin()
 	if err != nil { log.Fatal(err.Error()) }
@@ -58,21 +55,14 @@ func main() {
 	}
 	sort.Ints(sortedSnaps)
 
-	ms := &runtime.MemStats{}
+	valids := make([]bool, len(ids))
 
 	var losBuf *los.Buffers
 	for _, snap := range sortedSnaps { 
-		runtime.ReadMemStats(ms)
 		log.Println("Snap", snap)
+		if snap == -1 { continue }
 		snapIDs := snapBins[snap]
 		idxs := idxBins[snap]
-
-		if snap < minSnap {
-			for i := range snapIDs {
-				out[idxs[i]] = make([]float64, p.Order * p.Order * 2)
-			}
-			continue
-		}
 
 		// Bin halos
 		hds, files, err := util.ReadHeaders(snap)
@@ -100,11 +90,16 @@ func main() {
 		} else {
 			// Calculate Penna coefficients.
 			for i := range halos {
-				out[idxs[i]] = calcCoeffs(&halos[i], buf, p)
+				var ok bool
+				out[idxs[i]], ok = calcCoeffs(&halos[i], buf, p)
+				if ok { valids[idxs[i]] = true }
 			}
 		}
 		
 	}
+	
+	ids = util.Filter(ids, valids)
+	snaps = util.Filter(snaps, valids)
 	printCoeffs(ids, snaps, out)
 }
 
@@ -255,14 +250,15 @@ func binIntersections(
 
 func calcCoeffs(
 	halo *los.HaloProfiles, buf []analyze.RingBuffer, p *Params,
-) []float64 {
+) ([]float64, bool) {
 	for i := range buf {
 		buf[i].Clear()
 		buf[i].Splashback(halo, i, p.Window, p.Cutoff)
 	}
-	pxs, pys := analyze.FilterPoints(buf, p.Levels)
+	pxs, pys, ok := analyze.FilterPoints(buf, p.Levels)
+	if !ok { return nil, false }
 	cs, _ := analyze.PennaVolumeFit(pxs, pys, halo, p.Order, p.Order)
-	return cs
+	return cs, true
 }
 
 func calcMedian(halo *los.HaloProfiles, p *Params) []float64 {
@@ -277,7 +273,6 @@ func printCoeffs(ids, snaps []int, coeffs [][]float64) {
 	idWidth, snapWidth := 0, 0
 	coeffWidths := make([]int, len(coeffs[len(coeffs) - 1]))
 	for i := range ids {
-		if snaps[i] < minSnap { continue }
 		iWidth := len(fmt.Sprintf("%d", ids[i]))
 		sWidth := len(fmt.Sprintf("%d", snaps[i]))
 		if iWidth > idWidth { idWidth = iWidth }

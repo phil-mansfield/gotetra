@@ -92,7 +92,7 @@ func main() {
 		snaps = make([]int, len(rawIds))
 		for i := range snaps { snaps[i] = snap }
 		ids, err = convertSortedIDs(rawIds, snap)
-		if err != nil { err.Error() }
+		if err != nil { log.Fatal(err.Error()) }
 	default:
 		log.Fatal("Unsupported IDType for now. Sorry :3")
 	}
@@ -102,7 +102,7 @@ func main() {
 	if allowSubhalos {
 		isSub = make([]bool, len(ids))
 	} else {
-		isSub, err = findSubs(rawIds, snaps)
+		isSub, err = findSubs(ids, snaps)
 		if err != nil { log.Fatal(err.Error()) }
 	}
 
@@ -189,7 +189,7 @@ func convertSortedIDs(
 	}
 
 	rids, err := util.ReadSortedRockstarIDs(snap, maxID, halo.M200b)
-	if err != nil { return nil, err }	
+	if err != nil { return nil, err }
 
 	ids := make([]int, len(rawIDs))
 	for i := range ids { ids[i] = rids[rawIDs[i]] }

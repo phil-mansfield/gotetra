@@ -22,3 +22,17 @@ func DirContents(dir string) ([]string, error) {
 
 	return files, nil
 }
+
+func Filter(xs []int, oks []bool) []int {
+	n := 0
+	for _, ok := range oks {
+		if ok { n++ }
+	}
+
+	out := make([]int, 0, n)
+	for i, x := range xs {
+		if oks[i] { out = append(out, x) }
+	}
+
+	return out
+}

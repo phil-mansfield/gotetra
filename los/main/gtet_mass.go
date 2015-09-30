@@ -22,10 +22,6 @@ import (
 	
 )
 
-const (
-	minSnap = 30
-)
-
 type Params struct {
 	MaxMult float64
 }
@@ -52,8 +48,6 @@ func main() {
 		snapCoeffs := coeffBins[snap]
 		idxs := idxBins[snap]
 
-		if snap < minSnap { continue }
-
 		hds, files, err := util.ReadHeaders(snap)
 		if err != nil { log.Fatal(err.Error()) }
 		hBounds, err := boundingSpheres(snap, &hds[0], snapIDs, p)
@@ -67,6 +61,9 @@ func main() {
 			shell := analyze.PennaFunc(snapCoeffs[i], order, order, 2)
 			rLows[i], rHighs[i] = shell.RadialRange(10 * 1000)
 		}
+
+		log.Println("rLows", rLows)
+		log.Println("rHighs", rHighs)
 
 		xs := []rgeom.Vec{}
 		for i := range hds {
