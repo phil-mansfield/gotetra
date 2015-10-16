@@ -62,9 +62,6 @@ func main() {
 			rLows[i], rHighs[i] = shell.RadialRange(10 * 1000)
 		}
 
-		log.Println("rLows", rLows)
-		log.Println("rHighs", rHighs)
-
 		xs := []rgeom.Vec{}
 		for i := range hds {
 			if len(intrBins[i]) == 0 { continue }

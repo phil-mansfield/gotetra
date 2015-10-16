@@ -250,6 +250,8 @@ func readRockstarVals(
 		case Rad200c: R200c.Radius(cosmo, vals[i+1], vals[i+1])
 		case Rad500c: R500c.Radius(cosmo, vals[i+1], vals[i+1])
 		case Rad2500c: R2500c.Radius(cosmo, vals[i+1], vals[i+1])
+		case Rs, RVir, RsKylpin:
+			for j := range vals[i+1] { vals[i+1][j] /= 1000 }
 		}
 	}
 

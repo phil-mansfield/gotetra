@@ -252,6 +252,7 @@ type HaloProfiles struct {
 	boxWidth float32
 
 	log bool
+	IsValid bool
 }
 
 // Init initializes a HaloProfiles struct with the given parameters.
@@ -305,7 +306,7 @@ func (hp *HaloProfiles) Init(
 	}
 
 	hp.log = hp.rs[0].log
-
+	hp.IsValid = true
 	return hp
 }
 
@@ -569,4 +570,21 @@ func (h *HaloProfiles) MedianProfile() []float64 {
 	}
 	
 	return out
+}
+
+func (hp *HaloProfiles) MeanProfile() []float64 {
+	mean := make([]float64, hp.bins)
+	buf := make([]float64, hp.bins)
+	
+	// Find the spherically averaged rho profile
+	for r := 0; r < len(hp.rs); r++ {
+		for i := 0; i < hp.n; i++ {
+			hp.GetRhos(r, i, buf)
+			for j := range buf { mean[j] += buf[j] }
+		}
+	}
+
+	n := float64(len(hp.rs) * hp.n)
+	for j := range mean { mean[j] /= n }
+	return mean
 }

@@ -25,15 +25,15 @@ import (
 const (
 	rType = halo.R200m
 	rMaxMult = 3.0
-	rMinMult = 0.3
+	rMinMult = 0.5
 
-	n = 1024
+	n = 124
 	bins = 256
 	window = 121
 	cutoff = 0.0
 
-	rings = 10
-	plotStart = 1006
+	rings = 3
+	plotStart = 8
 	plotCount = 1
 
 	I, J = 5, 5
@@ -51,7 +51,7 @@ var (
 		"DarkViolet", "DeepPink", "DimGray",
 	}
 	refRings = []int{
-		10, //10, 10, 10, 10, 10,
+		25, //10, 10, 10, 10, 10,
 		//20, 20, 20, 20, 20, 20,
 		//20, 20, 20, 20, 20, 20,
 		//20, 20, 20, 20, 20, 20,
@@ -171,8 +171,7 @@ func main() {
 	//	1001, 1006, 1008, 1009, 1014, 1017, 1018, 1033, 1047, 6006, 6030,
 	//} {
 
-	idx := 1006
-	for _, i := range []int{idx} {
+	for _, i := range []int{8, 51} {
 		fmt.Printf("Loading %d (%d)\n", i, rids[i])
 		if sf.HostCount(i) > 0 { 
 			fmt.Println("Ignoring halo with host.")
@@ -210,12 +209,12 @@ func main() {
 		shells := make([]analyze.Shell, len(hRefs))
 		
 		for j := range pShells {
-			pxs, pys := analyze.FilterPoints(rbRefs[j], 4) 
+			pxs, pys, _ := analyze.FilterPoints(rbRefs[j], 4) 
 			cs, pShell := analyze.PennaPlaneFit(pxs, pys, &hRefs[j], I, J)
 			shell := analyze.PennaFunc(cs, I, J, 2)
 			pShells[j], shells[j] = pShell, shell
 		}
-		pxs, pys := analyze.FilterPoints(rbs, 4) 
+		pxs, pys, _ := analyze.FilterPoints(rbs, 4) 
 		cs, _ := analyze.PennaPlaneFit(pxs, pys, h, I, J)
 		_ = cs
 
@@ -228,13 +227,13 @@ func main() {
 		//}
 
 		fmt.Println("Plotting Tracers")
-		plotTracers(hRefs, rbRefs, h.ID(), 1, 1000, plotDir)
+		//plotTracers(hRefs, rbRefs, h.ID(), 1, 1000, plotDir)
 		fmt.Println("Plotting Plane")
 		for ring := 0; ring < rings; ring++ {
 			plotPlane(h, &rbs[ring], ms[i], h.ID(),
 				ring, pShells, plotDir, textDir)
 			_, _ = plotRhos, plotRs
-			plotExampleProfiles(h, ms[i], ring, plotRs, plotRhos, plotDir)
+			//plotExampleProfiles(h, ms[i], ring, plotRs, plotRhos, plotDir)
 			//plotExampleDerivs(h, ms[i], ring, plotRs, plotRhos, plotDir)
 		}
 	}
@@ -370,7 +369,7 @@ func plotKde(rbs []analyze.RingBuffer, m float64, id, rot int, plotDir string) {
 	for i := range rbs {
 		r := &rbs[i]
 		validRs, validPhis = r.OkPolarCoords(validRs, validPhis)
-		kt := analyze.NewKDETree(validRs, validPhis, 1)
+		kt, _ := analyze.NewKDETree(validRs, validPhis, 1)
 		kt.PlotLevel(0, plt.C(colors[rot % len(colors)]), plt.LW(3))
 	}
 
@@ -384,13 +383,12 @@ func plotPlane(
 	pShells []analyze.ProjectedShell, plotDir, textDir string,
 ) {
 	pName := path.Join(plotDir, fmt.Sprintf("plane_h%d_r%d.png", id, ring))
-	tName := 
 	xs, ys := make([]float64, 0, r.N), make([]float64, 0, r.N)
 	rs, phis := make([]float64, 0, r.N), make([]float64, 0, r.N)
 
 	xs, ys = r.OkPlaneCoords(xs, ys)
 	rs, phis = r.OkPolarCoords(rs, phis)
-	kt := analyze.NewKDETree(rs, phis, 4)
+	kt, _ := analyze.NewKDETree(rs, phis, 4)
 
 	fRs, fThs, _ := kt.FilterNearby(rs, phis, 4, kt.H() / 2)
 	fXs, fYs := make([]float64, len(fRs)), make([]float64, len(fRs))
@@ -402,7 +400,7 @@ func plotPlane(
 	plt.Figure(plt.Num(1), plt.FigSize(8, 8))
 	plt.InsertLine("plt.clf()")
 	plt.Plot(xs, ys, "ow")
-
+	
 	rf := kt.GetRFunc(4, analyze.Radial)
 	spXs := make([]float64, 200)
 	spYs := make([]float64, 200)
@@ -417,7 +415,7 @@ func plotPlane(
 	spXs[len(spXs) - 1], spYs[len(spYs) - 1] = spXs[0], spYs[0]
 	plt.Plot(spXs, spYs, plt.Color("r"), plt.LW(2))
 	plt.Plot(fXs, fYs, "o", plt.Color("r"))
-
+	
 	for i, pShell := range pShells {
 		rXs, rYs := make([]float64, 100), make([]float64, 100)
 		for i := range rXs {
@@ -471,7 +469,7 @@ func plotTracers(
 	shells, ringCounts := [][]analyze.Shell{}, []int{}
 	for ih := range hs {
 		h := &hs[ih]
-		xs, ys := analyze.FilterPoints(rbs[ih], 4)
+		xs, ys, _ := analyze.FilterPoints(rbs[ih], 4)
 		hRingCounts, hShells := analyze.CumulativeShells(
 			xs, ys, h, I, J, start, stop, step,
 		)

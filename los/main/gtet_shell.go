@@ -9,6 +9,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -31,7 +32,7 @@ type Params struct {
 	Cutoff float64
 
 	// Alternate modes
-	MedianProfile bool
+	MedianProfile, MeanProfile bool
 }
 
 func main() {
@@ -58,6 +59,8 @@ func main() {
 	valids := make([]bool, len(ids))
 
 	var losBuf *los.Buffers
+
+MainLoop:
 	for _, snap := range sortedSnaps { 
 		log.Println("Snap", snap)
 		if snap == -1 { continue }
@@ -69,14 +72,33 @@ func main() {
 		if err != nil { err.Error() }
 		if losBuf == nil { losBuf = los.NewBuffers(files[0], &hds[0]) }
 		halos, err := createHalos(snap, &hds[0], snapIDs, p)
+		for i := range halos {
+			// Screw it, we're too early in the catalog. Abort!
+			if !halos[i].IsValid { continue MainLoop }
+		}
+		
 		if err != nil { log.Fatal(err.Error()) }
 		intrBins := binIntersections(hds, halos)
 
 		// Add densities. Done header by header to limit I/O time.
+		preMS, postMS := runtime.MemStats{}, runtime.MemStats{}
+		hdContainer := make([]io.SheetHeader, 1)
+		fileContainer := make([]string, 1)
 		for i := range hds {
+			log.Printf(
+				"gtet_shell: analyzing sheet%d%d%d.dat", i/64, (i/8)%8, i%8,
+			)
+			runtime.ReadMemStats(&preMS)
+			runtime.GC()
+			runtime.ReadMemStats(&postMS)
+			log.Printf(
+				"gtet_shell: Pre GC: %d MB (%d MB), Post GC: %d MB (%d MB)",
+				preMS.Alloc / 1000000, preMS.Sys / 1000000,
+				postMS.Alloc / 1000000, postMS.Sys / 1000000,
+			)
 			if len(intrBins[i]) == 0 { continue }
-			hdContainer := []io.SheetHeader{hds[i]}
-			fileContainer := []string{files[i]}
+			hdContainer[0] = hds[i]
+			fileContainer[0] = files[i]
 			los.LoadPtrDensities(
 				intrBins[i], hdContainer, fileContainer, losBuf,
 			)
@@ -85,11 +107,20 @@ func main() {
 		if p.MedianProfile {
 			// Calculate median profile.
 			for i := range halos {
+				runtime.GC()
 				out[idxs[i]] = calcMedian(&halos[i], p)
+				valids[idxs[i]] = true
+			}
+		} else if p.MeanProfile {
+			for i := range halos {
+				runtime.GC()
+				out[idxs[i]] = calcMean(&halos[i], p)
+				valids[idxs[i]] = true
 			}
 		} else {
 			// Calculate Penna coefficients.
 			for i := range halos {
+				runtime.GC()
 				var ok bool
 				out[idxs[i]], ok = calcCoeffs(&halos[i], buf, p)
 				if ok { valids[idxs[i]] = true }
@@ -100,6 +131,7 @@ func main() {
 	
 	ids = util.Filter(ids, valids)
 	snaps = util.Filter(snaps, valids)
+	
 	printCoeffs(ids, snaps, out)
 }
 
@@ -127,6 +159,9 @@ func parseCmd() *Params {
 		"The shallowest slope that can be considered a splashback point.")
 	flag.BoolVar(&p.MedianProfile, "MedianProfile", false,
 		"Compute the median halo profile instead of the shell. " + 
+			"KILL THIS OPTION.")
+		flag.BoolVar(&p.MeanProfile, "MeanProfile", false,
+		"Compute the mean halo profile instead of the shell. " + 
 			"KILL THIS OPTION.")
 	flag.Parse()
 	return p
@@ -203,7 +238,7 @@ func createHalos(
 	if err != nil { return nil, err }
 
 	xs, ys, zs, rs := vals[0], vals[1], vals[2], vals[3]
-
+	
 	// Initialize halos.
 	halos := make([]los.HaloProfiles, len(ids))
 	seenIDs := make(map[int]bool)
@@ -212,6 +247,8 @@ func createHalos(
 			float32(xs[i]), float32(ys[i]), float32(zs[i]),
 		}
 
+		if rs[i] <= 0 { continue }
+		
 		// If we've already seen a halo once, randomize its orientation.
 		if seenIDs[id] {
 			halos[i].Init(
@@ -265,6 +302,13 @@ func calcMedian(halo *los.HaloProfiles, p *Params) []float64 {
 	rs := make([]float64, p.RBins)
 	halo.GetRs(rs)
 	rhos := halo.MedianProfile()
+	return append(rs, rhos...)
+}
+
+func calcMean(halo *los.HaloProfiles, p *Params) []float64 {
+	rs := make([]float64, p.RBins)
+	halo.GetRs(rs)
+	rhos := halo.MeanProfile()
 	return append(rs, rhos...)
 }
 

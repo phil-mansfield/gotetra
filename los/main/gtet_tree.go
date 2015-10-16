@@ -35,8 +35,10 @@ func main() {
 
 	trees, err := treeFiles()
 	if err != nil { log.Fatal(err.Error()) }
-	idSets, snapSets, err := tree.HaloHistories(trees, inputIDs)
-	if err != nil { log.Fatal(err.Error())}
+	snapOffset, err := util.SnapOffset()
+	if err != nil { log.Fatal(err.Error()) }
+	idSets, snapSets, err := tree.HaloHistories(trees, inputIDs, snapOffset)
+	if err != nil { log.Fatal(err.Error()) }
 
 	ids, snaps := []int{}, []int{}
 	for i := range idSets {

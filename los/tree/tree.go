@@ -9,7 +9,7 @@ import (
 const SCALE_FACTOR_MUL = 100000
 
 func HaloHistories(
-	files []string, roots []int,
+	files []string, roots []int, snapOffset int,
 ) (ids [][]int, snaps [][]int, err error) {
 	if len(roots) == 0 { return [][]int{}, [][]int{}, nil }
 
@@ -37,6 +37,9 @@ func HaloHistories(
 		}
 	}
 
+	for i := range snaps {
+		for j := range snaps[i] { snaps[i][j] += snapOffset }
+	}
 	return ids, snaps, nil
 }
 

@@ -26,7 +26,7 @@ func ReadSortedRockstarIDs(snap, maxID int, flag halo.Val) ([]int, error) {
 	if !PathExists(dir) { os.Mkdir(dir, 0777) }
 
 	var vals [][]float64
-	if maxID >= RockstarShortMemoNum {
+	if maxID >= RockstarShortMemoNum || maxID == -1 {
 		file := path.Join(dir, fmt.Sprintf(rockstarMemoFile, snap))
 		vals, err = readRockstar(
 			file, -1, snap, nil, halo.ID, flag,
@@ -51,6 +51,7 @@ func ReadSortedRockstarIDs(snap, maxID int, flag halo.Val) ([]int, error) {
 	}
 
 	sortRockstar(ids, ms)
+	if maxID == -1 { return ids, nil }
 	return ids[:maxID+1], nil
 }
 
@@ -103,12 +104,17 @@ func readRockstar(
 		rockstarDir, err := RockstarDir()
 		if err != nil { return nil, err }
 		hlists, err := DirContents(rockstarDir)
+		snapNum, err := SnapNum()
+		if err != nil { return nil, err }
+		negSnap := snapNum - snap
+		snapIdx := len(hlists) - 1 - negSnap
+		
 		if err != nil { return nil, err }
 		if n == -1 {
-			err = halo.RockstarConvert(hlists[snap - 1], binFile)
+			err = halo.RockstarConvert(hlists[snapIdx], binFile)
 			if err != nil { return nil, err }
 		} else {
-			err = halo.RockstarConvertTopN(hlists[snap - 1], binFile, n)
+			err = halo.RockstarConvertTopN(hlists[snapIdx], binFile, n)
 			if err != nil { return nil, err}
 		}
 	}
@@ -119,39 +125,41 @@ func readRockstar(
 	files, err := DirContents(fmt.Sprintf(gtetFmt, snap))
 	hd := &io.SheetHeader{}
 	err = io.ReadSheetHeaderAt(files[0], hd)
-	
+
 	rids, rvals, err := halo.ReadBinaryRockstarVals(
 		binFile, &hd.Cosmo, valFlags...,
-	)
-	
+	)	
 	if err != nil { return nil, err }
 	
 	// Select out only the IDs we want.
 	if ids == nil { return rvals, nil }
 	vals := make([][]float64, len(rvals))
-	
-	found := make([]bool, len(ids))
+
 	for i := range vals { vals[i] = make([]float64, len(ids)) }
-	// I think this looping strategy has better cache properties. But it will
-	// End up doing more match checks than it should.
-	for i, rid := range rids {
-		for j, id := range ids {
-			// IDs match. Copy over the values.
-			if id == rid {
-				for vi := range vals { vals[vi][j] = rvals[vi][i] }
-				found[j] = true
-				continue
-			}
-		}
+	f := newFinder(rids)
+	for i, id := range ids {
+		line, ok := f.find(id)
+		if !ok { return nil, fmt.Errorf("Could not find ID %d", id) }
+		for vi := range vals { vals[vi][i] = rvals[vi][line] }
 	}
-
-	for i := range found {
-		if !found[i] {
-			return nil, fmt.Errorf("Could not find ID %d.", ids[i])
-		}
-	}
-
+	
 	return vals, nil
+}
+
+type finder struct {
+	m map[int]int
+}
+
+func newFinder(rids []int) finder {
+	f := finder{}
+	f.m = make(map[int]int)
+	for i, rid := range rids { f.m[rid] = i }
+	return f
+}
+
+func (f finder) find(rid int) (int, bool) {
+	line, ok := f.m[rid]
+	return line, ok
 }
 
 func readHeadersFromSheet(snap int) ([]io.SheetHeader, []string, error) {

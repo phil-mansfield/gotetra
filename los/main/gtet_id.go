@@ -32,6 +32,8 @@ var (
 )
 
 func main() {
+	log.Println("gtet_id")
+	
 	// Parse command line
 	var (
 		idTypeStr string
@@ -51,7 +53,7 @@ func main() {
 
 	if idStart > idEnd {
 		log.Fatalf("IDStart, %d, is larger than IDEnd, %d.", idStart, idEnd)
-	} else if idStart != idEnd && idStart <= 0 {
+	} else if idStart != idEnd && idStart < 0 {
 		log.Fatalf("Non-positive IDStart %d.")
 	}
 
@@ -63,7 +65,7 @@ func main() {
 		log.Fatalf("Must set the Snap flag if using a non-default IDType.")
 	}
 
-	snapNum, err := snapNum()
+	snapNum, err := util.SnapNum()
 	if err != nil {
 		log.Fatalf(
 			"Error encountered when finding rockstar directory: %s",err.Error(),
@@ -133,14 +135,7 @@ func getIDs(idStart, idEnd int, args []string) []int {
 	return ids
 }
 
-func snapNum() (int, error) {
-	rockstarDir, err := util.RockstarDir()
-	if err != nil { return 0, err }
-	infos, err := ioutil.ReadDir(rockstarDir)
-	return len(infos), err
-}
-
-func getSnapHaloList(i int) (name string, err error) {
+func getSnapHaloList(i int) (name string, err error) {	
 	rockstarDir, err := util.RockstarDir()
 	if err != nil { return "", err }
 	infos, err := ioutil.ReadDir(rockstarDir)
@@ -199,24 +194,6 @@ func convertSortedIDs(
 func findSubs(rawIDs, snaps []int) ([]bool, error) {
 	isSub := make([]bool, len(rawIDs))
 
-	// Handle the case where we're indexing by sorted mass ID.
-	if xs != nil {
-		hd, err := readHeader(snaps[0])
-		if err != nil { return nil, err }
-
-		g := halo.NewGrid(finderCells, hd.TotalWidth, len(xs))
-		g.Insert(xs, ys, zs)
-		sf := halo.NewSubhaloFinder(g)
-		sf.FindSubhalos(xs, ys, zs, rs, overlapMult)
-
-		for i, id := range rawIDs {
-			isSub[i] = sf.HostCount(id) > 0
-		}
-		return isSub, nil
-	}
-
-	// Handle the case where all we have are halo IDs
-	
 	// Group by snapshot.
 	snapGroups := make(map[int][]int)
 	groupIdxs := make(map[int][]int)
@@ -231,16 +208,19 @@ func findSubs(rawIDs, snaps []int) ([]bool, error) {
 		hd, err := readHeader(snap)
 		if err != nil { return nil, err }
 
-		list, err := getSnapHaloList(snap)
-		rids, xs, ys, zs, ms, rs, err = halo.ReadRockstar(
-			list, halo.R200m, &hd.Cosmo,
+		rids, err := util.ReadSortedRockstarIDs(snap, -1, halo.M200b)
+		if err != nil { return nil, err }
+		vals, err := util.ReadRockstar(
+			snap, rids, halo.X, halo.Y, halo.Z, halo.Rad200b,
 		)
+		xs, ys, zs, rs := vals[0], vals[1], vals[2], vals[3]
 
 		g := halo.NewGrid(finderCells, hd.TotalWidth, len(xs))
 		g.Insert(xs, ys, zs)
 		sf := halo.NewSubhaloFinder(g)
 		sf.FindSubhalos(xs, ys, zs, rs, overlapMult)
-		
+
+		log.Println("gtet_id: search start")
 		for i, id := range group {
 			origIdx := groupIdxs[snap][i]
 			for j, checkID := range rids {
@@ -252,6 +232,7 @@ func findSubs(rawIDs, snaps []int) ([]bool, error) {
 				}
 			}
 		}
+		log.Println("gtet_id: search start")
 	}
 	return isSub, nil
 }
