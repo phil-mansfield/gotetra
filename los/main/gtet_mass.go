@@ -2,15 +2,10 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
-	"io/ioutil"
 	"math"
-	"os"
 	"runtime"
 	"sort"
-	"strconv"
-	"strings"
 
 	"github.com/phil-mansfield/gotetra/cosmo"
 	"github.com/phil-mansfield/gotetra/render/io"
@@ -28,7 +23,7 @@ type Params struct {
 
 func main() {
 	p := parseCmd()
-	ids, snaps, coeffs, err := parseStdin()
+	ids, snaps, coeffs, err := util.ParseStdin()
 	if err != nil { log.Fatal(err.Error()) }
 	snapBins, coeffBins, idxBins := binBySnap(snaps, ids, coeffs)
 
@@ -87,73 +82,7 @@ func main() {
 
 	log.Println("gtet_mass end")
 
-	printMasses(ids, snaps, masses, rads)
-}
-
-func parseStdin() (ids, snaps []int, coeffs [][]float64, err error) {
-	ids, snaps, coeffs = []int{}, []int{}, [][]float64{}
-	lines, err := stdinLines()
-	if err != nil { return nil, nil, nil, err }
-	for i, line := range lines {
-		rawTokens := strings.Split(line, " ")
-		tokens := make([]string, 0, len(rawTokens))
-		for _, tok := range rawTokens {
-			if len(tok) != 0 { tokens = append(tokens, tok) }
-		}
-
-		var (
-			id, snap int
-			hCoeffs []float64
-			err error
-		)
-		switch {
-		case len(tokens) == 0:
-			continue
-		case len(tokens) <= 2:
-			if tokens[0] == "" { continue }
-			return nil, nil, nil, fmt.Errorf(
-				"Line %d of stdin has 1 token, but >2 are required.", i + 1,
-			)
-		case len(tokens) > 2:
-			id, err = strconv.Atoi(tokens[0])
-			if err != nil {
-				return nil, nil, nil, fmt.Errorf(
-					"One line %d of stdin, %s does not parse as an int.",
-					i + 1, tokens[0],
-				)
-			} 
-			snap, err = strconv.Atoi(tokens[1]) 
-			if err != nil {
-				return nil, nil, nil, fmt.Errorf(
-					"One line %d of stdin, %s does not parse as an int.",
-					i + 1, tokens[1],
-				)
-			}
-			
-			hCoeffs = make([]float64, len(tokens) - 2) 
-			for i := range hCoeffs {
-				hCoeffs[i], err = strconv.ParseFloat(tokens[i + 2], 64)
-			}
-		}
-
-		ids = append(ids, id)
-		snaps = append(snaps, snap)
-		coeffs = append(coeffs, hCoeffs)
-	}
-
-	return ids, snaps, coeffs, nil
-}
-
-func stdinLines() ([]string, error) {
-	bs, err := ioutil.ReadAll(os.Stdin)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"Error reading stdin: %s.", err.Error(),
-		)
-	}
-
-	text := string(bs)
-	return strings.Split(text, "\n"), nil
+	util.PrintCols(ids, snaps, masses, rads)
 }
 
 func parseCmd() *Params {
@@ -339,22 +268,4 @@ func massContainedChan(
 		}
 	}
 	out <- sum
-}
-
-func printMasses(ids, snaps []int, masses, rads []float64) {
-	idWidth, snapWidth, massWidth, radWidth := 0, 0, 0, 0
-	for i := range ids {
-		iWidth := len(fmt.Sprintf("%d", ids[i]))
-		sWidth := len(fmt.Sprintf("%d", snaps[i]))
-		mWidth := len(fmt.Sprintf("%.5g", masses[i]))
-		rWidth := len(fmt.Sprintf("%.5g", rads[i]))
-		if iWidth > idWidth { idWidth = iWidth }
-		if sWidth > snapWidth { snapWidth = sWidth }
-		if mWidth > massWidth { massWidth = mWidth }
-		if rWidth > radWidth { radWidth = rWidth }
-	}
-
-	rowFmt := fmt.Sprintf("%%%dd %%%dd %%%d.5g %%%d.5g\n",
-		idWidth, snapWidth, massWidth, radWidth)
-	for i := range ids { fmt.Printf(rowFmt, ids[i], snaps[i], masses[i], rads[i]) }
 }

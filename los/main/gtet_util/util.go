@@ -1,9 +1,12 @@
 package gtet_util
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
+
+	"github.com/phil-mansfield/gotetra/render/io"
 )
 
 func PathExists(path string) bool {
@@ -35,4 +38,18 @@ func Filter(xs []int, oks []bool) []int {
 	}
 
 	return out
+}
+
+func ReadSnapHeader(snap int) (*io.SheetHeader, error) {
+	gtetFmt, err := GtetFmt()
+	if err != nil { return nil, err }
+
+	gtetDir := fmt.Sprintf(gtetFmt, snap)
+	gtetFiles, err := DirContents(gtetDir)
+	if err != nil { return nil, err }
+
+	hd := &io.SheetHeader{}
+	err = io.ReadSheetHeaderAt(gtetFiles[0], hd)
+	if err != nil { return nil, err }
+	return hd, nil
 }

@@ -6,10 +6,8 @@ import (
 	"io/ioutil"
 	"log"
 	"math"
-	"os"
 	"path"
 	"sort"
-	"strconv"
 	"strings"
 	
 	"github.com/phil-mansfield/gotetra/render/halo"
@@ -140,14 +138,9 @@ func main() {
 	flags, err := parseCmd()
 	if err != nil { log.Fatal(err.Error()) }
 	
-	if len(flags) == 0 {
-		err = printStdin()
-		if err != nil { log.Fatal(err.Error()) }
-	}
-	
-	ids, snaps, inVals, err := parseStdin()
-	log.Println("gtet_append")
+	ids, snaps, inVals, err := util.ParseStdin()
 	if err != nil { log.Fatal(err.Error()) }
+	log.Println("gtet_append")
 	vals, err := readVals(ids, snaps, flags)
 	if err != nil { log.Fatal(err.Error()) }
 
@@ -176,79 +169,6 @@ func parseCmd() ([]AppendFlag, error) {
 		}
 	}
 	return flags, nil
-}
-
-func printStdin() error {
-	lines, err := stdinLines()
-	if err != nil { return err }
-	fmt.Println(strings.Join(lines, "\n"))
-	return nil
-}
-
-func stdinLines() ([]string, error) {
-	bs, err := ioutil.ReadAll(os.Stdin)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"Error reading stdin: %s.", err.Error(),
-		)
-	}
-
-	text := string(bs)
-	return strings.Split(text, "\n"), nil
-}
-
-func parseStdin() (ids, snaps []int, inVals [][]float64, err error) {
-	ids, snaps, inVals = []int{}, []int{}, [][]float64{}
-	lines, err := stdinLines()
-	if err != nil { return nil, nil, nil, err }
-	for i, line := range lines {
-		rawTokens := strings.Split(line, " ")
-		tokens := make([]string, 0, len(rawTokens))
-		for _, tok := range rawTokens {
-			if len(tok) != 0 { tokens = append(tokens, tok) }
-		}
-
-		var (
-			id, snap int
-			vals []float64
-			err error
-		)
-		switch {
-		case len(tokens) == 0:
-			continue
-		case len(tokens) == 1:
-			if tokens[0] == "" { continue }
-			return nil, nil, nil, fmt.Errorf(
-				"Line %d of stdin has 1 token, but 2 are required.", i + 1,
-			)
-		case len(tokens) >= 2:
-			id, err = strconv.Atoi(tokens[0])
-			if err != nil {
-				return nil, nil, nil, fmt.Errorf(
-					"One line %d of stdin, %s does not parse as an int.",
-					i + 1, tokens[0],
-				)
-			} 
-			snap, err = strconv.Atoi(tokens[1]) 
-			if err != nil {
-				return nil, nil, nil, fmt.Errorf(
-					"One line %d of stdin, %s does not parse as an int.",
-					i + 1, tokens[1],
-				)
-			}
-			
-			vals = make([]float64, len(tokens) - 2) 
-			for i := range vals {
-				vals[i], err = strconv.ParseFloat(tokens[i + 2], 64)
-			}
-		}
-
-		ids = append(ids, id)
-		snaps = append(snaps, snap)
-		inVals = append(inVals, vals)
-	}
-
-	return ids, snaps, inVals, nil
 }
 
 func readVals(ids, snaps []int, aFlags []AppendFlag) ([][]float64, error) {
@@ -421,29 +341,7 @@ func printVals(ids, snaps []int, inVals, vals [][]float64) {
 	}
 	vals = inVals
 
-	idWidth, snapWidth := 0, 0
-	valWidths := make([]int, len(vals[0]))
-	for i := range ids {
-		iWidth := len(fmt.Sprintf("%d", ids[i]))
-		sWidth := len(fmt.Sprintf("%d", snaps[i]))
-		if iWidth > idWidth { idWidth = iWidth }
-		if sWidth > snapWidth { snapWidth = sWidth }
-		for j := range vals[i] {
-			width := len(fmt.Sprintf("%.10g", vals[i][j]))
-			if width > valWidths[j] { valWidths[j] = width }
-		}
-	}
-
-	rowFmt := fmt.Sprintf("%%%dd %%%dd", idWidth, snapWidth)
-	valFmts := make([]string, len(vals[0]))
-	for i := range valFmts {
-		rowFmt += fmt.Sprintf(" %%%d.10g", valWidths[i])
-	}
-	rowFmt += "\n"
-	for i := range ids {
-		args := append([]interface{}{ids[i], snaps[i]}, intr(vals[i])...)
-		fmt.Printf(rowFmt, args...)
-	}
+	util.PrintRows(ids, snaps, vals)
 }
 
 func flipAxis(vals [][]float64) [][]float64 {

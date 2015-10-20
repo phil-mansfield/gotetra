@@ -3,16 +3,11 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	"io/ioutil"
 	"log"
 	"math"
 	"math/rand"
-	"os"
 	"runtime"
 	"sort"
-	"strconv"
-	"strings"
 
 	"github.com/phil-mansfield/gotetra/los"
 	"github.com/phil-mansfield/gotetra/los/geom"
@@ -39,7 +34,7 @@ func main() {
 	// Parse.
 	log.Println("gtet_shell")
 	p := parseCmd()
-	ids, snaps, err := parseStdin()
+	ids, snaps, _, err := util.ParseStdin()
 	if err != nil { log.Fatal(err.Error()) }
 
 	if len(ids) == 0 { return }
@@ -132,7 +127,7 @@ MainLoop:
 	ids = util.Filter(ids, valids)
 	snaps = util.Filter(snaps, valids)
 	
-	printCoeffs(ids, snaps, out)
+	util.PrintRows(ids, snaps, out)
 }
 
 func parseCmd() *Params {
@@ -165,68 +160,6 @@ func parseCmd() *Params {
 			"KILL THIS OPTION.")
 	flag.Parse()
 	return p
-}
-
-func parseStdin() (ids, snaps []int, err error) {
-	ids, snaps = []int{}, []int{}
-	lines, err := stdinLines()
-	if err != nil { return nil, nil, err }
-	for i, line := range lines {
-		rawTokens := strings.Split(line, " ")
-		tokens := make([]string, 0, len(rawTokens))
-		for _, tok := range rawTokens {
-			if len(tok) != 0 { tokens = append(tokens, tok) }
-		}
-
-		var (
-			id, snap int
-			err error
-		)
-		switch len(tokens) {
-		case 0:
-			continue
-		case 2:
-			id, err = strconv.Atoi(tokens[0])
-			if err != nil {
-				return nil, nil, fmt.Errorf(
-					"One line %d of stdin, %s does not parse as an int.",
-					i + 1, tokens[0],
-				)
-			} 
-			snap, err = strconv.Atoi(tokens[1]) 
-			if err != nil {
-				return nil, nil, fmt.Errorf(
-					"One line %d of stdin, %s does not parse as an int.",
-					i + 1, tokens[1],
-				)
-			} 
-		case 1:
-			if tokens[0] == "" { continue }
-			fallthrough
-		default:
-			return nil, nil, fmt.Errorf(
-				"Line %d of stdin has %d tokens, but 2 are required.",
-				i + 1, len(tokens),
-			)
-		}
-
-		ids = append(ids, id)
-		snaps = append(snaps, snap)
-	}
-
-	return ids, snaps, nil
-}
-	
-func stdinLines() ([]string, error) {
-		bs, err := ioutil.ReadAll(os.Stdin)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"Error reading stdin: %s.", err.Error(),
-		)
-	}
-
-	text := string(bs)
-	return strings.Split(text, "\n"), nil
 }
 
 func createHalos(
@@ -310,33 +243,6 @@ func calcMean(halo *los.HaloProfiles, p *Params) []float64 {
 	halo.GetRs(rs)
 	rhos := halo.MeanProfile()
 	return append(rs, rhos...)
-}
-
-
-func printCoeffs(ids, snaps []int, coeffs [][]float64) {
-	idWidth, snapWidth := 0, 0
-	coeffWidths := make([]int, len(coeffs[len(coeffs) - 1]))
-	for i := range ids {
-		iWidth := len(fmt.Sprintf("%d", ids[i]))
-		sWidth := len(fmt.Sprintf("%d", snaps[i]))
-		if iWidth > idWidth { idWidth = iWidth }
-		if sWidth > snapWidth { snapWidth = sWidth }
-		for j := range coeffs[i] {
-			width := len(fmt.Sprintf("%.5g", coeffs[i][j]))
-			if width > coeffWidths[j] { coeffWidths[j] = width }
-		}
-	}
-
-	rowFmt := fmt.Sprintf("%%%dd %%%dd", idWidth, snapWidth)
-	coefFmts := make([]string, len(coeffs[0]))
-	for i := range coefFmts {
-		rowFmt += fmt.Sprintf(" %%%d.5g", coeffWidths[i])
-	}
-	rowFmt += "\n"
-	for i := range ids {
-		args := append([]interface{}{ids[i], snaps[i]}, intr(coeffs[i])...)
-		fmt.Printf(rowFmt, args...)
-	}
 }
 
 func intr(xs []float64) []interface{} {

@@ -220,9 +220,9 @@ func findSubs(rawIDs, snaps []int) ([]bool, error) {
 		sf := halo.NewSubhaloFinder(g)
 		sf.FindSubhalos(xs, ys, zs, rs, overlapMult)
 
-		log.Println("gtet_id: search start")
 		for i, id := range group {
 			origIdx := groupIdxs[snap][i]
+			// Holy linear seach, batman! Fix this, you idiot.
 			for j, checkID := range rids {
 				if checkID == id {
 					isSub[origIdx] = sf.HostCount(j) > 0
@@ -232,28 +232,28 @@ func findSubs(rawIDs, snaps []int) ([]bool, error) {
 				}
 			}
 		}
-		log.Println("gtet_id: search start")
 	}
 	return isSub, nil
 }
 
 func printIds(ids []int, snaps []int, isSub []bool, mult int) {
-	// Find the maximum width of each column.
-	idWidth, snapWidth := 2, 2
+	fIDs, fSnaps := make([]int, 0, len(ids)), make([]int, 0, len(ids))
 	for i := range ids {
-		if isSub[i] { continue }
-		iWidth := len(fmt.Sprintf("%d", ids[i]))
-		sWidth := len(fmt.Sprintf("%d", snaps[i]))
-		if iWidth > idWidth { idWidth = iWidth }
-		if sWidth > snapWidth { snapWidth = sWidth }
+		if !isSub[i] {
+			fIDs = append(fIDs, ids[i])
+			fSnaps = append(fSnaps, snaps[i])
+		}
 	}
 
-	rowFmt := fmt.Sprintf("%%%dd %%%dd\n", idWidth, snapWidth)
-	for i := range ids {
-		if isSub[i] { continue }
+	mIDs := make([]int, len(fIDs) * mult)
+	mSnaps := make([]int, len(fSnaps) * mult)
+	for i := range fIDs {
 		for j := 0; j < mult; j++ {
-			fmt.Printf(rowFmt, ids[i], snaps[i])
+			idx := mult*i + j
+			mIDs[idx] = ids[i]
+			mSnaps[idx] = snaps[i]
 		}
-		if mult > 1 { fmt.Printf(rowFmt, -1, -1) }
 	}
+
+	util.PrintCols(mIDs, mSnaps)
 }

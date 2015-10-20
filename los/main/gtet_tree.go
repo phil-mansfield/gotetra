@@ -5,10 +5,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"os"
 	"path"
 	"strconv"
-	"strings"
 
 	"github.com/phil-mansfield/gotetra/los/tree"
 	util "github.com/phil-mansfield/gotetra/los/main/gtet_util"
@@ -23,10 +21,7 @@ func main() {
 
 	cmdIDs, err := parseCmdArgs(flag.Args())
 	if err != nil { log.Fatal(err.Error()) }
-
-	stdin, err := readStdin()
-	if err != nil { log.Fatal(err.Error()) }
-	stdinIDs, err := parseStdinArgs(stdin)
+	stdinIDs, _, _, err := util.ParseStdin()
 	if err != nil { log.Fatal(err.Error()) }
 
 	// Calculate and print trees.
@@ -51,7 +46,7 @@ func main() {
 		}
 	}
 
-	printIDs(ids, snaps)
+	util.PrintCols(ids, snaps)
 }
 
 func parseCmdArgs(args []string) ([]int, error) {
@@ -66,28 +61,6 @@ func parseCmdArgs(args []string) ([]int, error) {
 		}
 	}
 	return IDs, nil
-}
-
-func parseStdinArgs(args []string) ([]int, error) {
-	IDs := make([]int, 0, len(args))
-	for i := range args {
-		rawTokens := strings.Split(args[i], " ")
-		tokens := make([]string, 0, len(rawTokens))
-		for _, tok := range rawTokens {
-			if len(tok) != 0 { tokens = append(tokens, tok) }
-		}
-		// This should be impossible, but whatever.
-		if len(tokens) == 0 { continue }
-		id, err := strconv.Atoi(tokens[0])
-		if id == -1 { continue }
-		IDs = append(IDs, id)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"Argument %d of command line args cannot be parsed.", i,
-			)
-		}
-	}
-	return IDs, nil	
 }
 
 func treeFiles() ([]string, error) {
@@ -106,32 +79,4 @@ func treeFiles() ([]string, error) {
 		}
 	}
 	return names, nil
-}
-
-func readStdin() ([]string, error) {
-	bs, err := ioutil.ReadAll(os.Stdin)
-	if err != nil {
-		return nil, fmt.Errorf("Problem reading stdin: %s", err)
-	}
-	text := string(bs)
-	lines := strings.Split(text, "\n")
-	fullLines := make([]string, 0, len(lines))
-	for _, line := range lines {
-		if len(line) != 0 { fullLines = append(fullLines, line) }
-	}
-	return fullLines, nil
-}
-
-func printIDs(ids []int, snaps []int) {
-	// Find the maximum width of each column.
-	idWidth, snapWidth := 0, 0
-	for i := range ids {
-		iWidth := len(fmt.Sprintf("%d", ids[i]))
-		sWidth := len(fmt.Sprintf("%d", snaps[i]))
-		if iWidth > idWidth { idWidth = iWidth }
-		if sWidth > snapWidth { snapWidth = sWidth }
-	}
-
-	rowFmt := fmt.Sprintf("%%%dd %%%dd\n", idWidth, snapWidth)
-	for i := range ids { fmt.Printf(rowFmt, ids[i], snaps[i]) }
 }

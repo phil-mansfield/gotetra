@@ -136,9 +136,9 @@ func readRockstar(
 	vals := make([][]float64, len(rvals))
 
 	for i := range vals { vals[i] = make([]float64, len(ids)) }
-	f := newFinder(rids)
+	f := NewIntFinder(rids)
 	for i, id := range ids {
-		line, ok := f.find(id)
+		line, ok := f.Find(id)
 		if !ok { return nil, fmt.Errorf("Could not find ID %d", id) }
 		for vi := range vals { vals[vi][i] = rvals[vi][line] }
 	}
@@ -146,18 +146,20 @@ func readRockstar(
 	return vals, nil
 }
 
-type finder struct {
+// A quick generic wrapper for doing those one-to-one mappings I need to do so
+// often. Written like this so the backend can be swapped out easily.
+type IntFinder struct {
 	m map[int]int
 }
 
-func newFinder(rids []int) finder {
-	f := finder{}
+func NewIntFinder(rids []int) IntFinder {
+	f := IntFinder{}
 	f.m = make(map[int]int)
 	for i, rid := range rids { f.m[rid] = i }
 	return f
 }
 
-func (f finder) find(rid int) (int, bool) {
+func (f IntFinder) Find(rid int) (int, bool) {
 	line, ok := f.m[rid]
 	return line, ok
 }
