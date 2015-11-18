@@ -46,3 +46,4 @@ _testmain.go
 *.png
 *.sh
 *.pprof
+*.gtet
