@@ -41,12 +41,12 @@ r_def = sys.argv[2]
 check(r_def in r_defs)
 check(filter_size > 0 and not is_even(filter_size))
 
-gtet_dir = "/home/mansfield/code/go/src/github.com/phil-mansfield/gotetra/main/small_halos"
+gtet_dir = "/home/mansfield/code/go/src/github.com/phil-mansfield/gotetra/render/main/unif_sample/L500"
 sh_dir = gtet_dir
 
-hlist_file = "/project/surph/diemer/Box_L0063_N1024_CBol/Rockstar/hlists/hlist_1.00000.list"
-snap_file = "/project/surph/diemer/Box_L0063_N1024_CBol/Snaps/snapdir_100/snapshot_100.0"
-gtet_snap_dir = "/project/surph/mansfield/data/sheet_segments/Box_L0063_N1024_G0008_CBol/snapdir_100"
+hlist_file = "/project/surph/diemer/Box_L0500_N1024_CBol/Rockstar/hlists/hlist_1.00000.list"
+snap_file = "/project/surph/diemer/Box_L0500_N1024_CBol/Snaps/snapdir_100/snapshot_100.0"
+gtet_snap_dir = "/project/surph/mansfield/data/sheet_segments/Box_L0500_N1024_G0008_CBol/snapdir_100"
 
 
 opt_str = "R%s_F%d" % (r_def, filter_size)
@@ -88,14 +88,15 @@ x_plot_prefix = path.join(x_plot_dir, halo_str + "_x")
 y_plot_prefix = path.join(y_plot_dir, halo_str + "_y")
 z_plot_prefix = path.join(z_plot_dir, halo_str + "_z")
 
+t0 = time.time()
 
 subprocess.check_call("go build read_halo.go", shell=True)
-t0 = time.time()
 subprocess.check_call(
     "./read_halo %s %s %s %s %s %s" % (
         hlist_file, snap_file, gtet_snap_dir, gtet_dir, gtet_dir, r_def,
     ), shell=True,
 )
+"""
 t1 = time.time()
 subprocess.check_call("go build profile.go", shell=True)
 t2 = time.time()
@@ -123,3 +124,4 @@ print "Z Profile:"
 subprocess.check_call("python plot_filament_remover.py %s %s %d %s" %
                       (z_lines_file, z_plot_prefix, filter_size,z_caustic_file),
                       shell=True)
+"""

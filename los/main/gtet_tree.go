@@ -18,7 +18,8 @@ func main() {
 	// Parse input
 
 	flag.Parse()
-
+	log.Println("gtet_tree")
+	
 	cmdIDs, err := parseCmdArgs(flag.Args())
 	if err != nil { log.Fatal(err.Error()) }
 	stdinIDs, _, _, err := util.ParseStdin()

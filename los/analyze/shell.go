@@ -3,7 +3,8 @@ package analyze
 import (
 	"math"
 	"math/rand"
-	
+
+	"github.com/phil-mansfield/gotetra/math/sort"
 	"github.com/phil-mansfield/gotetra/los"
 )
 
@@ -21,6 +22,24 @@ func cartesian(phi, theta, r float64) (x, y, z float64) {
 	return r * sinT * cosP, r * sinT * sinP, r * cosT
 }
 
+func (s Shell) CartesianSampledVolume(samples int, rMax float64) float64 {
+	inside := 0
+	for i := 0; i < samples; i++ {
+		x := rand.Float64() * (2*rMax) - rMax
+		y := rand.Float64() * (2*rMax) - rMax
+		z := rand.Float64() * (2*rMax) - rMax	
+		
+		r := math.Sqrt(x*x + y*y + z*z)
+		phi := math.Atan2(y, x)
+		th := math.Acos(z / r)
+
+		rs := s(phi, th)
+		if r < rs { inside++ }
+	}
+
+	return float64(inside) / float64(samples) * (rMax*rMax*rMax*8)
+}
+
 func (s Shell) Volume(samples int) float64 {
 	sum := 0.0
 	for i := 0; i < samples; i++ {
@@ -30,6 +49,25 @@ func (s Shell) Volume(samples int) float64 {
 	}
 	r3 := sum / float64(samples)
 	return r3 * 4 * (math.Pi / 3)
+}
+
+func (s Shell) MeanRadius(samples int) float64 {
+	sum := 0.0
+	for i := 0; i < samples; i++ {
+		phi, th := randomAngle()
+		r := s(phi, th)
+		sum += r
+	}
+	return sum / float64(samples)
+}
+
+func (s Shell) MedianRadius(samples int) float64 {
+	rs := make([]float64, samples)
+	for i := range rs {
+		phi, th := randomAngle()
+		rs[i] = s(phi, th)
+	}	
+	return sort.Median(rs, rs)
 }
 
 func (s Shell) Moments(samples int) (Ix, Iy, Iz float64) {

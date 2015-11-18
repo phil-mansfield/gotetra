@@ -16,12 +16,14 @@ type Buffers struct {
 	rhos []float64
 	intr []bool
 	bufHs []HaloProfiles
+	skip int64
 }
 
-func NewBuffers(file string, hd *io.SheetHeader) *Buffers {
+func NewBuffers(file string, hd *io.SheetHeader, subsampleLength int) *Buffers {
 	buf := new(Buffers)
 
-    sw := hd.SegmentWidth
+    sw := hd.SegmentWidth / int64(subsampleLength)
+	buf.skip = int64(subsampleLength)
     buf.xs = make([]rGeom.Vec, hd.GridCount)
     buf.ts = make([]geom.Tetra, 6*sw*sw*sw)
     buf.ss = make([]geom.Sphere, 6*sw*sw*sw)
@@ -69,17 +71,22 @@ func (buf *Buffers) chanRead(
 ) {
 	// Remember: Grid -> All particles; Segment -> Particles that can be turned
 	// into tetrahedra.
-	n := hd.SegmentWidth*hd.SegmentWidth*hd.SegmentWidth
+	skipVol := buf.skip*buf.skip*buf.skip
+	n := hd.SegmentWidth*hd.SegmentWidth*hd.SegmentWidth / skipVol
+	
+	gw := hd.GridWidth
 	tw := hd.TotalWidth
-	tFactor := tw*tw*tw / float64(hd.Count * 6)
+	tFactor := tw*tw*tw / float64(hd.Count * 6 / skipVol)
 	idxBuf := new(rGeom.TetraIdxs)
 
 	jump := int64(workers)
 	for segIdx := int64(id); segIdx < n; segIdx += jump {
-		x, y, z := coords(segIdx, hd.SegmentWidth)
+		x, y, z := coords(segIdx, hd.SegmentWidth / buf.skip)
+		x, y, z = x*buf.skip, y*buf.skip, z*buf.skip
+		idx := gw*gw*z + gw*y + x
 		for dir := int64(0); dir < 6; dir++ {
 			ti := 6 * segIdx + dir
-			idxBuf.InitCartesian(x, y, z, hd.GridWidth, int(dir))
+			idxBuf.Init(idx, gw, buf.skip, int(dir))
 			unpackTetra(idxBuf, buf.xs, &buf.ts[ti])
 			buf.ts[ti].Orient(+1)
 

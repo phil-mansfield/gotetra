@@ -210,7 +210,6 @@ func readVals(ids, snaps []int, aFlags []AppendFlag) ([][]float64, error) {
 	
 	for _, snap := range sortedSnaps {
 		if snap == 82 || snap == 84 { continue }
-		log.Printf("gtet_append: read snap %d", snap)
 		idSet := snapBins[snap]
 		idxSet := idxBins[snap]
 
@@ -283,7 +282,6 @@ func massHistories(
 	
 	for snap := minSnap; snap <= maxSnap; snap++ {
 		if snap == 82 || snap == 84 { continue }
-		log.Println("gtet_append: history snap", snap)
 		defaultID := -1
 		for i := range rids { rids[i] = -1 }
 		for ti, tree := range snapTrees {
@@ -308,7 +306,6 @@ func massHistories(
 		vals, err := util.ReadRockstar(snap, rids, halo.Scale, halo.MVir)
 		if err != nil { return nil, nil, err }
 		sScales, sMVirs := vals[0], vals[1]
-		
 
 		for ti, tree := range snapTrees {
 			for si, tSnap := range tree {

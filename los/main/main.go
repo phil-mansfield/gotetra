@@ -32,11 +32,11 @@ const (
 	window = 121
 	cutoff = 0.0
 
-	rings = 3
+	rings = 25
 	plotStart = 8
 	plotCount = 1
 
-	I, J = 5, 5
+	I, J = 3, 3
 	
 	// SubhaloFinder params.
 	finderCells = 150
@@ -171,7 +171,21 @@ func main() {
 	//	1001, 1006, 1008, 1009, 1014, 1017, 1018, 1033, 1047, 6006, 6030,
 	//} {
 
-	for _, i := range []int{8, 51} {
+	ranks := []int{}
+	switch hds[0].TotalWidth {
+	case 62.5:
+		ranks = []int{ 4302, 8092, 6862, 522, 4565, 2991, 4250 }
+	case 125.0:
+		ranks = []int{ 2019, 2189, 1568, 1268, 367, 1673, 276, 300 }
+	case 250.0:
+		ranks = []int{ 296, 201, 314, 236, 924, 1477, 521, 726, 339 }
+	case 500.0:
+		ranks = []int{ 8, 51, 105, 825, 465, 562, 902, 809, 241 }
+	default:
+		panic(fmt.Sprintf("recognized box with %g", hds[0].TotalWidth))
+	}
+
+	for _, i := range ranks {
 		fmt.Printf("Loading %d (%d)\n", i, rids[i])
 		if sf.HostCount(i) > 0 { 
 			fmt.Println("Ignoring halo with host.")
@@ -209,12 +223,15 @@ func main() {
 		shells := make([]analyze.Shell, len(hRefs))
 		
 		for j := range pShells {
-			pxs, pys, _ := analyze.FilterPoints(rbRefs[j], 4) 
+			pxs, pys, _ := analyze.FilterPoints(rbRefs[j], 3) 
 			cs, pShell := analyze.PennaPlaneFit(pxs, pys, &hRefs[j], I, J)
 			shell := analyze.PennaFunc(cs, I, J, 2)
+			v := shell.Volume(100 * 1000)
+			vRad := math.Pow(v / (4 * math.Pi / 3), 0.3333)
+			PrintCoeffs(cs, vRad, rs[i])
 			pShells[j], shells[j] = pShell, shell
 		}
-		pxs, pys, _ := analyze.FilterPoints(rbs, 4) 
+		pxs, pys, _ := analyze.FilterPoints(rbs, 3) 
 		cs, _ := analyze.PennaPlaneFit(pxs, pys, h, I, J)
 		_ = cs
 
@@ -226,12 +243,27 @@ func main() {
 		//	plotKde(rbRefs[j], ms[i], h.ID(), j, plotDir)
 		//}
 
+		sh := shells[0]
+		v := sh.Volume(100 * 1000)
+		vRad := math.Pow(v / (4 * math.Pi / 3), 0.3333)
+		
+		rMin, rMax := sh.RadialRange(100 * 1000)
+		cv := sh.CartesianSampledVolume(100 * 1000, rMax)
+		cvRad := math.Pow(cv / (4 * math.Pi / 3), 0.3333)
+		meanR := sh.MeanRadius(100 * 1000)
+		medR := sh.MedianRadius(100 * 1000)
+
+		fmt.Printf("%8s %8s %8s %8s %8s %8s\n",
+			"rMin", "rMax", "vRad", "cvRad", "meanR", "medR")
+		fmt.Printf("%8.3g %8.3g %8.3g %8.3g %8.3g %8.3g\n",
+			rMin, rMax, vRad, cvRad, meanR, medR)
+		
 		fmt.Println("Plotting Tracers")
 		//plotTracers(hRefs, rbRefs, h.ID(), 1, 1000, plotDir)
 		fmt.Println("Plotting Plane")
 		for ring := 0; ring < rings; ring++ {
 			plotPlane(h, &rbs[ring], ms[i], h.ID(),
-				ring, pShells, plotDir, textDir)
+				ring, pShells, medR, plotDir, textDir)
 			_, _ = plotRhos, plotRs
 			//plotExampleProfiles(h, ms[i], ring, plotRs, plotRhos, plotDir)
 			//plotExampleDerivs(h, ms[i], ring, plotRs, plotRhos, plotDir)
@@ -239,6 +271,14 @@ func main() {
 	}
 	
 	plt.Execute()
+}
+
+func PrintCoeffs(cs []float64, rsp, r200m float64) {
+	fmt.Printf("-1 -1 %g %g ", rsp, r200m)
+	for _, c := range cs {
+		fmt.Print(c, " ")
+	}
+	fmt.Println()
 }
 
 func subhaloSpheres(
@@ -369,7 +409,7 @@ func plotKde(rbs []analyze.RingBuffer, m float64, id, rot int, plotDir string) {
 	for i := range rbs {
 		r := &rbs[i]
 		validRs, validPhis = r.OkPolarCoords(validRs, validPhis)
-		kt, _ := analyze.NewKDETree(validRs, validPhis, 1)
+		kt, _ := analyze.NewKDETree(validRs, validPhis, 1, 10)
 		kt.PlotLevel(0, plt.C(colors[rot % len(colors)]), plt.LW(3))
 	}
 
@@ -380,7 +420,7 @@ func plotKde(rbs []analyze.RingBuffer, m float64, id, rot int, plotDir string) {
 
 func plotPlane(
 	h *los.HaloProfiles, r *analyze.RingBuffer, m float64, id, ring int,
-	pShells []analyze.ProjectedShell, plotDir, textDir string,
+	pShells []analyze.ProjectedShell, rad float64, plotDir, textDir string,
 ) {
 	pName := path.Join(plotDir, fmt.Sprintf("plane_h%d_r%d.png", id, ring))
 	xs, ys := make([]float64, 0, r.N), make([]float64, 0, r.N)
@@ -388,7 +428,7 @@ func plotPlane(
 
 	xs, ys = r.OkPlaneCoords(xs, ys)
 	rs, phis = r.OkPolarCoords(rs, phis)
-	kt, _ := analyze.NewKDETree(rs, phis, 4)
+	kt, _ := analyze.NewKDETree(rs, phis, 4, 10)
 
 	fRs, fThs, _ := kt.FilterNearby(rs, phis, 4, kt.H() / 2)
 	fXs, fYs := make([]float64, len(fRs)), make([]float64, len(fRs))
@@ -402,19 +442,21 @@ func plotPlane(
 	plt.Plot(xs, ys, "ow")
 	
 	rf := kt.GetRFunc(4, analyze.Radial)
-	spXs := make([]float64, 200)
-	spYs := make([]float64, 200)
+	spXs, radXs := make([]float64, 200), make([]float64, 200)
+	spYs, radYs := make([]float64, 200), make([]float64, 200)
 	dPhi := 2 * math.Pi / float64(len(spXs) - 1)
 	for i := range spXs {
 		phi := (float64(i) + 0.5) * dPhi
 		r := rf(phi)
 		sin, cos := math.Sincos(phi)
 		spXs[i], spYs[i] = r * cos, r * sin
+		radXs[i], radYs[i] = rad * cos, rad * sin
 	}
 
 	spXs[len(spXs) - 1], spYs[len(spYs) - 1] = spXs[0], spYs[0]
 	plt.Plot(spXs, spYs, plt.Color("r"), plt.LW(2))
 	plt.Plot(fXs, fYs, "o", plt.Color("r"))
+	plt.Plot(radXs, radYs, plt.Color("g"), plt.LW(2))
 	
 	for i, pShell := range pShells {
 		rXs, rYs := make([]float64, 100), make([]float64, 100)

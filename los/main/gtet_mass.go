@@ -19,6 +19,7 @@ import (
 
 type Params struct {
 	MaxMult float64
+	RadOnly bool
 }
 
 func main() {
@@ -29,6 +30,8 @@ func main() {
 
 	masses := make([]float64, len(ids))
 	rads := make([]float64, len(ids))
+	rmins := make([]float64, len(ids))
+	rmaxes := make([]float64, len(ids))
 
 	sortedSnaps := []int{}
 	for snap := range snapBins {
@@ -38,11 +41,16 @@ func main() {
 
 	log.Println("gtet_mass")
 	for _, snap := range sortedSnaps {
-		log.Println("Snap", snap)
 		snapIDs := snapBins[snap]
 		snapCoeffs := coeffBins[snap]
 		idxs := idxBins[snap]
 
+		for j := range idxs {
+			rads[idxs[j]] = rSp(snapCoeffs[j])
+			rmins[idxs[j]], rmaxes[idxs[j]] = rangeSp(snapCoeffs[j])
+		}
+		if p.RadOnly { continue }
+		
 		hds, files, err := util.ReadHeaders(snap)
 		if err != nil { log.Fatal(err.Error()) }
 		hBounds, err := boundingSpheres(snap, &hds[0], snapIDs, p)
@@ -74,15 +82,9 @@ func main() {
 				)
 			}
 		}
-
-		for j := range idxs {
-			rads[idxs[j]] = rSp(&hds[0], snapCoeffs[j])
-		}
 	}
 
-	log.Println("gtet_mass end")
-
-	util.PrintCols(ids, snaps, masses, rads)
+	util.PrintCols(ids, snaps, masses, rads, rmins, rmaxes)
 }
 
 func parseCmd() *Params {
@@ -90,6 +92,8 @@ func parseCmd() *Params {
 	flag.Float64Var(&p.MaxMult, "MaxMult", 3, 
 		"Ending radius of LoSs as a multiple of R_200m. " + 
 			"Should be the same value as used in gtet_shell.")
+	flag.BoolVar(&p.RadOnly, "RadOnly", false,
+		"Only compute radii, not masses.")
 	flag.Parse()
 	return p
 }
@@ -195,13 +199,19 @@ func coords(idx, cells int64) (x, y, z int64) {
     return x, y, z
 }
 
-func rSp(hd *io.SheetHeader, coeffs []float64) float64 {
+func rSp(coeffs []float64) float64 {
 	order := findOrder(coeffs)
 	shell := analyze.PennaFunc(coeffs, order, order, 2)
 	vol := shell.Volume(10 * 1000)
-
 	r := math.Pow(vol / (math.Pi * 4 / 3), 0.33333)
 	return r
+	//return shell.MedianRadius(10 * 1000)
+}
+
+func rangeSp(coeffs []float64) (rmin, rmax float64) {
+	order := findOrder(coeffs)
+	shell := analyze.PennaFunc(coeffs, order, order, 2)
+	return shell.RadialRange(10 * 1000)
 }
 
 func massContained(

@@ -19,6 +19,8 @@ import (
 	"github.com/phil-mansfield/gotetra/render/density"
 	"github.com/phil-mansfield/gotetra/render/geom"
 	"github.com/phil-mansfield/gotetra/render/io"
+
+	"unsafe"
 )
 
 const (
@@ -241,6 +243,7 @@ func lGadget2Main(con *io.ConvertSnapshotConfig) {
 		for i, info := range infos {
 			files[i] = path.Join(input, info.Name())
 		}
+
 		
 		hd, xs, vs := createGrids(files)
 
@@ -266,6 +269,15 @@ func createGrids(
 		}
 	}
 
+	ms := &runtime.MemStats{}
+	runtime.ReadMemStats(ms)
+	log.Printf("Allocated %d MB %d B (sys: %d MB)\n",
+		ms.Alloc / 1000000, ms.Alloc, ms.Sys / 1000000,
+	)
+	log.Printf("About to allocate another %d MB\n",
+		(hs[0].TotalCount * int64(unsafe.Sizeof(geom.Vec{}))) / 1000000,
+	)
+	runtime.GC()
 	xs = make([]geom.Vec, hs[0].TotalCount)
 	vs = make([]geom.Vec, hs[0].TotalCount)
 	

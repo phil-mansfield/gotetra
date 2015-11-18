@@ -108,14 +108,13 @@ func (intr *mcarlo) Interpolate(
 		intr.Cells() / 2 > relCb.Width[2])
 
 	maxWidth := 0.0
-
+	
 	for idx := int64(low); idx < int64(high); idx += jump64 {
 		x, y, z := coords(idx, idxWidth)
 		gridIdx := index(x * intr.skip, y * intr.skip, z * intr.skip, gridWidth)
-
 		for dir := 0; dir < 6; dir++ {
 			intr.idxBuf.Init(gridIdx, gridWidth, intr.skip, dir)
-			
+
 			intr.tet.Init(
 				&xs[intr.idxBuf[0]],
 				&xs[intr.idxBuf[1]],

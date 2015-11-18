@@ -266,6 +266,8 @@ class RawProfile(AbstractProfile):
     """
     def __init__(self, rs, rhos, unit, conv=BinConverter(-2, 1, 300)):
         if rs[0] == 0: rs, rhos = rs[1:], rhos[1:]
+        rhos[rhos <= 0] = np.nan
+
         raw_rs_group, raw_rhos_group = nan_split(rs, rhos)
         raw_lrs_group = map(np.log10, raw_rs_group)
         raw_lrhos_group = map(np.log10, raw_rhos_group)

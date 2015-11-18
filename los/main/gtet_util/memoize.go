@@ -120,12 +120,17 @@ func readRockstar(
 	}
 
 	// Get cosmo header.
-	gtetFmt, err := GtetFmt()
+	//gtetFmt, err := GtetFmt()
+	//if err != nil { return nil, err }
+	//files, err := DirContents(fmt.Sprintf(gtetFmt, snap))
+	//if err != nil { return nil, err }
+	//hd := &io.SheetHeader{}
+	//err = io.ReadSheetHeaderAt(files[0], hd)
+	hds, _, err := ReadHeaders(snap)
 	if err != nil { return nil, err }
-	files, err := DirContents(fmt.Sprintf(gtetFmt, snap))
-	hd := &io.SheetHeader{}
-	err = io.ReadSheetHeaderAt(files[0], hd)
+	hd := &hds[0]
 
+	
 	rids, rvals, err := halo.ReadBinaryRockstarVals(
 		binFile, &hd.Cosmo, valFlags...,
 	)	

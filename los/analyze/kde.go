@@ -37,10 +37,10 @@ type KDETree struct {
 	spRs []float64
 }
 
-func NewKDETree(rs, phis []float64, splits int) (*KDETree, bool) {
+func NewKDETree(
+	rs, phis []float64, splits int, hFactor float64,
+) (*KDETree, bool) {
 	kt := new(KDETree)
-
-	hFactor := 5.0
 	rn := 100
 
 	kt.low, kt.high = 0, rs[0]
@@ -167,7 +167,7 @@ func (kt *KDETree) connectMaxes() {
 				currMaxes[node] = connMax
 			} else {
 				for _, max := range nodeMaxes {
-					rFunc := kt.GetRFunc(split, Cartesian)
+					rFunc := kt.GetRFunc(split, Radial)
 					spR := rFunc(kt.thTree[split+1][node])
 					if math.Abs(max - spR) < kt.h { currMaxes[node] = max }
 				}
@@ -256,7 +256,8 @@ func (kt *KDETree) H() float64 { return kt.h }
 func (kt *KDETree) FilterNearby(
 	rs, ths []float64, level int, dr float64,
 ) (fRs, fThs []float64, idxs []int) {
-	rFunc := kt.GetRFunc(level, Cartesian)
+	//rFunc := kt.GetRFunc(level, Cartesian)
+	rFunc := kt.GetRFunc(level, Radial)
 	fRs, fThs, idxs = []float64{}, []float64{}, []int{}
 	for i := range rs {
 		if math.Abs(rFunc(ths[i]) - rs[i]) < dr {

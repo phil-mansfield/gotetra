@@ -35,8 +35,8 @@ func NthLargest(xs []float64, n int, buf ...[]float64) float64 {
 		if len(medSlice) != len(xs) {
 			panic("Length of buffer does not equal length of input array.")
 		}
-		copy(buf[0], xs)
 	}
+	copy(medSlice, xs)
 
 	return nthLargest(medSlice, n)
 }

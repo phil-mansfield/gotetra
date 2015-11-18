@@ -253,6 +253,9 @@ func (man *Manager) RenderDensityFromFile(file string) error {
 		if !r.requiresFile(file) { continue }
 		man.xCb = *man.hd.CellBounds(r.box.Cells())
 
+		log.Printf("%d\n", man.xCb)
+		log.Printf("%.3g %.3g\n", man.hd.Origin, man.hd.Width)
+		
 		r.over = r.box.Overlap(&man.hd)
 		r.cb = geom.CellBounds{ r.box.CellOrigin(), r.box.CellSpan() }
 		r.scaleXs(man)

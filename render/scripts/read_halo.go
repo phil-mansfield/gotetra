@@ -5,12 +5,12 @@ import (
 	"path"
 	"strings"
 	"fmt"
-	"time"
+	//"time"
 	"encoding/binary"
 	"os"
 	"log"
 	"sort"
-	"math/rand"
+	//"math/rand"
 
 	"github.com/phil-mansfield/table"
 	"github.com/phil-mansfield/gotetra/render/halo"
@@ -19,6 +19,7 @@ import (
 
 const (
 	finderCells = 150
+	idCol = 1
 	xCol = 17
 	yCol = 18
 	zCol = 19
@@ -41,7 +42,7 @@ const (
 #SBATCH --mem=29GB
 #SBATCH --account=pi-kravtsov
 module load go/1.3
-go build -gcflags=-B github.com/phil-mansfield/gotetra && time ~/code/go/src/github.com/phil-mansfield/gotetra/main/main -Render %s %s`
+go build -gcflags=-B github.com/phil-mansfield/gotetra/render/main && time ~/code/go/src/github.com/phil-mansfield/gotetra/render/main/main -Render %s %s`
 	// Remember: 3 arguments
 	renderText=`[Render]
 Quantity = Density
@@ -58,6 +59,7 @@ Radius = %g`
 )
 
 type Halos struct {
+	ids []int
 	xs, ys, zs, m200ms, r200ms, rPrints []float64
 }
 
@@ -74,6 +76,7 @@ func (h *Halo) String() string {
 func (hs *Halos) Len() int { return len(hs.r200ms) }
 func (hs *Halos) Less(i, j int) bool { return hs.r200ms[i] < hs.r200ms[j] }
 func (hs *Halos) Swap(i, j int) {
+	hs.ids[i], hs.ids[j] = hs.ids[j], hs.ids[i]
 	hs.r200ms[i], hs.r200ms[j] = hs.r200ms[j], hs.r200ms[i]
 	hs.m200ms[i], hs.m200ms[j] = hs.m200ms[j], hs.m200ms[i]
 	hs.rPrints[i], hs.rPrints[j] = hs.rPrints[j], hs.rPrints[i]
@@ -106,11 +109,13 @@ func main() {
 	if !ok { log.Fatalf("%s is not a recognized halo radius type.", rDef) }
 	rPrintCol := rPrintType.RockstarColumn()
 
-	colIdxs := []int{ xCol, yCol, zCol, r200mCol, rPrintCol }
+	colIdxs := []int{ idCol, xCol, yCol, zCol, r200mCol, rPrintCol }
 	cols, err := table.ReadTable(fileName, colIdxs, nil)
 	if err != nil { log.Fatalf(err.Error()) }
 
-	xs, ys, zs, m200ms := cols[0], cols[1], cols[2], cols[3]
+	ids := make([]int, len(cols[0]))
+	for i := range ids { ids[i] = int(cols[0][i]) }
+	xs, ys, zs, m200ms := cols[1], cols[2], cols[3], cols[4]
 	r200ms := make([]float64, len(m200ms))
 	rType.Radius(cosmo, m200ms, r200ms)
 
@@ -118,17 +123,17 @@ func main() {
 
 	var mPrints, rPrints []float64
 	if rPrintType.RockstarMass() {
-		mPrints := cols[4]
+		mPrints := cols[5]
 		rPrints = make([]float64, len(mPrints))
 		rType.Radius(cosmo, mPrints, rPrints)
 	} else {
-		rPrints = cols[4]
+		rPrints = cols[5]
 		mPrints = make([]float64, len(rPrints))
 		for i := range rPrints { rPrints[i] /= 1000 } // kpc -> Mpc
 		rType.Mass(cosmo, rPrints, mPrints)
 	}
 
-	sort.Sort(sort.Reverse(&Halos{ xs, ys, zs, m200ms, r200ms, rPrints }))
+	sort.Sort(sort.Reverse(&Halos{ ids, xs, ys, zs, m200ms, r200ms, rPrints }))
 
 	// Find Subhalos.
 
@@ -139,17 +144,34 @@ func main() {
 
 	// Find some halos within a mass range that I'm interested in:
 
-	iLow, iHigh := findIdx(m200ms, mLow), findIdx(m200ms, mHigh)
-	rand.Seed(time.Now().UnixNano())
+	//iLow, iHigh := findIdx(m200ms, mLow), findIdx(m200ms, mHigh)
+	//rand.Seed(time.Now().UnixNano())
 	
-	idxs := []int{ 1051, 1092, 1115 }
+	//idxs := []int{ 1001, 1008, 1014, 1017, 1018, 6006, 6020, 6030 }
+	//idxs := []int{ 1033 }
+	//idxs := []int{ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 }
 
-	for i := 0; i < 10; i++ {
-		ih := rand.Intn(iLow - iHigh) + iHigh
-		if i >= 3 { break }
-		ih = idxs[i]
-
-		if sf.HostCount(ih) > 0 { continue }
+	// L63
+	// idTargets := []int{ 168364287, 169346596, 169405951, 169431559, 168101172, 169284419, 168591622 }
+	// L125
+	// idTargets := []int{ 174122115, 175516325, 174693455, 175448948, 174933005, 174587014, 175168151, 175689691 }
+	// L250
+	// idTargets := []int{ 169801890, 170977391, 169882890, 169681912, 171104569, 170935748, 170447923, 170005543 }
+	// L500
+	idTargets := []int{ 167733451, 166159687, 168138562, 168037771, 166311120, 167835215, 165404638 }
+	idxs := make([]int, len(idTargets))
+	for i, target := range idTargets {
+		for j, id := range ids {
+			if id == target {
+				idxs[i] = j
+				fmt.Println(target, j)
+				break
+			}
+		}
+	}
+	
+	for _, ih := range idxs {
+		//if sf.HostCount(ih) > 0 { continue }
 
 		fmt.Printf("Halo %d  Mass: %.3g\n", ih, m200ms[ih])
 		fmt.Printf(
@@ -179,7 +201,7 @@ func newHalos(ihs []int, xs, ys, zs, rs []float64) []Halo {
 }
 
 func particles(L, l float64, pixels int) int {
-	n := int(500 * math.Pow(L / (3 * l), 3) *
+	n := int(1000 * math.Pow(L / (3 * l), 3) *
 		math.Pow(float64(pixels) / 500, 3))
 	if n < 20 { n = 20 }
 	return n
@@ -190,7 +212,6 @@ func genScripts(
 	rType halo.Radius, h *Halo, intrs []Halo,
 ) {
 	R := h.r * renderMult
-
 	// Create names
 
 	rs := rType.String()
@@ -198,6 +219,8 @@ func genScripts(
 	renderName := path.Join(scriptDir, fmt.Sprintf("%s_render.txt", name))
 	ballName := path.Join(scriptDir, fmt.Sprintf("%s_ball.txt", name))
 	shName := path.Join(scriptDir, fmt.Sprintf("%s_%s_sh.txt", name, rs))
+
+	fmt.Println(shName)
 
 	// Create bodies
 
