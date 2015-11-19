@@ -325,7 +325,7 @@ func sphericalProfile(ids, snaps []int, p *Params) ([][]float64, error) {
 		rMin, rMax := ranges[i].rMin, ranges[i].rMax
 		hds, _, err := util.ReadHeaders(snaps[i])
 		if err != nil { return nil, err }
-		countsToRhos(&hds[0], counts[i], rMin, rMax)
+		countsToRhos(&hds[0], counts[i], rMin, rMax, p.SphericalProfilePoints)
 	}
 
 	outs := prependRadii(counts, ranges)
@@ -334,10 +334,13 @@ func sphericalProfile(ids, snaps []int, p *Params) ([][]float64, error) {
 }
 
 func countsToRhos(
-	hd *io.SheetHeader, counts []float64, rMin, rMax float64,
+	hd *io.SheetHeader, counts []float64, rMin, rMax float64, tetraPoints int,
 ) {
 	dx := hd.TotalWidth / float64(hd.CountWidth)
 	mp := dx*dx*dx
+	if tetraPoints > 0 {
+		mp /= float64(6 * tetraPoints)
+	}
 
 	lrMin, lrMax := math.Log(rMin), math.Log(rMax)
 	dlr := (lrMax - lrMin) / float64(len(counts))
@@ -359,7 +362,6 @@ func tetraBinParticles(
 
 	lrMin, lrMax := math.Log(rMin), math.Log(rMax)
 	dlr := (lrMax - lrMin) / float64(len(counts))
-	incr := float64(skip*skip*skip)
 	tw := hd.TotalWidth
 
 	sw, gw := int(hd.SegmentWidth), int(hd.GridWidth)
@@ -387,7 +389,7 @@ func tetraBinParticles(
 						lr := math.Log(r2) / 2
 						ri := int((lr - lrMin) / dlr)
 					
-						counts[ri] += incr
+						counts[ri]++
 					}
 				}
 			}
