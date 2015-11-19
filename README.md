@@ -71,6 +71,10 @@ Wishlist
 Here are some things which I would love to add to this project but do not
 currently have the time to do so. In no particular order:
 
+- Create a Python librarywhich captures the behavior of the command-line
+utilities. Write Python bindings for all the important functions.
+(Difficulty: *Medium*)
+
 - Higher order tesselation techniques. (Difficulty: *High*)
 
 - Generalization from uniform initial conditions to adaptively refined
