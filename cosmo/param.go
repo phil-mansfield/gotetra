@@ -32,7 +32,7 @@ func RhoCritical(H0, omegaM, omegaL, z float64) float64 {
 }
 
 // RhoAverage calculates the average density of matter in the universe. The
-// returned value is in cosmological units.
+// returned value is in cosmological units / h.
 func RhoAverage(H0, omegaM, omegaL, z float64) float64 {
 	return RhoCritical(H0, omegaM, omegaL, 0) * omegaM * math.Pow(1+z, 3.0)
 }
