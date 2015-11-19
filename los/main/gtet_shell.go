@@ -4,7 +4,6 @@ import (
 	"flag"
 	"log"
 	"math"
-	"math/rand"
 	"runtime"
 	"sort"
 
@@ -15,6 +14,7 @@ import (
 	util "github.com/phil-mansfield/gotetra/los/main/gtet_util"
 	"github.com/phil-mansfield/gotetra/render/io"
 	"github.com/phil-mansfield/gotetra/render/halo"
+	"github.com/phil-mansfield/gotetra/math/rand"
 )
 
 type Params struct {
@@ -29,6 +29,7 @@ type Params struct {
 
 	// Alternate modes
 	MedianProfile, MeanProfile, SphericalProfile bool
+	SphericalProfilePoints int
 }
 
 func main() {
@@ -182,6 +183,10 @@ func parseCmd() *Params {
 	flag.BoolVar(&p.SphericalProfile, "SphericalProfile", false,
 		"Compute the radial profile of a halo using standard particle " +
 			"binning. KILL THIS OPTION.")
+	flag.IntVar(&p.SphericalProfilePoints, "SphericalProfilePoints", 0,
+		"Number of pointers per tetrhedra to use when computing spherical " +
+			"If 0, tetrahedra won't be used and the profiles will just be" +
+			"computed from the particles.")
 	flag.Parse()
 	return p
 }
@@ -195,7 +200,8 @@ func createHalos(
 	if err != nil { return nil, err }
 
 	xs, ys, zs, rs := vals[0], vals[1], vals[2], vals[3]
-	
+	g := rand.NewTimeSeed(rand.Xorshift)
+
 	// Initialize halos.
 	halos := make([]los.HaloProfiles, len(ids))
 	seenIDs := make(map[int]bool)
@@ -211,9 +217,9 @@ func createHalos(
 			halos[i].Init(
 				id, p.Rings, origin, rs[i] * p.MinMult, rs[i] * p.MaxMult,
 				p.RBins, p.Spokes, hd.TotalWidth, los.Log(true),
-				los.Rotate(float32(2 * math.Pi * rand.Float64()),
-                    float32(2 * math.Pi * rand.Float64()),
-                    float32(2 * math.Pi * rand.Float64())),
+				los.Rotate(float32(g.Uniform(0, 2 * math.Pi)),
+                    float32(g.Uniform(0, 2 * math.Pi)),
+                    float32(g.Uniform(0, 2 * math.Pi))),
 			)
 		} else {
 			seenIDs[id] = true
@@ -256,13 +262,26 @@ func newProfileRanges(ids, snaps []int, p *Params) ([]profileRange, error) {
 }
 
 func sphericalProfile(ids, snaps []int, p *Params) ([][]float64, error) {
-	// Set up
+	// Normal Set up
 	var xs []rgeom.Vec
 	counts := make([][]float64, len(ids))
 	for i := range counts { counts[i] = make([]float64, p.RBins) }
 	ranges, err := newProfileRanges(ids, snaps, p)
 	if err != nil { return nil, err }
 	
+	// Tetra setup.
+	var (
+		vecBuf []rgeom.Vec
+		randBuf []float64
+		gen *rand.Generator
+	)
+	if p.SphericalProfilePoints > 0 {
+		gen = rand.NewTimeSeed(rand.Xorshift)
+		vecBuf = make([]rgeom.Vec, p.SphericalProfilePoints)
+		randBuf = make([]float64, 3 * p.SphericalProfilePoints)
+	}
+
+
 	// Bin particles
 	snapBins, idxBins := binBySnap(snaps, ids)
 	for snap := range snapBins {
@@ -285,10 +304,18 @@ func sphericalProfile(ids, snaps []int, p *Params) ([][]float64, error) {
 			if err != nil { return nil, err }
 			for _, j := range intrBins[i] {
 				r := ranges[idxs[j]]
-				binParticles(
-					&hds[i], xs, counts[idxs[j]], p.SubsampleLength,
-					r.rMin, r.rMax, r.v0,
-				)
+				if p.SphericalProfilePoints > 0 {
+					tetraBinParticles(
+						&hds[i], xs, counts[idxs[j]], p.SubsampleLength,
+						r.rMin, r.rMax, r.v0, vecBuf, randBuf, gen,
+						
+					)
+				} else {
+					binParticles(
+						&hds[i], xs, counts[idxs[j]], p.SubsampleLength,
+						r.rMin, r.rMax, r.v0,
+					)
+				}
 			}
 		}
 	}
@@ -322,6 +349,63 @@ func countsToRhos(
 	}
 }
 
+func tetraBinParticles(
+	hd *io.SheetHeader, xs []rgeom.Vec, counts []float64, skip int,
+	rMin, rMax float64, v0 rgeom.Vec,
+	vecBuf []rgeom.Vec, randBuf []float64, gen *rand.Generator,
+) {
+	min2, max2 := rMin*rMin, rMax*rMax
+	x0, y0, z0 := float64(v0[0]), float64(v0[1]), float64(v0[2])
+
+	lrMin, lrMax := math.Log(rMin), math.Log(rMax)
+	dlr := (lrMax - lrMin) / float64(len(counts))
+	incr := float64(skip*skip*skip)
+	tw := hd.TotalWidth
+
+	sw, gw := int(hd.SegmentWidth), int(hd.GridWidth)
+	for iz := 0; iz < sw; iz += skip {
+		for iy := 0; iy < sw; iy += skip {
+			for ix := 0; ix < sw; ix += skip {
+				idx := ix + gw*iy + gw*gw*iz
+				for dir := 0; dir < 6; dir++ {
+					tetraPoints(idx, dir, gw, skip, xs, gen, randBuf, vecBuf)
+					for _, pt := range vecBuf {
+						x := float64(pt[0]) - x0
+						y := float64(pt[1]) - y0
+						z := float64(pt[2]) - z0
+
+						if x > tw / 2 { x -= tw }
+						if y > tw / 2 { y -= tw }
+						if z > tw / 2 { z -= tw }
+						if x < -tw / 2 { x += tw }
+						if y < -tw / 2 { y += tw }
+						if z < -tw / 2 { z += tw }
+						
+						r2 := x*x + y*y + z*z
+						if r2 <= min2 || r2 >= max2 { continue }
+						
+						lr := math.Log(r2) / 2
+						ri := int((lr - lrMin) / dlr)
+					
+						counts[ri] += incr
+					}
+				}
+			}
+		}
+	}
+}
+
+func tetraPoints(
+	idx, dir, gw, skip int, xs []rgeom.Vec,
+	gen *rand.Generator, randBuf []float64, vecBuf []rgeom.Vec,
+) {
+	idxBuf, tet := &rgeom.TetraIdxs{}, &rgeom.Tetra{}
+	idxBuf.Init(int64(idx), int64(gw), int64(skip), dir)
+	i0, i1, i2, i3 := idxBuf[0], idxBuf[1], idxBuf[2], idxBuf[3]
+	tet.Init(&xs[i0], &xs[i1], &xs[i2], &xs[i3])
+	tet.RandomSample(gen, randBuf, vecBuf)
+}
+
 func binParticles(
 	hd *io.SheetHeader, xs []rgeom.Vec, counts []float64, skip int,
 	rMin, rMax float64, v0 rgeom.Vec,
@@ -334,27 +418,28 @@ func binParticles(
 	incr := float64(skip*skip*skip)
 	tw := hd.TotalWidth
 
-	sw := int(hd.SegmentWidth)
+	sw, gw := int(hd.SegmentWidth), int(hd.GridWidth)
 	for iz := 0; iz < sw; iz += skip {
 		for iy := 0; iy < sw; iy += skip {
 			for ix := 0; ix < sw; ix += skip {
-				i := ix + iy*sw + iz*sw*sw
-				xVec := xs[i]
-				x, y, z := float64(xVec[0]), float64(xVec[1]), float64(xVec[2])
-				x, y, z = x - x0, y - y0, z - z0
+				pt := xs[ix + iy*gw + iz*gw*gw]
+				x := float64(pt[0]) - x0
+				y := float64(pt[1]) - y0
+				z := float64(pt[2]) - z0
+				
 				if x > tw / 2 { x -= tw }
 				if y > tw / 2 { y -= tw }
 				if z > tw / 2 { z -= tw }
 				if x < -tw / 2 { x += tw }
 				if y < -tw / 2 { y += tw }
 				if z < -tw / 2 { z += tw }
-
+				
 				r2 := x*x + y*y + z*z
 				if r2 <= min2 || r2 >= max2 { continue }
 				
 				lr := math.Log(r2) / 2
 				ri := int((lr - lrMin) / dlr)
-
+				
 				counts[ri] += incr
 			}
 		}
