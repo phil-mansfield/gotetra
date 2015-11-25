@@ -2,7 +2,7 @@ package density
 
 import (
 	"log"
-
+	
 	"github.com/phil-mansfield/gotetra/render/geom"
 	"github.com/phil-mansfield/gotetra/math/rand"
 )
@@ -179,13 +179,6 @@ func (intr *mcarlo) Interpolate(
 				buf, intr.vecBuf, nil, ptVal, bweights, 0, intr.points, 1,
 			)
 		}
-	}
-	
-	if maxWidth > 1000 {
-		log.Printf(
-			"width: %.5g, bound: %v\n", maxWidth,
-			intr.subIntr.BufferCellBounds(),
-		)
 	}
 }
 
