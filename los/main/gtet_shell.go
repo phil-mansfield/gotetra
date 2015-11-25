@@ -15,6 +15,7 @@ import (
 	"github.com/phil-mansfield/gotetra/render/io"
 	"github.com/phil-mansfield/gotetra/render/halo"
 	"github.com/phil-mansfield/gotetra/math/rand"
+	intr "github.com/phil-mansfield/gotetra/math/interpolate"
 )
 
 type Params struct {
@@ -398,6 +399,111 @@ func tetraBinParticles(
 	}
 }
 
+func triLinearBinParticles(
+	hd *io.SheetHeader, xs []rgeom.Vec, counts []float64, skip, pts int,
+	rMin, rMax float64, v0 rgeom.Vec,
+	xBuf, yBuf, zBuf []float64,
+) {
+	// This could be handled a million times better than this.
+	runtime.GC()
+
+	x0, y0, z0 := float64(v0[0]), float64(v0[1]), float64(v0[2])
+	cubeXs := make([]float64, pts*pts*pts)
+	cubeYs := make([]float64, pts*pts*pts)
+	cubeZs := make([]float64, pts*pts*pts)
+
+	sw, gw := int(hd.SegmentWidth), int(hd.GridWidth)
+	kw := (sw/skip) + 1
+
+	for iz := 0; iz < gw; iz += skip {
+		for iy := 0; iy < gw; iy += skip {
+			for ix := 0; ix < gw; ix += skip {
+				i := ix + iy*gw + iz*gw*gw
+				j := (ix/skip) + (iy/skip)*kw + (iz/skip)*kw*kw
+				xBuf[j] = float64(xs[i][0])
+				yBuf[j] = float64(xs[i][1])
+				zBuf[j] = float64(xs[i][2])
+			}
+		}
+	}
+
+	triX := intr.NewUniformTriLinear(
+		0, float64(skip), kw, 0, float64(skip), kw, 0, float64(skip), kw, xBuf,
+	)
+	triY := intr.NewUniformTriLinear(
+		0, float64(skip), kw, 0, float64(skip), kw, 0, float64(skip), kw, xBuf,
+	)
+	triZ := intr.NewUniformTriLinear(
+		0, float64(skip), kw, 0, float64(skip), kw, 0, float64(skip), kw, xBuf,
+	)
+
+	min2, max2 := rMin*rMin, rMax*rMax
+	lrMin, lrMax := math.Log(rMin), math.Log(rMax)
+	dlr := lrMax - lrMin
+	incr := float64(skip*skip*skip)
+
+	for iz := 0; iz < sw; iz += skip {
+		for iy := 0; iy < sw; iy += skip {
+			for ix := 0; ix < sw; ix += skip {
+				if !cubeInSphere(xs, ix, iy, iz, v0, rMax) {
+					continue
+				}
+				
+				cubePts(
+					iz, iy, iz, skip,
+					triX, triY, triZ,
+					cubeXs, cubeYs, cubeZs, pts,
+				)
+
+				for i := range cubeXs {
+					x, y, z := cubeXs[i], cubeYs[i], cubeZs[i]
+					dx, dy, dz := x - x0, y - y0, z - z0
+					r2 := dx*dx + dy*dy + dz*dz
+
+					if r2 <= min2 || r2 >= max2 { continue }
+					lr := math.Log(r2) / 2
+					ri := int((lr - lrMin) / dlr)
+					
+					counts[ri] += incr
+				}
+			}
+		}
+	}
+
+	runtime.GC()
+}
+
+func cubeInSphere(
+	xs []rgeom.Vec, ix, iy, iz int, v0 rgeom.Vec, rMax float64,
+) bool {
+	panic(":3")
+	return true
+}
+
+func cubePts(
+	ix, iy, iz, skip int,
+	triX, triY, triZ *intr.TriLinear,
+	xBuf, yBuf, zBuf []float64, pts int,
+) {
+	x1, y1, z1 := float64(ix), float64(iy), float64(iz)
+	x2, y2, z2 := float64(ix + skip), float64(iy + skip), float64(iz + skip)
+
+	dx := (x2 - x1) / float64(pts - 1)
+	dy := (y2 - y1) / float64(pts - 1)
+	dz := (z2 - z1) / float64(pts - 1)
+
+	idx := 0
+	for k := 0; k < pts; k++ {
+		for j := 0; j < pts; j++ {
+			for i := 0; i < pts; i++ {
+				xBuf[idx] = x1 + dx * float64(i)
+				yBuf[idx] = y1 + dy * float64(j)
+				zBuf[idx] = z1 + dz * float64(k)
+			}
+		}
+	}
+}
+
 func tetraPoints(
 	idx, dir, gw, skip int, xs []rgeom.Vec,
 	gen *rand.Generator, randBuf []float64, vecBuf []rgeom.Vec,
@@ -539,12 +645,6 @@ func calcMean(halo *los.HaloProfiles, p *Params) []float64 {
 	halo.GetRs(rs)
 	rhos := halo.MeanProfile()
 	return append(rs, rhos...)
-}
-
-func intr(xs []float64) []interface{} {
-	is := make([]interface{}, len(xs))
-	for i, x := range xs { is[i] = x }
-	return is
 }
 
 func binBySnap(snaps, ids []int) (snapBins, idxBins map[int][]int) {

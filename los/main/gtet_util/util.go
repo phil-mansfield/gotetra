@@ -9,11 +9,13 @@ import (
 	"github.com/phil-mansfield/gotetra/render/io"
 )
 
+// PathExists returns true if the given path exists.
 func PathExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
 }
 
+// DirContetns returnspaths to all the files in a directory.
 func DirContents(dir string) ([]string, error) {
 	infos, err := ioutil.ReadDir(dir)
 	if err != nil { return nil, err }
@@ -26,6 +28,7 @@ func DirContents(dir string) ([]string, error) {
 	return files, nil
 }
 
+// Filter applies a filtering operation to a slice of ints.
 func Filter(xs []int, oks []bool) []int {
 	n := 0
 	for _, ok := range oks {
@@ -40,6 +43,7 @@ func Filter(xs []int, oks []bool) []int {
 	return out
 }
 
+// ReadSnapHeader reads a single snapshot header from the given snapshot.
 func ReadSnapHeader(snap int) (*io.SheetHeader, error) {
 	gtetFmt, err := GtetFmt()
 	if err != nil { return nil, err }

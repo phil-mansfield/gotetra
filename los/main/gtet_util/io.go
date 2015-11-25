@@ -20,6 +20,13 @@ func stdinLines() ([]string, error) {
 	return strings.Split(text, "\n"), nil
 }
 
+// ParseStdin parses a stdin which consists of a series of columns. The first
+// two columns must be included in all non=empty rows and must be ints. The
+// first will be parsed at halo IDs and the second as halo snapshots. Aside
+// from these two columns, each line may have any number of additional columns,
+// which will be parsed as floats and returned line-by-line as inVals.
+//
+// An error is returned either on I/O errors or on parsing errors.
 func ParseStdin() (ids, snaps []int, inVals [][]float64, err error) {
 	ids, snaps, inVals = []int{}, []int{}, [][]float64{}
 	lines, err := stdinLines()
@@ -75,6 +82,11 @@ func ParseStdin() (ids, snaps []int, inVals [][]float64, err error) {
 	return ids, snaps, inVals, nil
 }
 
+// PrintRows takes a seqeunce of variable-length rows, each associated with
+// a halo ID and snapshot, and prints them out as uniformly-spaced columns
+// to stdout.
+//
+// PrintRows panics if the length of ids, snaps, and rows are not all the same.
 func PrintRows(ids, snaps []int, rows [][]float64) {
 	height := len(ids)
 	if height != len(snaps) {
@@ -83,6 +95,7 @@ func PrintRows(ids, snaps []int, rows [][]float64) {
 		panic("Height of rows does not equal height of ID column.")
 	}
 
+	// Maximum number of items per row.
 	maxWidth := 0
 	for i := range rows {
 		if len(rows[i]) > maxWidth { maxWidth = len(rows[i]) }
@@ -91,6 +104,7 @@ func PrintRows(ids, snaps []int, rows [][]float64) {
 	idW, snapW := 0, 0
 	ws := make([]int, maxWidth)
 
+	// Maximum character width needed within each row.
 	for i := 0; i < height; i++ {
 		idN := len(fmt.Sprintf("%d", ids[i]))
 		if idN > idW { idW = idN }
@@ -115,6 +129,10 @@ func PrintRows(ids, snaps []int, rows [][]float64) {
 	}
 }
 
+// PrintCols prints out a sequence of columns to stdin such that each column
+// has the same character width.
+//
+// PrintCols panics if all the columns are not the same height.
 func PrintCols(ids, snaps []int, cols ...[]float64) {
 	height := len(ids)
 	width := len(cols)

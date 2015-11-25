@@ -7,10 +7,17 @@ import (
 )
 
 var (
+	// FinderCells is the number of cells used by the subhalo finder.
 	FinderCells = 150
+	// OverlapMult is the multiplier applied to each halo's R200m to find
+	// its subhalos.
 	OverlapMult = 3.0
 )
 
+// SubIDs returns the subhalos within OverlapMult * 3 of the given host
+// halos, including
+//
+// An error is 
 func SubIDs(ids, snaps []int) (
 	sIDs, sSnaps, hIDs []int, err error,
 ) {
