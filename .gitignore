@@ -13,6 +13,7 @@ _test
 scripts/batch_scripts
 scripts/pprof
 scripts/out
+render/scripts/
 out/
 plots/
 doc/
