@@ -4,7 +4,7 @@ import (
 	"log"
 	"path"
 	"runtime"
-
+	
 	"github.com/phil-mansfield/gotetra/render/density"
 	"github.com/phil-mansfield/gotetra/render/geom"
 	"github.com/phil-mansfield/gotetra/render/io"
@@ -200,7 +200,7 @@ func (r *renderer) initWorkspaces(man *Manager) {
 		man.workspaces[id].buf.SetGridLocation(r.g)
 		man.workspaces[id].buf.Clear()
 
-		man.workspaces[id].lowX = id * man.skip
+		man.workspaces[id].lowX = id
 		man.workspaces[id].highX = segLen
 	}
 }
@@ -252,9 +252,6 @@ func (man *Manager) RenderDensityFromFile(file string) error {
 
 		if !r.requiresFile(file) { continue }
 		man.xCb = *man.hd.CellBounds(r.box.Cells())
-
-		log.Printf("%d\n", man.xCb)
-		log.Printf("%.3g %.3g\n", man.hd.Origin, man.hd.Width)
 		
 		r.over = r.box.Overlap(&man.hd)
 		r.cb = geom.CellBounds{ r.box.CellOrigin(), r.box.CellSpan() }
