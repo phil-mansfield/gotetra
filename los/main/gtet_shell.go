@@ -363,7 +363,8 @@ func tetraBinParticles(
 	lrMin, lrMax := math.Log(rMin), math.Log(rMax)
 	dlr := (lrMax - lrMin) / float64(len(counts))
 	tw := hd.TotalWidth
-
+	incr := float64(skip*skip*skip)
+	
 	sw, gw := int(hd.SegmentWidth), int(hd.GridWidth)
 	for iz := 0; iz < sw; iz += skip {
 		for iy := 0; iy < sw; iy += skip {
@@ -389,7 +390,7 @@ func tetraBinParticles(
 						lr := math.Log(r2) / 2
 						ri := int((lr - lrMin) / dlr)
 					
-						counts[ri]++
+						counts[ri] += incr
 					}
 				}
 			}
