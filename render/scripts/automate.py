@@ -41,12 +41,12 @@ r_def = sys.argv[2]
 check(r_def in r_defs)
 check(filter_size > 0 and not is_even(filter_size))
 
-gtet_dir = "/home/mansfield/code/go/src/github.com/phil-mansfield/gotetra/render/main/unif_sample/L500"
+gtet_dir = "/home/mansfield/code/go/src/github.com/phil-mansfield/gotetra/render/main/converge_test"
 sh_dir = gtet_dir
 
-hlist_file = "/project/surph/diemer/Box_L0500_N1024_CBol/Rockstar/hlists/hlist_1.00000.list"
-snap_file = "/project/surph/diemer/Box_L0500_N1024_CBol/Snaps/snapdir_100/snapshot_100.0"
-gtet_snap_dir = "/project/surph/mansfield/data/sheet_segments/Box_L0500_N1024_G0008_CBol/snapdir_100"
+hlist_file = "/project/surph/diemer/Box_L0063_N1024_CBol/Rockstar/hlists/hlist_1.00000.list"
+snap_file = "/project/surph/diemer/Box_L0063_N1024_CBol/Snaps/snapdir_100/snapshot_100.0"
+gtet_snap_dir = "/project/surph/mansfield/data/sheet_segments/Box_L0063_N1024_G0008_CBol/snapdir_100"
 
 
 opt_str = "R%s_F%d" % (r_def, filter_size)
