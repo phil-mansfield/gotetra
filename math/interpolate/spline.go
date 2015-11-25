@@ -93,6 +93,18 @@ func (sp *Spline) Eval(x float64) float64 {
 	return a*dx*dx*dx + b*dx*dx + c*dx + d
 }
 
+func (sp *Spline) EvalAll(xs []float64, out ...[]float64) []float64 {
+	if len(out) == 0 {
+		out = [][]float64{make([]float64, len(xs))}
+	}
+
+	for i := range xs {
+		out[0][i] = sp.Eval(xs[i])
+	}
+
+	return out[0]
+}
+
 // Deriv computes the derivative of spline at the given point to the
 // specified order.
 //
