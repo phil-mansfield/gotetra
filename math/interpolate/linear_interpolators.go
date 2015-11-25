@@ -167,12 +167,19 @@ func (bi *BiLinear) EvalAll(xs, ys []float64, out ...[]float64) []float64 {
 // TriLinear Implementation //
 //////////////////////////////
 
+// TriLinear is a tri-linear interpolator.
 type TriLinear struct {
 	xs, ys, zs searcher
 	vals []float64
 	nx, ny int
 }
 
+// NewTriLinear creates a tri-linear interpolator on top of a grid with the
+// values given by vals. The values of the x, y, and z grid lines are given by
+// xs, ys, and zs respectively. The vals grid is indexed in the usual way:
+// vals(ix, iy, iz) -> vals[ix + iy*nx + iz*nx*ny].
+//
+// Panics if len(xs) * len(ys) * len(zs) != len(vals).
 func NewTriLinear(xs, ys, zs, vals []float64) *TriLinear {
 	tri := &TriLinear{}
 	tri.xs.init(xs)
@@ -192,6 +199,13 @@ func NewTriLinear(xs, ys, zs, vals []float64) *TriLinear {
 	return tri
 }
 
+// NewUniformTriLinear creates a tri-linear interpolator on top of a uniform
+// grid with the values given by vals. The values of the x, y, and z grid lines
+// start at x0, y0, and z0 and increase with steps of dx, dy, and dz,
+// respectively. The vals grid is indexed in the usual way: vals(ix, iy, iz) ->
+// vals[ix + iy*nx + iz*nx*ny].
+//
+// Panics if len(xs) * len(ys) != len(vals).
 func NewUniformTriLinear(
 	x0, dx float64, nx int,
 	y0, dy float64, ny int,
