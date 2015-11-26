@@ -1,8 +1,6 @@
 package density
 
-import (
-	"log"
-	
+import (	
 	"github.com/phil-mansfield/gotetra/render/geom"
 	"github.com/phil-mansfield/gotetra/math/rand"
 )
