@@ -290,9 +290,6 @@ func sphericalProfile(ids, snaps []int, p *Params) ([][]float64, error) {
 		randBuf = make([]float64, 3 * p.SphericalProfilePoints)
 	} else if p.SphericalProfileTriLinearPoints > 0 {
 		triPts = p.SphericalProfileTriLinearPoints
-		xBuf = make([]float64, triPts*triPts*triPts)
-		yBuf = make([]float64, triPts*triPts*triPts)
-		zBuf = make([]float64, triPts*triPts*triPts)
 	}
 
 
@@ -307,6 +304,11 @@ func sphericalProfile(ids, snaps []int, p *Params) ([][]float64, error) {
 		if len(xs) == 0 {
 			n := hds[0].GridWidth*hds[0].GridWidth*hds[0].GridWidth
 			xs = make([]rgeom.Vec, n)
+
+			kw := (int(hds[0].SegmentWidth) / p.SubsampleLength) + 1
+			xBuf = make([]float64, kw*kw*kw)
+			yBuf = make([]float64, kw*kw*kw)
+			zBuf = make([]float64, kw*kw*kw)
 		}
 		
 		intrBins := binRangeIntersections(hds, ranges, idxs)
@@ -464,7 +466,7 @@ func triLinearBinParticles(
 	for iz := 0; iz < sw; iz += skip {
 		for iy := 0; iy < sw; iy += skip {
 			for ix := 0; ix < sw; ix += skip {
-				if !cubeInSphere(xs, ix, iy, iz, v0, rMax) {
+				if !cubeInSphere(xs, gw, ix, iy, iz, v0, rMax) {
 					continue
 				}
 				
@@ -493,10 +495,50 @@ func triLinearBinParticles(
 }
 
 func cubeInSphere(
-	xs []rgeom.Vec, ix, iy, iz int, v0 rgeom.Vec, rMax float64,
+	xs []rgeom.Vec, gw, ix, iy, iz int, v0 rgeom.Vec, rMax float64,
 ) bool {
-	panic(":3")
-	return true
+	// This is strictly false.
+	
+	r2 := float32(rMax*rMax)
+
+	// Kinda ugly for speed reasons.
+	
+	gw2 := gw*gw
+	i000 := ix + iy*gw + iz*gw2
+
+	i := i000 + 0 +  0 +  0
+	dx, dy, dz := v0[0] - xs[i][0], v0[1] - xs[i][1], v0[2] - xs[i][2]
+	if dx*dx + dy*dy + dz*dz < r2 { return true }
+	
+	i = i000 + 0 +  0 + gw2
+	dx, dy, dz = v0[0] - xs[i][0], v0[1] - xs[i][1], v0[2] - xs[i][2]
+	if dx*dx + dy*dy + dz*dz < r2 { return true }
+
+	i = i000 + 0 + gw +   0
+	dx, dy, dz = v0[0] - xs[i][0], v0[1] - xs[i][1], v0[2] - xs[i][2]
+	if dx*dx + dy*dy + dz*dz < r2 { return true }
+
+	i = i000 + 0 + gw + gw2
+	dx, dy, dz = v0[0] - xs[i][0], v0[1] - xs[i][1], v0[2] - xs[i][2]
+	if dx*dx + dy*dy + dz*dz < r2 { return true }
+
+	i = i000 + 1 +  0 +   0
+	dx, dy, dz = v0[0] - xs[i][0], v0[1] - xs[i][1], v0[2] - xs[i][2]
+	if dx*dx + dy*dy + dz*dz < r2 { return true }
+	
+	i = i000 + 1 +  0 + gw2
+	dx, dy, dz = v0[0] - xs[i][0], v0[1] - xs[i][1], v0[2] - xs[i][2]
+	if dx*dx + dy*dy + dz*dz < r2 { return true }
+
+	i = i000 + 1 + gw +   0
+	dx, dy, dz = v0[0] - xs[i][0], v0[1] - xs[i][1], v0[2] - xs[i][2]
+	if dx*dx + dy*dy + dz*dz < r2 { return true }
+
+	i = i000 + 1 + gw + gw2
+	dx, dy, dz = v0[0] - xs[i][0], v0[1] - xs[i][1], v0[2] - xs[i][2]
+	if dx*dx + dy*dy + dz*dz < r2 { return true }
+	
+	return false
 }
 
 func cubePts(
