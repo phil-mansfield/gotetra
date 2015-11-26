@@ -31,6 +31,7 @@ type Params struct {
 	// Alternate modes
 	MedianProfile, MeanProfile, SphericalProfile bool
 	SphericalProfilePoints int
+	SphericalProfileTriLinearPoints int
 }
 
 func main() {
@@ -188,6 +189,10 @@ func parseCmd() *Params {
 		"Number of pointers per tetrhedra to use when computing spherical " +
 			"If 0, tetrahedra won't be used and the profiles will just be" +
 			"computed from the particles.")
+	flag.IntVar(&p.SphericalProfileTriLinearPoints,
+		"SphericalProfileTriLinearPoints", 0,
+		"Number of particles per side of each cube when using tri-linear " +
+			"interpolation. If 0, tri-linear interpolation won't be use.")
 	flag.Parse()
 	return p
 }
@@ -270,16 +275,24 @@ func sphericalProfile(ids, snaps []int, p *Params) ([][]float64, error) {
 	ranges, err := newProfileRanges(ids, snaps, p)
 	if err != nil { return nil, err }
 	
-	// Tetra setup.
+	// tetra and tri-linear setup.
 	var (
 		vecBuf []rgeom.Vec
 		randBuf []float64
 		gen *rand.Generator
+
+		triPts int
+		xBuf, yBuf, zBuf []float64
 	)
 	if p.SphericalProfilePoints > 0 {
 		gen = rand.NewTimeSeed(rand.Xorshift)
 		vecBuf = make([]rgeom.Vec, p.SphericalProfilePoints)
 		randBuf = make([]float64, 3 * p.SphericalProfilePoints)
+	} else if p.SphericalProfileTriLinearPoints > 0 {
+		triPts = p.SphericalProfileTriLinearPoints
+		xBuf = make([]float64, triPts*triPts*triPts)
+		yBuf = make([]float64, triPts*triPts*triPts)
+		zBuf = make([]float64, triPts*triPts*triPts)
 	}
 
 
@@ -310,6 +323,12 @@ func sphericalProfile(ids, snaps []int, p *Params) ([][]float64, error) {
 						&hds[i], xs, counts[idxs[j]], p.SubsampleLength,
 						r.rMin, r.rMax, r.v0, vecBuf, randBuf, gen,
 						
+					)
+				} else if triPts > 0 {
+					triLinearBinParticles(
+						&hds[i], xs, counts[idxs[j]], p.SubsampleLength,
+						triPts, r.rMin, r.rMax, r.v0,
+						xBuf, yBuf, zBuf,
 					)
 				} else {
 					binParticles(
