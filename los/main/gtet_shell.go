@@ -6,7 +6,7 @@ import (
 	"math"
 	"runtime"
 	"sort"
-
+	
 	"github.com/phil-mansfield/gotetra/los"
 	"github.com/phil-mansfield/gotetra/los/geom"
 	rgeom "github.com/phil-mansfield/gotetra/render/geom"
@@ -347,7 +347,9 @@ func sphericalProfile(ids, snaps []int, p *Params) ([][]float64, error) {
 		rMin, rMax := ranges[i].rMin, ranges[i].rMax
 		hds, _, err := util.ReadHeaders(snaps[i])
 		if err != nil { return nil, err }
-		countsToRhos(&hds[0], counts[i], rMin, rMax, p.SphericalProfilePoints)
+		countsToRhos(&hds[0], counts[i], rMin, rMax,
+			p.SphericalProfilePoints, triPts)
+		
 	}
 
 	outs := prependRadii(counts, ranges)
@@ -356,12 +358,15 @@ func sphericalProfile(ids, snaps []int, p *Params) ([][]float64, error) {
 }
 
 func countsToRhos(
-	hd *io.SheetHeader, counts []float64, rMin, rMax float64, tetraPoints int,
+	hd *io.SheetHeader, counts []float64, rMin, rMax float64,
+	tetraPoints, triPoints int,
 ) {
 	dx := hd.TotalWidth / float64(hd.CountWidth)
 	mp := dx*dx*dx
 	if tetraPoints > 0 {
 		mp /= float64(6 * tetraPoints)
+	} else if triPoints > 0 {
+		mp /= float64(triPoints*triPoints*triPoints)
 	}
 
 	lrMin, lrMax := math.Log(rMin), math.Log(rMax)
@@ -452,35 +457,56 @@ func triLinearBinParticles(
 		0, float64(skip), kw, 0, float64(skip), kw, 0, float64(skip), kw, xBuf,
 	)
 	triY := intr.NewUniformTriLinear(
-		0, float64(skip), kw, 0, float64(skip), kw, 0, float64(skip), kw, xBuf,
+		0, float64(skip), kw, 0, float64(skip), kw, 0, float64(skip), kw, yBuf,
 	)
 	triZ := intr.NewUniformTriLinear(
-		0, float64(skip), kw, 0, float64(skip), kw, 0, float64(skip), kw, xBuf,
+		0, float64(skip), kw, 0, float64(skip), kw, 0, float64(skip), kw, zBuf,
 	)
 
 	min2, max2 := rMin*rMin, rMax*rMax
 	lrMin, lrMax := math.Log(rMin), math.Log(rMax)
-	dlr := lrMax - lrMin
+	dlr := (lrMax - lrMin) / float64(len(counts))
 	incr := float64(skip*skip*skip)
-
+	tw := hd.TotalWidth
+	
 	for iz := 0; iz < sw; iz += skip {
 		for iy := 0; iy < sw; iy += skip {
 			for ix := 0; ix < sw; ix += skip {
-				if !cubeInSphere(xs, gw, ix, iy, iz, v0, rMax) {
-					continue
-				}
-				
+				if !cubeInSphere(xs, gw, ix, iy, iz, v0, rMax) { continue }
 				cubePts(
-					iz, iy, iz, skip,
+					ix, iy, iz, skip,
 					triX, triY, triZ,
 					cubeXs, cubeYs, cubeZs, pts,
 				)
 
+				// Periodicity checks. Could be abstracted out.
+				x, y, z := cubeXs[0], cubeYs[0], cubeZs[0]
+				dx, dy, dz := x - x0, y - y0, z - z0
+				if dx > tw / 2 {
+					for i := range xBuf { xBuf[i] -= tw }
+				}
+				if dy > tw / 2 {
+					for i := range xBuf { yBuf[i] -= tw }
+				}
+				if dz > tw / 2 {
+					for i := range xBuf { zBuf[i] -= tw }
+				}
+				if dx < -tw / 2 {
+					for i := range xBuf { xBuf[i] += tw }
+				}
+				if dy < -tw / 2 {
+					for i := range xBuf { yBuf[i] += tw }
+				}
+				if dz < -tw / 2 {
+					for i := range xBuf { zBuf[i] += tw }
+				}
+
 				for i := range cubeXs {
 					x, y, z := cubeXs[i], cubeYs[i], cubeZs[i]
+					
 					dx, dy, dz := x - x0, y - y0, z - z0
 					r2 := dx*dx + dy*dy + dz*dz
-
+					
 					if r2 <= min2 || r2 >= max2 { continue }
 					lr := math.Log(r2) / 2
 					ri := int((lr - lrMin) / dlr)
@@ -490,15 +516,14 @@ func triLinearBinParticles(
 			}
 		}
 	}
-
+	
 	runtime.GC()
 }
 
+// This is strictly false.
 func cubeInSphere(
 	xs []rgeom.Vec, gw, ix, iy, iz int, v0 rgeom.Vec, rMax float64,
 ) bool {
-	// This is strictly false.
-	
 	r2 := float32(rMax*rMax)
 
 	// Kinda ugly for speed reasons.
@@ -555,11 +580,15 @@ func cubePts(
 
 	idx := 0
 	for k := 0; k < pts; k++ {
+		z := z1 + dz * float64(k)
 		for j := 0; j < pts; j++ {
+			y := y1 + dy * float64(j)
 			for i := 0; i < pts; i++ {
-				xBuf[idx] = x1 + dx * float64(i)
-				yBuf[idx] = y1 + dy * float64(j)
-				zBuf[idx] = z1 + dz * float64(k)
+				x := x1 + dx * float64(i)
+				xBuf[idx] = triX.Eval(x, y, z)
+				yBuf[idx] = triY.Eval(x, y, z)
+				zBuf[idx] = triZ.Eval(x, y, z)
+				idx++
 			}
 		}
 	}
