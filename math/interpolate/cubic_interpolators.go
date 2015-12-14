@@ -148,6 +148,7 @@ func NewUniformTriCubic(
 	z0, dz float64, nz int,
 	vals []float64,
 ) *TriCubic {
+
 	if nx*ny*nz != len(vals) {
 		panic(fmt.Sprintf(
 			"len(vals) = %d, but len(xs) = %d, len(ys) = %d, len(zs) = %d",
@@ -162,7 +163,8 @@ func NewUniformTriCubic(
 
 	tri.xs = make([]float64, nx)
 	tri.ys = make([]float64, ny)
-	tri.ys = make([]float64, nz)
+	tri.zs = make([]float64, nz)
+
 	for i := range tri.xs { tri.xs[i] = x0 + float64(i)*dx }
 	for i := range tri.ys { tri.ys[i] = y0 + float64(i)*dy }
 	for i := range tri.zs { tri.zs[i] = z0 + float64(i)*dz }
@@ -193,13 +195,14 @@ func (tri *TriCubic) initSplines() {
 	tri.lastZ = tri.zs[0]
 
 	tri.ySplineVals = make([][]float64, len(tri.xs))
+	tri.ySplines = make([]*Spline, len(tri.xs))
 	for xi := range tri.xs {
 		tri.ySplineVals[xi] = make([]float64, len(tri.ys))
 		for yi := range tri.ys {
 			tri.ySplineVals[xi][yi] =
 				tri.zSplines[yi*tri.nx + xi].Eval(tri.lastZ)
 		}
-		tri.ySplines[xi] = NewSpline(tri.xs, tri.ySplineVals[xi])
+		tri.ySplines[xi] = NewSpline(tri.ys, tri.ySplineVals[xi])
 	}
 
 	// Create initial spline along lines of constant y and z.
@@ -226,7 +229,7 @@ func (tri *TriCubic) Eval(x, y, z float64) float64 {
 					tri.ySplineVals[xi][yi] =
 						tri.zSplines[yi*tri.nx + xi].Eval(tri.lastZ)
 				}
-				tri.ySplines[xi].Init(tri.xs, tri.ySplineVals[xi])
+				tri.ySplines[xi].Init(tri.ys, tri.ySplineVals[xi])
 			}			
 		}
 
@@ -238,7 +241,6 @@ func (tri *TriCubic) Eval(x, y, z float64) float64 {
 		}
 		
 		tri.xSpline.Init(tri.xs, tri.xSplineVals)
-
 	}
 
 	return tri.xSpline.Eval(x)
