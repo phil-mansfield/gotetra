@@ -16,6 +16,7 @@ type BiInterpolator interface {
 
 var (
 	_ BiInterpolator = &BiLinear{}
+	_ BiInterpolator = &BiCubic{}
 )
 
 type TriInterpolator interface {
@@ -25,4 +26,5 @@ type TriInterpolator interface {
 
 var (
 	_ TriInterpolator = &TriLinear{}
+	_ TriInterpolator = &TriCubic{}
 )
