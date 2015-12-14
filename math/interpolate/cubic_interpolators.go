@@ -173,17 +173,22 @@ func NewUniformTriCubic(
 }
 
 func (tri *TriCubic) initSplines() {
-	tri.zSplines = make([]*Spline, len(tri.xs) * len(tri.ys))
+	// Create "base" splines along lines of constant x and y. These will never
+	// be changed.
+
+	tri.zSplines = make([]*Spline, len(tri.xs)*len(tri.ys))
 	for xi := range tri.xs {
 		for yi := range tri.ys {
 			zVals := make([]float64, len(tri.zs))
 			for zi := range tri.zs {
-				zVals[yi] = tri.vals[tri.nx*tri.ny*zi + tri.nx*yi + xi]
+				zVals[zi] = tri.vals[tri.nx*tri.ny*zi + tri.nx*yi + xi]
 			}
 
 			tri.zSplines[yi*tri.nx + xi] = NewSpline(tri.zs, zVals)
 		}
 	}
+
+	// Create initial splines along lines of constant x and z.
 
 	tri.lastZ = tri.zs[0]
 
@@ -196,6 +201,8 @@ func (tri *TriCubic) initSplines() {
 		}
 		tri.ySplines[xi] = NewSpline(tri.xs, tri.ySplineVals[xi])
 	}
+
+	// Create initial spline along lines of constant y and z.
 
 	tri.lastY = tri.ys[0]
 
