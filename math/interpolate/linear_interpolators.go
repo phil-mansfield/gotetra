@@ -229,7 +229,7 @@ func NewUniformTriLinear(
 	tri.zs.unifInit(z0, dz, nz)
 	tri.nx = nx
 	tri.ny = ny
-	tri.vals = nil
+	tri.vals = vals
 
 	if nx * ny * nz != len(vals) {
 		panic(fmt.Sprintf(
@@ -242,37 +242,37 @@ func NewUniformTriLinear(
 }
 
 func (tri *TriLinear) Eval(x, y, z float64) float64 {
-	ix1 := tri.xs.search(x)
-	iy1 := tri.ys.search(y)
-	iz1 := tri.ys.search(z)
+	ix := tri.xs.search(x)
+	iy := tri.ys.search(y)
+	iz := tri.ys.search(z)
 
-	ix2, iy2, iz2 := ix1 + 1, iy1 + 1, iz1 + 1
-
-	x1, x2 := tri.xs.val(ix1), tri.xs.val(ix2)
-	y1, y2 := tri.ys.val(iy1), tri.ys.val(iy2)
-	z1, z2 := tri.ys.val(iz1), tri.ys.val(iz2)
-
-	v111 := tri.vals[ix1 + iy1*tri.nx + iz1*tri.nx*tri.ny]
-	v112 := tri.vals[ix1 + iy1*tri.nx + iz2*tri.nx*tri.ny]
-	v121 := tri.vals[ix1 + iy2*tri.nx + iz1*tri.nx*tri.ny]
-	v122 := tri.vals[ix1 + iy2*tri.nx + iz2*tri.nx*tri.ny]
-
-	v211 := tri.vals[ix2 + iy1*tri.nx + iz1*tri.nx*tri.ny]
-	v212 := tri.vals[ix2 + iy1*tri.nx + iz2*tri.nx*tri.ny]
-	v221 := tri.vals[ix2 + iy2*tri.nx + iz1*tri.nx*tri.ny]
-	v222 := tri.vals[ix2 + iy2*tri.nx + iz2*tri.nx*tri.ny]
-
+	dix, diy, diz := 1, tri.nx, tri.nx*tri.ny
+	i := ix + iy*tri.nx + iz*tri.ny*tri.nx
+	
+	v111 := tri.vals[i +   0 +   0 +   0]
+	v112 := tri.vals[i +   0 +   0 + diz]
+	v121 := tri.vals[i +   0 + diy +   0]
+	v122 := tri.vals[i +   0 + diy + diz]
+	v211 := tri.vals[i + dix +   0 +   0]
+	v212 := tri.vals[i + dix +   0 + diz]
+	v221 := tri.vals[i + dix + diy +   0]
+	v222 := tri.vals[i + dix + diy + diz]
+	
+	x1, x2 := tri.xs.val(ix), tri.xs.val(ix + 1)
+	y1, y2 := tri.ys.val(iy), tri.ys.val(iy + 1)
+	z1, z2 := tri.ys.val(iz), tri.ys.val(iz + 1)
+	
 	xd := (x - x1) / (x2 - x1)
 	yd := (y - y1) / (y2 - y1)
 	zd := (z - z1) / (z2 - z1)
-
+	
 	c11 := v111*(1 - xd) + v211*xd
 	c21 := v121*(1 - xd) + v221*xd
 	c12 := v112*(1 - xd) + v212*xd
 	c22 := v122*(1 - xd) + v222*xd
-
-	c1 := c11*(1 - y2) + c21*yd
-	c2 := c12*(1 - y2) + c22*yd
+	
+	c1 := c11*(1 - yd) + c21*yd
+	c2 := c12*(1 - yd) + c22*yd
 
 	return c1*(1 - zd) + c2*zd
 }

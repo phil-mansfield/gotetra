@@ -40,8 +40,9 @@ func (s *searcher) search(x float64) int {
 	}
 
 	if s.unif {
-		if x == s.lim { return s.n - 1 }
-		return int((x - s.x0) / s.dx)
+		idx := int((x - s.x0) / s.dx)
+		if idx == s.n - 1 { idx-- }
+		return idx
 	} else {
 
 		// Guess under the assumption of uniform spacing.
