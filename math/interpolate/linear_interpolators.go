@@ -116,7 +116,7 @@ func NewUniformBiLinear(
 	bi.xs.unifInit(x0, dx, nx)
 	bi.ys.unifInit(y0, dy, ny)
 	bi.nx = nx
-	bi.vals = nil
+	bi.vals = vals
 
 	if nx * ny  != len(vals) {
 		panic(fmt.Sprintf(
@@ -135,21 +135,30 @@ func (bi *BiLinear) Eval(x, y float64) float64 {
 	ix1 := bi.xs.search(x)
 	iy1 := bi.ys.search(y)
 	ix2, iy2 := ix1 + 1, iy1 + 1
+	if ix2 == bi.xs.n {
+		ix1--
+		ix2--
+	}
+	if iy2 == bi.ys.n {
+		iy1--
+		iy2--
+	}
 
 	x1, x2 := bi.xs.val(ix1), bi.xs.val(ix2)
 	y1, y2 := bi.ys.val(iy1), bi.ys.val(iy2)
+
 	i11, i12 := ix1 + bi.nx*iy1, ix1 + bi.nx*iy2
 	i21, i22 := ix2 + bi.nx*iy1, ix2 + bi.nx*iy2
 
-	v21, v22 := bi.vals[i11], bi.vals[i12]
-	v11, v12 := bi.vals[i21], bi.vals[i22]
+	v11, v12 := bi.vals[i11], bi.vals[i12]
+	v21, v22 := bi.vals[i21], bi.vals[i22]
 
 	dx, dy := x2 - x1, y2 - y1
 	dx1, dx2 := x - x1, x2 - x
 	dy1, dy2 := y - y1, y2 - y
 
-	return (v11*dx2*dy2 + v12*dx1*dy2 +
-		v21*dx2*dy1 + v22*dx1*dy1) / (dx*dy)
+	return (v11*dx2*dy2 + v12*dx2*dy1 +
+		v21*dx1*dy2 + v22*dx1*dy1) / (dx*dy)
 }
 
 // EvalAll evaluates the interpolator at all the given (x, y) values. If an
@@ -258,8 +267,8 @@ func (tri *TriLinear) Eval(x, y, z float64) float64 {
 	zd := (z - z1) / (z2 - z1)
 
 	c11 := v111*(1 - xd) + v211*xd
-	c12 := v121*(1 - xd) + v221*xd
-	c21 := v112*(1 - xd) + v212*xd
+	c21 := v121*(1 - xd) + v221*xd
+	c12 := v112*(1 - xd) + v212*xd
 	c22 := v122*(1 - xd) + v222*xd
 
 	c1 := c11*(1 - y2) + c21*yd

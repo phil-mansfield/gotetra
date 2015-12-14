@@ -15,7 +15,7 @@ func (s *searcher) init(xs []float64) {
 	s.xs = xs
 	s.x0 = xs[0]
 	s.lim = xs[len(xs) - 1]
-	s.dx = (s.lim - s.x0) / float64(len(xs))
+	s.dx = (s.lim - s.x0) / float64(len(xs) - 1)
 	s.n = len(xs)
 	s.unif = false
 	s.incr = s.dx > 0
@@ -24,7 +24,7 @@ func (s *searcher) init(xs []float64) {
 func (s *searcher) unifInit(x0, dx float64, n int) {
 	s.xs = nil
 	s.x0 = x0
-	s.lim = float64(n)
+	s.lim = float64(n - 1) * dx + x0
 	s.dx = dx
 	s.n = n
 	s.unif = true
