@@ -4,7 +4,7 @@ through sparse or noisy data.
 package interpolate
 
 import (
-	"log"
+	"fmt"
 )
 
 type splineCoeff struct {
@@ -27,12 +27,11 @@ type Spline struct {
 // must be sorted in increasing or decreasing order in x.
 func NewSpline(xs, ys []float64) *Spline {
 	if len(xs) != len(ys) {
-		log.Fatalf(
-			"Table given to NewSpline() has len(xs) = %d but len(ys) = %d.",
-			len(xs), len(ys),
-		)
+		panic(fmt.Sprintf("Table given to NewSpline() has len(xs) = %d " + 
+			"but len(ys) = %d.", len(xs), len(ys)))
 	} else if len(xs) <= 1 {
-		log.Fatalf("Table given to NewSpline() has length of %d.", len(xs))
+		panic(fmt.Sprintf("Table given to NewSpline() has " + 
+			"length of %d.", len(xs)))
 	}
 
 	sp := new(Spline)
@@ -58,14 +57,14 @@ func (sp *Spline) Init(xs, ys []float64) {
 		sp.incr = true
 		for i := 0; i < len(xs)-1; i++ {
 			if xs[i+1] < xs[i] {
-				log.Fatal("Table given to NewSpline() not sorted.")
+				panic("Table given to NewSpline() not sorted.")
 			}
 		}
 	} else {
 		sp.incr = false
 		for i := 0; i < len(xs)-1; i++ {
 			if xs[i+1] > xs[i] {
-				log.Fatal("Table given to NewSpline() not sorted.")
+				panic("Table given to NewSpline() not sorted.")
 			}
 		}
 	}
@@ -83,8 +82,8 @@ func (sp *Spline) Eval(x float64) float64 {
 		if x == sp.xs[0] { return sp.ys[0] }
 		if x == sp.xs[len(sp.xs) - 1] { return sp.ys[len(sp.ys) - 1] }
 
-		log.Fatalf("Point %g given to Spline.Eval() out of bounds [%g, %g].",
-			x, sp.xs[0], sp.xs[len(sp.xs) - 1])
+		panic(fmt.Sprintf("Point %g given to Spline.Eval() out of bounds " + 
+			"[%g, %g].", x, sp.xs[0], sp.xs[len(sp.xs) - 1]))
 	}
 
 	i := sp.bsearch(x)
@@ -111,7 +110,8 @@ func (sp *Spline) EvalAll(xs []float64, out ...[]float64) []float64 {
 // x must be within the range of x values given to NewSpline().
 func (sp *Spline) Deriv(x float64, order int) float64 {
 	if x < sp.xs[0] == sp.incr || x > sp.xs[len(sp.xs)-1] == sp.incr {
-		log.Fatalf("Point %g given to Spline.Differentiate() out of bounds.", x)
+		panic(fmt.Sprintf("Point %g given to Spline.Differentiate() " + 
+			"out of bounds.", x))
 	}
 
 	i := sp.bsearch(x)
@@ -135,9 +135,11 @@ func (sp *Spline) Deriv(x float64, order int) float64 {
 func (sp *Spline) Integrate(lo, hi float64) float64 {
 	if lo > hi { return -sp.Integrate(hi, lo) }
 	if lo < sp.xs[0] == sp.incr || lo > sp.xs[len(sp.xs)-1] == sp.incr {
-		log.Fatalf("Low bound %g in Spline.Integrate() out of bounds.", lo)
+		panic(fmt.Sprintf("Low bound %g in Spline.Integrate() " + 
+			"out of bounds.", lo))
 	} else if hi < sp.xs[0] == sp.incr || hi > sp.xs[len(sp.xs)-1] == sp.incr {
-		log.Fatalf("High bound %g in Spline.Integrate() out of bounds.", hi)
+		panic(fmt.Sprintf("High bound %g in Spline.Integrate() " + 
+			"out of bounds.", hi))
 	}
 
 	iLo, iHi := sp.bsearch(lo), sp.bsearch(hi)
@@ -183,8 +185,8 @@ func (sp *Spline) bsearch(x float64) int {
 	}
 
 	if lo == len(sp.xs) - 1 { 
-		log.Fatalf("Point %g out of Spline bounds [%g, %g].",
-			x, sp.xs[0], sp.xs[len(sp.xs) - 1])
+		panic(fmt.Sprintf("Point %g out of Spline bounds [%g, %g].",
+			x, sp.xs[0], sp.xs[len(sp.xs) - 1]))
 	}
 	return lo
 }
@@ -239,14 +241,14 @@ func TriDiagAt(as, bs, cs, rs, out []float64) {
 	if len(as) != len(bs) || len(as) != len(cs) ||
 		len(as) != len(out) || len(as) != len(rs) {
 
-		log.Fatal("Length of arugments to TriDiagAt are unequal.")
+		panic("Length of arugments to TriDiagAt are unequal.")
 	}
 
 	tmp := make([]float64, len(as))
 
 	beta := bs[0]
 	if beta == 0 {
-		log.Fatal("TriDiagAt cannot solve given system.")
+		panic("TriDiagAt cannot solve given system.")
 	}
 	out[0] = rs[0] / beta
 
@@ -254,7 +256,7 @@ func TriDiagAt(as, bs, cs, rs, out []float64) {
 		tmp[i] = cs[i-1] / beta
 		beta = bs[i] - as[i]*tmp[i]
 		if beta == 0 {
-			log.Fatal("TriDiagAt cannot solve given system")
+			panic("TriDiagAt cannot solve given system")
 		}
 		out[i] = (rs[i] - as[i]*out[i-1]) / beta
 
