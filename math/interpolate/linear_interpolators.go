@@ -282,3 +282,31 @@ func (tri *TriLinear) EvalAll(xs, ys, zs []float64, out ...[]float64) []float64 
 	for i := range xs { out[0][i] = tri.Eval(xs[i], ys[i], zs[i]) }
 	return out[0]	
 }
+
+func NewLinearInterpolator(xs, vals []float64) Interpolator {
+	return NewLinear(xs, vals)
+}
+func NewUniformLinearInterpolator(
+	x0, dx float64, vals []float64,
+) Interpolator {
+	return NewUniformLinear(x0, dx, vals)
+}
+func NewBiLinearInterpolator(xs, ys, vals []float64) BiInterpolator {
+	return NewBiLinear(xs, ys, vals)
+}
+func NewUniformBiLinearInterpolator(
+	x0, dx float64, nx int,
+	y0, dy float64, ny int, vals []float64,
+) BiInterpolator {
+	return NewUniformBiLinear(x0, dx, nx, y0, dy, ny, vals)
+}
+func NewTriLinearInterpolator(xs, ys, zs, vals []float64) TriInterpolator {
+	return NewTriLinear(xs, ys, zs, vals)
+}
+func NewUniformTriLinearInterpolator(
+	x0, dx float64, nx int,
+	y0, dy float64, ny int,
+	z0, dz float64, nz int, vals []float64,
+) TriInterpolator {
+	return NewUniformTriLinear(x0, dx, nx, y0, dy, ny, z0, dz, nz, vals)
+}

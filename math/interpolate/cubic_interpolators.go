@@ -251,3 +251,30 @@ func (tri *TriCubic) EvalAll(xs, ys, zs []float64, out ...[]float64) []float64 {
 	for i := range xs { out[0][i] = tri.Eval(xs[i], ys[i], zs[i]) }
 	return out[0]
 }
+
+func NewSplineInterpolator(xs, vals []float64) Interpolator {
+	return NewSpline(xs, vals)
+}
+
+func NewBiCubicInterpolator(xs, ys, vals []float64) BiInterpolator {
+	return NewBiCubic(xs, ys, vals)
+}
+
+func NewUniformBiCubicInterpolator(
+	x0, dx float64, nx int,
+	y0, dy float64, ny int, vals []float64,
+) BiInterpolator {
+	return NewUniformBiCubic(x0, dx, nx, y0, dy, ny, vals)
+}
+
+func NewTriCubicInterpolator(xs, ys, zs, vals []float64) TriInterpolator {
+	return NewTriCubic(xs, ys, zs, vals)
+}
+
+func NewUniformTriCubicInterpolator(
+	x0, dx float64, nx int,
+	y0, dy float64, ny int,
+	z0, dz float64, nz int, vals []float64,
+) TriInterpolator {
+	return NewUniformTriCubic(x0, dx, nx, y0, dy, ny, z0, dz, nz, vals)
+}

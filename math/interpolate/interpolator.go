@@ -4,6 +4,7 @@ type Interpolator interface {
 	Eval(x float64) float64
 	EvalAll(xs []float64, out ...[]float64) []float64
 }
+
 var (
 	_ Interpolator = &Spline{}
 	_ Interpolator = &Linear{}
