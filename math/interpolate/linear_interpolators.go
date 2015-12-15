@@ -65,6 +65,25 @@ func (lin *Linear) EvalAll(xs []float64, out ...[]float64) []float64 {
 }
 
 
+func (lin *Linear) Ref() Interpolator {
+	panic("NYI")
+}
+
+type linearRef struct {
+}
+
+func (lin *linearRef) Eval(x float64) float64 {
+	panic("NYI")
+}
+
+func (lin *linearRef) EvalAll(xs []float64, out ...[]float64) []float64 {
+	panic("NYI")
+}
+
+func (lin *linearRef) Ref() Interpolator {
+	panic("NYI")
+}
+
 /////////////////////////////
 // BiLinear Implementation //
 /////////////////////////////
@@ -170,6 +189,25 @@ func (bi *BiLinear) EvalAll(xs, ys []float64, out ...[]float64) []float64 {
 	if len(out) == 0 { out = [][]float64{ make([]float64, len(xs)) } }
 	for i := range xs { out[0][i] = bi.Eval(xs[i], ys[i]) }
 	return out[0]
+}
+
+func (bi *BiLinear) Ref() BiInterpolator {
+	panic("NYI")
+}
+
+type biLinearRef struct {
+}
+
+func (bi *biLinearRef) Eval(x, y float64) float64 {
+	panic("NYI")
+}
+
+func (bi *biLinearRef) EvalAll(xs, ys []float64, out ...[]float64) []float64 {
+	panic("NYI")
+}
+
+func (bi *biLinearRef) Ref() BiInterpolator {
+	panic("NYI")
 }
 
 //////////////////////////////
@@ -283,6 +321,24 @@ func (tri *TriLinear) EvalAll(xs, ys, zs []float64, out ...[]float64) []float64 
 	return out[0]	
 }
 
+func (tri *TriLinear) Ref() TriInterpolator {
+	panic("NYI")
+}
+
+type triLinearRef struct {
+}
+
+func (tri *triLinearRef) Eval(x, y, z float64) float64 {
+	panic("NYI")
+}
+
+func (tri *triLinearRef) EvalAll(xs, ys, zs []float64, out ...[]float64) []float64 {
+	panic("NYI")
+}
+
+func (tri *triLinearRef) Ref() TriInterpolator {
+	panic("NYI")
+}
 func NewLinearInterpolator(xs, vals []float64) Interpolator {
 	return NewLinear(xs, vals)
 }

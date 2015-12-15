@@ -229,6 +229,25 @@ func (sp *Spline) calcCoeffs() {
 	}
 }
 
+func (sp *Spline) Ref() Interpolator {
+	panic("NYI")
+}
+
+type splineRef struct {
+}
+
+func (sp *splineRef) Eval(x float64) float64 {
+	panic("NYI")
+}
+
+func (sp *splineRef) EvalAll(xs []float64, out... []float64) []float64 {
+	panic("NYI")
+}
+
+func (sp *splineRef) Ref() Interpolator {
+	panic("NYI")
+}
+
 // TriTiagAt solves the system of equations
 //
 // | b0 c0 ..    |   | out0 |   | r0 |

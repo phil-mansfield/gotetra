@@ -104,6 +104,25 @@ func (bi *BiCubic) EvalAll(xs, ys []float64, out ...[]float64) []float64 {
 	return out[0]
 }
 
+func (bi *BiCubic) Ref() BiInterpolator {
+	panic("NYI")
+}
+
+type biCubicRef struct {
+}
+
+func (bi *biCubicRef) Eval(x, y float64) float64 {
+	panic("NYI")
+}
+
+func (bi *biCubicRef) EvalAll(xs, ys []float64, out ...[]float64) []float64 {
+	panic("NYI")
+}
+
+func (bi *biCubicRef) Ref() BiInterpolator {
+	panic("NYI")
+}
+
 /////////////////////////////
 // TriCubic Implementation //
 /////////////////////////////
@@ -250,6 +269,25 @@ func (tri *TriCubic) EvalAll(xs, ys, zs []float64, out ...[]float64) []float64 {
 	if len(out) == 0 { out = [][]float64{ make([]float64, len(xs)) } }
 	for i := range xs { out[0][i] = tri.Eval(xs[i], ys[i], zs[i]) }
 	return out[0]
+}
+
+func (tri *TriCubic) Ref() TriInterpolator {
+	panic("NYI")
+}
+
+type triCubicRef struct {
+}
+
+func (tri *triCubicRef) Eval(x, y, z float64) float64 {
+	panic("NYI")
+}
+
+func (tri *triCubicRef) EvalAll(xs, ys, zs []float64, out ...[]float64) []float64 {
+	panic("NYI")
+}
+
+func (tri *triCubicRef) Ref() TriInterpolator {
+	panic("NYI")
 }
 
 func NewSplineInterpolator(xs, vals []float64) Interpolator {
