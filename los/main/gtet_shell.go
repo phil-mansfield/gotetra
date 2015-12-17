@@ -32,6 +32,7 @@ type Params struct {
 	MedianProfile, MeanProfile, SphericalProfile bool
 	SphericalProfilePoints int
 	SphericalProfileTriLinearPoints int
+	SphericalProfileTriCubicPoints int
 }
 
 func main() {
@@ -45,7 +46,7 @@ func main() {
 
 	// We're just going to do this part separately.
 	if p.SphericalProfile {
-		out, err := sphericalProfile(ids, snaps, p)
+		out, err := profile(ids, snaps, p)
 		if err != nil { log.Fatal(err.Error()) }
 		util.PrintRows(ids, snaps, out)
 		return
@@ -267,29 +268,46 @@ func newProfileRanges(ids, snaps []int, p *Params) ([]profileRange, error) {
 	return ranges, nil
 }
 
-func sphericalProfile(ids, snaps []int, p *Params) ([][]float64, error) {
+func profile(ids, snaps []int, p *Params) ([][]float64, error) {
 	// Normal Set up
-	var xs []rgeom.Vec
-	counts := make([][]float64, len(ids))
-	for i := range counts { counts[i] = make([]float64, p.RBins) }
 	ranges, err := newProfileRanges(ids, snaps, p)
 	if err != nil { return nil, err }
 	
 	// tetra and tri-linear setup.
 	var (
+		xs []rgeom.Vec
 		vecBuf []rgeom.Vec
 		randBuf []float64
 		gen *rand.Generator
 
+		profs []*sphericalProfile
+		intrBuf *intrBuffers
+		con intrConstructor
 		triPts int
-		xBuf, yBuf, zBuf []float64
 	)
+
 	if p.SphericalProfilePoints > 0 {
 		gen = rand.NewTimeSeed(rand.Xorshift)
 		vecBuf = make([]rgeom.Vec, p.SphericalProfilePoints)
 		randBuf = make([]float64, 3 * p.SphericalProfilePoints)
 	} else if p.SphericalProfileTriLinearPoints > 0 {
 		triPts = p.SphericalProfileTriLinearPoints
+		con = func(x0, dx float64, nx int,
+			y0, dy float64, ny int, 
+			z0, dz float64, nz int, vals []float64) intr.TriInterpolator {
+				return intr.NewUniformTriLinear(
+					x0, dx, nx, y0, dy, ny, z0, dz, nz, vals,
+				)
+		}
+	} else if p.SphericalProfileTriCubicPoints > 0 {
+		triPts = p.SphericalProfileTriCubicPoints
+		con = func(x0, dx float64, nx int,
+			y0, dy float64, ny int, 
+			z0, dz float64, nz int, vals []float64) intr.TriInterpolator {
+				return intr.NewUniformTriCubic(
+					x0, dx, nx, y0, dy, ny, z0, dz, nz, vals,
+				)
+		}
 	}
 
 
@@ -305,10 +323,21 @@ func sphericalProfile(ids, snaps []int, p *Params) ([][]float64, error) {
 			n := hds[0].GridWidth*hds[0].GridWidth*hds[0].GridWidth
 			xs = make([]rgeom.Vec, n)
 
-			kw := (int(hds[0].SegmentWidth) / p.SubsampleLength) + 1
-			xBuf = make([]float64, kw*kw*kw)
-			yBuf = make([]float64, kw*kw*kw)
-			zBuf = make([]float64, kw*kw*kw)
+			if p.SphericalProfile {
+				profs = make([]*sphericalProfile, len(ranges))
+				for _, r := range ranges {
+					
+					newSphericalProfile(r.v0, r.rMin, r.rMax,
+						hds[0].TotalWidth, hds[0].CountWidth, p.RBins)
+				}
+			}
+
+			if triPts > 0 {
+				intrBuf = newIntrBuffers(
+					int(hds[0].SegmentWidth), 
+					int(hds[0].GridWidth), p.SubsampleLength,
+				)
+			}
 		}
 		
 		intrBins := binRangeIntersections(hds, ranges, idxs)
@@ -319,79 +348,62 @@ func sphericalProfile(ids, snaps []int, p *Params) ([][]float64, error) {
 			err := io.ReadSheetPositionsAt(files[i], xs)
 			if err != nil { return nil, err }
 			for _, j := range intrBins[i] {
-				r := ranges[idxs[j]]
 				if p.SphericalProfilePoints > 0 {
 					tetraBinParticles(
-						&hds[i], xs, counts[idxs[j]], p.SubsampleLength,
-						r.rMin, r.rMax, r.v0, vecBuf, randBuf, gen,
+						&hds[i], xs, p.SubsampleLength, profs[idxs[j]],
+						vecBuf, randBuf, gen,
 						
 					)
 				} else if triPts > 0 {
-					triLinearBinParticles(
-						&hds[i], xs, counts[idxs[j]], p.SubsampleLength,
-						triPts, r.rMin, r.rMax, r.v0,
-						xBuf, yBuf, zBuf,
+					interpolatorBinParticles(
+						xs, triPts, profs[idxs[j]], con, intrBuf,
 					)
 				} else {
-					binParticles(
-						&hds[i], xs, counts[idxs[j]], p.SubsampleLength,
-						r.rMin, r.rMax, r.v0,
-					)
+					binParticles(&hds[i], xs, p.SubsampleLength, profs[idxs[j]])
 				}
 			}
 		}
 	}
 	
 	// Convert
-	for i := range counts {
-		rMin, rMax := ranges[i].rMin, ranges[i].rMax
-		hds, _, err := util.ReadHeaders(snaps[i])
+	for i := range profs {
 		if err != nil { return nil, err }
-		countsToRhos(&hds[0], counts[i], rMin, rMax,
-			p.SphericalProfilePoints, triPts)
-		
+		countsToRhos(
+			profs[i], p.SubsampleLength, p.SphericalProfilePoints, triPts,
+		)
 	}
 
+	counts := make([][]float64, len(profs))
+	for i := range counts { counts[i] = profs[i].counts }
 	outs := prependRadii(counts, ranges)
 	
 	return outs, nil
 }
 
-func countsToRhos(
-	hd *io.SheetHeader, counts []float64, rMin, rMax float64,
-	tetraPoints, triPoints int,
-) {
-	dx := hd.TotalWidth / float64(hd.CountWidth)
+func countsToRhos(prof *sphericalProfile, skip, tetraPoints, triPoints int) {
+	dx :=prof.boxWidth / prof.countWidth
 	mp := dx*dx*dx
+
 	if tetraPoints > 0 {
-		mp /= float64(6 * tetraPoints)
+		mp /= float64(6*tetraPoints * skip*skip*skip)
 	} else if triPoints > 0 {
-		mp /= float64(triPoints*triPoints*triPoints)
+		mp /= float64(triPoints*triPoints*triPoints * skip*skip*skip)
 	}
 
-	lrMin, lrMax := math.Log(rMin), math.Log(rMax)
-	dlr := (lrMax - lrMin) / float64(len(counts))
-	for i := range counts {
+	lrMin, lrMax := math.Log(prof.rMin), math.Log(prof.rMax)
+	dlr := (lrMax - lrMin) / float64(len(prof.counts))
+	for i := range prof.counts {
 		rLo := math.Exp(dlr*float64(i) + lrMin)
 		rHi := math.Exp(dlr*float64(i + 1) + lrMin)
 		dV := (rHi*rHi*rHi - rLo*rLo*rLo) * 4 * math.Pi / 3
-		counts[i] *= mp / dV
+		prof.counts[i] *= mp / dV
 	}
 }
 
 func tetraBinParticles(
-	hd *io.SheetHeader, xs []rgeom.Vec, counts []float64, skip int,
-	rMin, rMax float64, v0 rgeom.Vec,
+	hd *io.SheetHeader, xs []rgeom.Vec, skip int, prof *sphericalProfile,
 	vecBuf []rgeom.Vec, randBuf []float64, gen *rand.Generator,
 ) {
-	min2, max2 := rMin*rMin, rMax*rMax
-	x0, y0, z0 := float64(v0[0]), float64(v0[1]), float64(v0[2])
-
-	lrMin, lrMax := math.Log(rMin), math.Log(rMax)
-	dlr := (lrMax - lrMin) / float64(len(counts))
-	tw := hd.TotalWidth
-	incr := float64(skip*skip*skip)
-	
 	sw, gw := int(hd.SegmentWidth), int(hd.GridWidth)
 	for iz := 0; iz < sw; iz += skip {
 		for iy := 0; iy < sw; iy += skip {
@@ -400,24 +412,10 @@ func tetraBinParticles(
 				for dir := 0; dir < 6; dir++ {
 					tetraPoints(idx, dir, gw, skip, xs, gen, randBuf, vecBuf)
 					for _, pt := range vecBuf {
-						x := float64(pt[0]) - x0
-						y := float64(pt[1]) - y0
-						z := float64(pt[2]) - z0
-
-						if x > tw / 2 { x -= tw }
-						if y > tw / 2 { y -= tw }
-						if z > tw / 2 { z -= tw }
-						if x < -tw / 2 { x += tw }
-						if y < -tw / 2 { y += tw }
-						if z < -tw / 2 { z += tw }
-						
-						r2 := x*x + y*y + z*z
-						if r2 <= min2 || r2 >= max2 { continue }
-						
-						lr := math.Log(r2) / 2
-						ri := int((lr - lrMin) / dlr)
-					
-						counts[ri] += incr
+						x := float64(pt[0])
+						y := float64(pt[1])
+						z := float64(pt[2])
+						prof.insert(x, y, z)
 					}
 				}
 			}
@@ -425,6 +423,328 @@ func tetraBinParticles(
 	}
 }
 
+////////////////////////////////////
+// Interpolation Helper Functions //
+////////////////////////////////////
+
+// intrConstructor creates a new 3D interpolator.
+type intrConstructor func(
+	float64, float64, int,
+	float64, float64, int,
+	float64, float64, int, []float64) intr.TriInterpolator
+
+// intrBuffers contains the space required for interpolating.
+type intrBuffers struct {
+	gw, sw, kw, skip int
+	xs, ys, zs []float64
+	vecIntr, boxIntr []bool
+}
+
+// newIntrBuffers allocates a new set of buffers for a given set of grid
+// parameters.
+func newIntrBuffers(segWidth, gridWidth, skip int) *intrBuffers {
+	buf := &intrBuffers{}
+	buf.gw = gridWidth // Remember! This is the bigger one!!!
+	buf.sw = segWidth
+	buf.skip = skip
+	buf.kw = (segWidth/skip) + 1
+
+	buf.xs = make([]float64, buf.kw*buf.kw*buf.kw)
+	buf.zs = make([]float64, len(buf.xs))
+	buf.zs = make([]float64, len(buf.xs))
+	
+	buf.vecIntr = make([]bool, buf.kw*buf.kw*buf.kw)
+	buf.boxIntr = make([]bool, (buf.kw-1)*(buf.kw-1)*(buf.kw-1))
+
+	return buf
+}
+
+// loadBuffers inserts a set of vectors into the intrBuffers. The points are
+// assumed to have undergone a coordinate transformation such that they
+// are contiguous (read: call sphericalProfile.transform() on them first).
+func (buf *intrBuffers) loadVecs(vecs []rgeom.Vec, sp *sphericalProfile) {
+	kw, gw, s := buf.kw, buf.gw, buf.skip
+
+	// Construct per-vector buffers.
+	ik := 0
+	for zk := 0; zk < kw; zk++ {
+		for yk := 0; yk < kw; yk++ {
+			for xk := 0; xk < kw; xk++ {
+				xg, yg, zg := xk*s, yk*s, zk*s
+				ig := xg + yg*gw + zg*gw*gw
+				x := float64(vecs[ig][0])
+				y := float64(vecs[ig][1])
+				z := float64(vecs[ig][2])
+				buf.vecIntr[ik] = sp.contains(x, y, z)
+
+				buf.xs[ik] = x
+				buf.ys[ik] = y
+				buf.zs[ik] = z
+
+				ik++
+			}
+		}
+	}
+
+	// Construct per-box buffers.
+	v := buf.vecIntr
+	i := 0
+	for z0 := 0; z0 < kw-1; z0++ {
+		z1 := z0 + 1
+		for y0 := 0; y0 < kw-1; y0++ {
+			y1 := y0 + 1
+			for x0 := 0; x0 < kw-1; x0++ {
+				x1 := x0 + 1
+				
+				i000 := x0 + y0*kw + z0*kw*kw
+				i001 := x0 + y0*kw + z1*kw*kw
+				i010 := x0 + y1*kw + z0*kw*kw
+				i011 := x0 + y1*kw + z1*kw*kw
+
+				i100 := x1 + y0*kw + z0*kw*kw
+				i101 := x1 + y0*kw + z1*kw*kw
+				i110 := x1 + y1*kw + z0*kw*kw
+				i111 := x1 + y1*kw + z1*kw*kw
+				
+				buf.boxIntr[i] = v[i000] || v[i001] || v[i010] || v[i011] ||
+					v[i100] || v[i101] || v[i110] || v[i111]
+
+				i++
+			}
+		}
+	}
+}
+
+// Used for load balancing.
+func (buf *intrBuffers) zCounts() []int {
+	counts := make([]int, buf.kw-1)
+
+	i := 0
+	for z := 0; z < buf.kw-1; z++ {
+		for y := 0; y < buf.kw-1; y++ {
+			for x := 0; x < buf.kw-1; x++ {
+				if buf.boxIntr[i] { counts[z]++ }
+				i++
+			}
+		}
+	}
+	
+	return counts
+}
+
+// Used for load balanacing.
+func zSplit(zCounts []int, workers int) [][]int {
+	tot := 0
+	for _, n := range zCounts { tot += n }
+
+	splits := make([]int, workers + 1)
+	si := 1
+	splitWidth := tot / workers
+	if splitWidth * workers < tot { splitWidth++ }
+	target := splitWidth
+
+	sum := 0
+	for i, n := range zCounts {
+		sum += n
+		if sum > target {
+			splits[si] = i
+			for sum > target { target += splitWidth }
+			si++
+		}
+	}
+	for ; si < len(splits); si++ { splits[si] = len(zCounts) }
+
+	splitIdxs := make([][]int, workers)
+	for i := range splitIdxs {
+		jStart, jEnd := splits[i], splits[i + 1]
+		for j := jStart; j < jEnd; j++ {
+			if zCounts[j] > 0 { splitIdxs[i] = append(splitIdxs[i], j) }
+		}
+	}
+
+	return splitIdxs
+}
+
+// sphericalProfile represents a particle-counting profile for a halo.
+type sphericalProfile struct {
+	origin [3]float64
+	counts []float64
+	boxWidth, countWidth float64
+	rMin, rMax, rMin2, rMax2 float64
+	lrMin, lrMax, dlr float64
+}
+
+// newSphericalProfile does what you think it does.
+func newSphericalProfile(
+	origin rgeom.Vec, rMin, rMax, boxWidth float64, countWidth int64, rBins int,
+) *sphericalProfile {
+	sp := &sphericalProfile{}
+	
+	sp.origin[0] = float64(origin[0])
+	sp.origin[1] = float64(origin[1])
+	sp.origin[2] = float64(origin[2])
+
+	sp.rMin = rMin
+	sp.rMax = rMax
+	sp.rMin2 = rMin*rMin
+	sp.rMax2 = rMax*rMax
+	sp.lrMax = math.Log(rMax)
+	sp.lrMin = math.Log(rMin)
+	sp.dlr = (sp.lrMax - sp.lrMin) / float64(rBins - 1)
+	sp.counts = make([]float64, rBins)
+	sp.boxWidth = boxWidth
+	sp.countWidth = float64(countWidth)
+
+	return sp
+}
+
+// transform does a coordinate transformation on the given vectors so that 
+// they are as close to the given halo as possible.
+func (sp *sphericalProfile) transform(vecs []rgeom.Vec) {
+	x0 := float32(sp.origin[0])
+	y0 := float32(sp.origin[1])
+	z0 := float32(sp.origin[2])
+	tw := float32(sp.boxWidth)
+	tw2 := tw / 2
+
+	for i, vec := range vecs {
+		x, y, z := vec[0], vec[1], vec[2]
+		dx, dy, dz := x - x0, y - y0, z - z0
+
+		if dx > tw2 {
+			vecs[i][0] -= tw
+		} else if dx < -tw2 {
+			vecs[i][0] += tw
+		}
+
+		if dy > tw2 {
+			vecs[i][1] -= tw
+		} else if dy < -tw2 {
+			vecs[i][1] += tw
+		}
+
+		if dz > tw2 {
+			vecs[i][2] -= tw
+		} else if dz < -tw2 {
+			vecs[i][2] += tw
+		}
+	}
+}
+
+// r2 returns the square of the distance between the givne point and the
+// center of the profile.
+func (sp *sphericalProfile) r2(x, y, z float64) float64 {
+	x0, y0, z0 := sp.origin[0], sp.origin[1], sp.origin[2]
+	dx, dy, dz := x - x0, y - y0, z - z0
+	return dx*dx + dy*dy + dz*dz
+}
+
+// contains returns true if the given point is inside the profile
+func (sp *sphericalProfile) contains(x, y, z float64) bool {
+	r2 := sp.r2(x, y, z)
+	return sp.rMin2 < r2 && r2 < sp.rMax2
+}
+
+// insert inserts the given point into the profile with the given weight 
+// if possible. If the point is inserted true is returned, otherwise false is
+// returned.
+func (sp *sphericalProfile) insert(x, y, z float64) bool {
+	r2 := sp.r2(x, y, z)
+	if r2 <= sp.rMin2 || r2 >= sp.rMax2 { return false }
+	lr := math.Log(r2) / 2
+	ir := int((lr - sp.lrMin) / sp.dlr)
+	sp.counts[ir]++
+
+	return true
+}
+
+// interpolatorBinParticles places the density field represented by the given
+// points into the given profile.
+func interpolatorBinParticles(
+	vecs []rgeom.Vec, pts int, prof *sphericalProfile,
+	con intrConstructor, buf *intrBuffers,
+) {
+	prof.transform(vecs)
+	buf.loadVecs(vecs, prof)
+
+	// Yup... lots of allocations happening here... -___-
+	// This could be improved.
+	runtime.GC()
+
+	triX := con(0, 1, buf.kw, 0, 1, buf.kw, 0, 1, buf.kw, buf.xs)
+	triY := con(0, 1, buf.kw, 0, 1, buf.kw, 0, 1, buf.kw, buf.xs)
+	triZ := con(0, 1, buf.kw, 0, 1, buf.kw, 0, 1, buf.kw, buf.xs)
+
+	xBuf := make([]int, 0, buf.kw*buf.kw)
+	yBuf := make([]int, 0, buf.kw*buf.kw)
+
+	i := 0
+	for z := 0; z < buf.kw-1; z++ {
+		xBuf := xBuf[0:0]
+		yBuf := yBuf[0:0]
+		for y := 0; y < buf.kw-1; y++ {
+			for x := 0; x < buf.kw-1; x++ {
+				if !buf.boxIntr[i] {
+					xBuf = append(xBuf, x)
+					yBuf = append(yBuf, y)
+				}
+				i++
+			}
+		}
+
+		if len(xBuf) > 0 {
+			xyInterpolate(xBuf, yBuf, z, triX, triY, triZ, pts, prof)
+		}
+	}
+}
+
+func xyInterpolate(
+	xBuf, yBuf []int, zIdx int,
+	triX, triY, triZ intr.TriInterpolator,
+	pts int, prof *sphericalProfile,
+) {
+	dp := 1 / float64(pts)
+	z0 := float64(zIdx)
+
+	// xl, yl, zl - Lagrangian values in code units.
+
+	for zi := 0; zi < pts; zi++ {
+		zl := z0 + float64(zi) * dp
+
+		// Iterate over y indices.
+		iStart, iEnd := 0, 0
+		for iEnd < len(xBuf) {
+			yIdx := yBuf[iStart]
+			y0 := float64(yIdx)
+
+			// Find the index range of the current yIdx.
+			for iEnd = iStart; iEnd < len(xBuf); iEnd++ {
+				if yBuf[iEnd] != yIdx { break }
+			}
+
+			for yi := 0; yi < pts; yi++ {
+				yl := y0 + float64(yi) * dp
+				// Iterate over x indices.
+				for xIdx := range xBuf[iStart: iEnd] {
+					x0 := float64(xIdx)
+					for xi := 0; xi < pts; xi++ {
+						xl := x0 + float64(xi) * dp
+
+						x := triX.Eval(xl, yl, zl)
+						y := triY.Eval(xl, yl, zl)
+						z := triZ.Eval(xl, yl, zl)
+
+						prof.insert(x, y, z)
+					}
+				}
+			}
+
+			iStart = iEnd
+		}
+	}
+}
+
+/*
 func triLinearBinParticles(
 	hd *io.SheetHeader, xs []rgeom.Vec, counts []float64, skip, pts int,
 	rMin, rMax float64, v0 rgeom.Vec,
@@ -593,6 +913,7 @@ func cubePts(
 		}
 	}
 }
+*/
 
 func tetraPoints(
 	idx, dir, gw, skip int, xs []rgeom.Vec,
@@ -606,40 +927,16 @@ func tetraPoints(
 }
 
 func binParticles(
-	hd *io.SheetHeader, xs []rgeom.Vec, counts []float64, skip int,
-	rMin, rMax float64, v0 rgeom.Vec,
+	hd *io.SheetHeader, xs []rgeom.Vec, skip int, prof *sphericalProfile,
 ) {
-	min2, max2 := rMin*rMin, rMax*rMax
-	x0, y0, z0 := float64(v0[0]), float64(v0[1]), float64(v0[2])
-
-	lrMin, lrMax := math.Log(rMin), math.Log(rMax)
-	dlr := (lrMax - lrMin) / float64(len(counts))
-	incr := float64(skip*skip*skip)
-	tw := hd.TotalWidth
-
+	prof.transform(xs)
 	sw, gw := int(hd.SegmentWidth), int(hd.GridWidth)
 	for iz := 0; iz < sw; iz += skip {
 		for iy := 0; iy < sw; iy += skip {
 			for ix := 0; ix < sw; ix += skip {
 				pt := xs[ix + iy*gw + iz*gw*gw]
-				x := float64(pt[0]) - x0
-				y := float64(pt[1]) - y0
-				z := float64(pt[2]) - z0
-				
-				if x > tw / 2 { x -= tw }
-				if y > tw / 2 { y -= tw }
-				if z > tw / 2 { z -= tw }
-				if x < -tw / 2 { x += tw }
-				if y < -tw / 2 { y += tw }
-				if z < -tw / 2 { z += tw }
-				
-				r2 := x*x + y*y + z*z
-				if r2 <= min2 || r2 >= max2 { continue }
-				
-				lr := math.Log(r2) / 2
-				ri := int((lr - lrMin) / dlr)
-				
-				counts[ri] += incr
+				x, y, z := float64(pt[0]), float64(pt[1]), float64(pt[1])
+				prof.insert(x, y, z)
 			}
 		}
 	}
