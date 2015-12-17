@@ -325,9 +325,8 @@ func profile(ids, snaps []int, p *Params) ([][]float64, error) {
 
 			if p.SphericalProfile {
 				profs = make([]*sphericalProfile, len(ranges))
-				for _, r := range ranges {
-					
-					newSphericalProfile(r.v0, r.rMin, r.rMax,
+				for i, r := range ranges {
+					profs[i] = newSphericalProfile(r.v0, r.rMin, r.rMax,
 						hds[0].TotalWidth, hds[0].CountWidth, p.RBins)
 				}
 			}
@@ -352,7 +351,6 @@ func profile(ids, snaps []int, p *Params) ([][]float64, error) {
 					tetraBinParticles(
 						&hds[i], xs, p.SubsampleLength, profs[idxs[j]],
 						vecBuf, randBuf, gen,
-						
 					)
 				} else if triPts > 0 {
 					interpolatorBinParticles(
@@ -375,6 +373,7 @@ func profile(ids, snaps []int, p *Params) ([][]float64, error) {
 
 	counts := make([][]float64, len(profs))
 	for i := range counts { counts[i] = profs[i].counts }
+	
 	outs := prependRadii(counts, ranges)
 	
 	return outs, nil
@@ -935,7 +934,7 @@ func binParticles(
 		for iy := 0; iy < sw; iy += skip {
 			for ix := 0; ix < sw; ix += skip {
 				pt := xs[ix + iy*gw + iz*gw*gw]
-				x, y, z := float64(pt[0]), float64(pt[1]), float64(pt[1])
+				x, y, z := float64(pt[0]), float64(pt[1]), float64(pt[2])
 				prof.insert(x, y, z)
 			}
 		}
