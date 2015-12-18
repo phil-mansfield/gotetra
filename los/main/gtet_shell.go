@@ -193,7 +193,11 @@ func parseCmd() *Params {
 	flag.IntVar(&p.SphericalProfileTriLinearPoints,
 		"SphericalProfileTriLinearPoints", 0,
 		"Number of particles per side of each cube when using tri-linear " +
-			"interpolation. If 0, tri-linear interpolation won't be use.")
+			"interpolation. If 0, tri-linear interpolation won't be used.")
+		flag.IntVar(&p.SphericalProfileTriCubicPoints,
+		"SphericalProfileTriCubicPoints", 0,
+		"Number of particles per side of each cube when using tri-cubic " +
+			"interpolation. If 0, tri-cubic interpolation won't be used.")
 	flag.Parse()
 	return p
 }
@@ -384,9 +388,9 @@ func countsToRhos(prof *sphericalProfile, skip, tetraPoints, triPoints int) {
 	mp := dx*dx*dx
 
 	if tetraPoints > 0 {
-		mp /= float64(6*tetraPoints * skip*skip*skip)
+		mp *= float64(skip*skip*skip) / float64(6*tetraPoints)
 	} else if triPoints > 0 {
-		mp /= float64(triPoints*triPoints*triPoints * skip*skip*skip)
+		mp *= float64(skip*skip*skip) / float64(triPoints*triPoints*triPoints)
 	}
 
 	lrMin, lrMax := math.Log(prof.rMin), math.Log(prof.rMax)
@@ -449,7 +453,7 @@ func newIntrBuffers(segWidth, gridWidth, skip int) *intrBuffers {
 	buf.kw = (segWidth/skip) + 1
 
 	buf.xs = make([]float64, buf.kw*buf.kw*buf.kw)
-	buf.zs = make([]float64, len(buf.xs))
+	buf.ys = make([]float64, len(buf.xs))
 	buf.zs = make([]float64, len(buf.xs))
 	
 	buf.vecIntr = make([]bool, buf.kw*buf.kw*buf.kw)
@@ -484,7 +488,7 @@ func (buf *intrBuffers) loadVecs(vecs []rgeom.Vec, sp *sphericalProfile) {
 			}
 		}
 	}
-
+	
 	// Construct per-box buffers.
 	v := buf.vecIntr
 	i := 0
@@ -507,7 +511,7 @@ func (buf *intrBuffers) loadVecs(vecs []rgeom.Vec, sp *sphericalProfile) {
 				
 				buf.boxIntr[i] = v[i000] || v[i001] || v[i010] || v[i011] ||
 					v[i100] || v[i101] || v[i110] || v[i111]
-
+				
 				i++
 			}
 		}
@@ -589,7 +593,7 @@ func newSphericalProfile(
 	sp.rMax2 = rMax*rMax
 	sp.lrMax = math.Log(rMax)
 	sp.lrMin = math.Log(rMin)
-	sp.dlr = (sp.lrMax - sp.lrMin) / float64(rBins - 1)
+	sp.dlr = (sp.lrMax - sp.lrMin) / float64(rBins)
 	sp.counts = make([]float64, rBins)
 	sp.boxWidth = boxWidth
 	sp.countWidth = float64(countWidth)
@@ -657,6 +661,9 @@ func (sp *sphericalProfile) insert(x, y, z float64) bool {
 	return true
 }
 
+var hits = 0
+var passes = 0
+
 // interpolatorBinParticles places the density field represented by the given
 // points into the given profile.
 func interpolatorBinParticles(
@@ -671,26 +678,26 @@ func interpolatorBinParticles(
 	runtime.GC()
 
 	triX := con(0, 1, buf.kw, 0, 1, buf.kw, 0, 1, buf.kw, buf.xs)
-	triY := con(0, 1, buf.kw, 0, 1, buf.kw, 0, 1, buf.kw, buf.xs)
-	triZ := con(0, 1, buf.kw, 0, 1, buf.kw, 0, 1, buf.kw, buf.xs)
-
+	triY := con(0, 1, buf.kw, 0, 1, buf.kw, 0, 1, buf.kw, buf.ys)
+	triZ := con(0, 1, buf.kw, 0, 1, buf.kw, 0, 1, buf.kw, buf.zs)
+	
 	xBuf := make([]int, 0, buf.kw*buf.kw)
 	yBuf := make([]int, 0, buf.kw*buf.kw)
-
+	
 	i := 0
 	for z := 0; z < buf.kw-1; z++ {
 		xBuf := xBuf[0:0]
 		yBuf := yBuf[0:0]
 		for y := 0; y < buf.kw-1; y++ {
 			for x := 0; x < buf.kw-1; x++ {
-				if !buf.boxIntr[i] {
+				if buf.boxIntr[i] {
 					xBuf = append(xBuf, x)
 					yBuf = append(yBuf, y)
 				}
 				i++
 			}
 		}
-
+		
 		if len(xBuf) > 0 {
 			xyInterpolate(xBuf, yBuf, z, triX, triY, triZ, pts, prof)
 		}
@@ -706,7 +713,7 @@ func xyInterpolate(
 	z0 := float64(zIdx)
 
 	// xl, yl, zl - Lagrangian values in code units.
-
+	
 	for zi := 0; zi < pts; zi++ {
 		zl := z0 + float64(zi) * dp
 
@@ -724,7 +731,7 @@ func xyInterpolate(
 			for yi := 0; yi < pts; yi++ {
 				yl := y0 + float64(yi) * dp
 				// Iterate over x indices.
-				for xIdx := range xBuf[iStart: iEnd] {
+				for _, xIdx := range xBuf[iStart: iEnd] {
 					x0 := float64(xIdx)
 					for xi := 0; xi < pts; xi++ {
 						xl := x0 + float64(xi) * dp
@@ -732,7 +739,7 @@ func xyInterpolate(
 						x := triX.Eval(xl, yl, zl)
 						y := triY.Eval(xl, yl, zl)
 						z := triZ.Eval(xl, yl, zl)
-
+						
 						prof.insert(x, y, z)
 					}
 				}
@@ -742,177 +749,6 @@ func xyInterpolate(
 		}
 	}
 }
-
-/*
-func triLinearBinParticles(
-	hd *io.SheetHeader, xs []rgeom.Vec, counts []float64, skip, pts int,
-	rMin, rMax float64, v0 rgeom.Vec,
-	xBuf, yBuf, zBuf []float64,
-) {
-	// This could be handled a million times better than this.
-	runtime.GC()
-
-	x0, y0, z0 := float64(v0[0]), float64(v0[1]), float64(v0[2])
-	cubeXs := make([]float64, pts*pts*pts)
-	cubeYs := make([]float64, pts*pts*pts)
-	cubeZs := make([]float64, pts*pts*pts)
-
-	sw, gw := int(hd.SegmentWidth), int(hd.GridWidth)
-	kw := (sw/skip) + 1
-
-	for iz := 0; iz < gw; iz += skip {
-		for iy := 0; iy < gw; iy += skip {
-			for ix := 0; ix < gw; ix += skip {
-				i := ix + iy*gw + iz*gw*gw
-				j := (ix/skip) + (iy/skip)*kw + (iz/skip)*kw*kw
-				xBuf[j] = float64(xs[i][0])
-				yBuf[j] = float64(xs[i][1])
-				zBuf[j] = float64(xs[i][2])
-			}
-		}
-	}
-
-	triX := intr.NewUniformTriLinear(
-		0, float64(skip), kw, 0, float64(skip), kw, 0, float64(skip), kw, xBuf,
-	)
-	triY := intr.NewUniformTriLinear(
-		0, float64(skip), kw, 0, float64(skip), kw, 0, float64(skip), kw, yBuf,
-	)
-	triZ := intr.NewUniformTriLinear(
-		0, float64(skip), kw, 0, float64(skip), kw, 0, float64(skip), kw, zBuf,
-	)
-
-	min2, max2 := rMin*rMin, rMax*rMax
-	lrMin, lrMax := math.Log(rMin), math.Log(rMax)
-	dlr := (lrMax - lrMin) / float64(len(counts))
-	incr := float64(skip*skip*skip)
-	tw := hd.TotalWidth
-	
-	for iz := 0; iz < sw; iz += skip {
-		for iy := 0; iy < sw; iy += skip {
-			for ix := 0; ix < sw; ix += skip {
-				if !cubeInSphere(xs, gw, ix, iy, iz, v0, rMax) { continue }
-				cubePts(
-					ix, iy, iz, skip,
-					triX, triY, triZ,
-					cubeXs, cubeYs, cubeZs, pts,
-				)
-
-				// Periodicity checks. Could be abstracted out.
-				x, y, z := cubeXs[0], cubeYs[0], cubeZs[0]
-				dx, dy, dz := x - x0, y - y0, z - z0
-				if dx > tw / 2 {
-					for i := range xBuf { xBuf[i] -= tw }
-				}
-				if dy > tw / 2 {
-					for i := range xBuf { yBuf[i] -= tw }
-				}
-				if dz > tw / 2 {
-					for i := range xBuf { zBuf[i] -= tw }
-				}
-				if dx < -tw / 2 {
-					for i := range xBuf { xBuf[i] += tw }
-				}
-				if dy < -tw / 2 {
-					for i := range xBuf { yBuf[i] += tw }
-				}
-				if dz < -tw / 2 {
-					for i := range xBuf { zBuf[i] += tw }
-				}
-
-				for i := range cubeXs {
-					x, y, z := cubeXs[i], cubeYs[i], cubeZs[i]
-					
-					dx, dy, dz := x - x0, y - y0, z - z0
-					r2 := dx*dx + dy*dy + dz*dz
-					
-					if r2 <= min2 || r2 >= max2 { continue }
-					lr := math.Log(r2) / 2
-					ri := int((lr - lrMin) / dlr)
-					
-					counts[ri] += incr
-				}
-			}
-		}
-	}
-	
-	runtime.GC()
-}
-
-// This is strictly false.
-func cubeInSphere(
-	xs []rgeom.Vec, gw, ix, iy, iz int, v0 rgeom.Vec, rMax float64,
-) bool {
-	r2 := float32(rMax*rMax)
-
-	// Kinda ugly for speed reasons.
-	
-	gw2 := gw*gw
-	i000 := ix + iy*gw + iz*gw2
-
-	i := i000 + 0 +  0 +  0
-	dx, dy, dz := v0[0] - xs[i][0], v0[1] - xs[i][1], v0[2] - xs[i][2]
-	if dx*dx + dy*dy + dz*dz < r2 { return true }
-	
-	i = i000 + 0 +  0 + gw2
-	dx, dy, dz = v0[0] - xs[i][0], v0[1] - xs[i][1], v0[2] - xs[i][2]
-	if dx*dx + dy*dy + dz*dz < r2 { return true }
-
-	i = i000 + 0 + gw +   0
-	dx, dy, dz = v0[0] - xs[i][0], v0[1] - xs[i][1], v0[2] - xs[i][2]
-	if dx*dx + dy*dy + dz*dz < r2 { return true }
-
-	i = i000 + 0 + gw + gw2
-	dx, dy, dz = v0[0] - xs[i][0], v0[1] - xs[i][1], v0[2] - xs[i][2]
-	if dx*dx + dy*dy + dz*dz < r2 { return true }
-
-	i = i000 + 1 +  0 +   0
-	dx, dy, dz = v0[0] - xs[i][0], v0[1] - xs[i][1], v0[2] - xs[i][2]
-	if dx*dx + dy*dy + dz*dz < r2 { return true }
-	
-	i = i000 + 1 +  0 + gw2
-	dx, dy, dz = v0[0] - xs[i][0], v0[1] - xs[i][1], v0[2] - xs[i][2]
-	if dx*dx + dy*dy + dz*dz < r2 { return true }
-
-	i = i000 + 1 + gw +   0
-	dx, dy, dz = v0[0] - xs[i][0], v0[1] - xs[i][1], v0[2] - xs[i][2]
-	if dx*dx + dy*dy + dz*dz < r2 { return true }
-
-	i = i000 + 1 + gw + gw2
-	dx, dy, dz = v0[0] - xs[i][0], v0[1] - xs[i][1], v0[2] - xs[i][2]
-	if dx*dx + dy*dy + dz*dz < r2 { return true }
-	
-	return false
-}
-
-func cubePts(
-	ix, iy, iz, skip int,
-	triX, triY, triZ *intr.TriLinear,
-	xBuf, yBuf, zBuf []float64, pts int,
-) {
-	x1, y1, z1 := float64(ix), float64(iy), float64(iz)
-	x2, y2, z2 := float64(ix + skip), float64(iy + skip), float64(iz + skip)
-
-	dx := (x2 - x1) / float64(pts - 1)
-	dy := (y2 - y1) / float64(pts - 1)
-	dz := (z2 - z1) / float64(pts - 1)
-
-	idx := 0
-	for k := 0; k < pts; k++ {
-		z := z1 + dz * float64(k)
-		for j := 0; j < pts; j++ {
-			y := y1 + dy * float64(j)
-			for i := 0; i < pts; i++ {
-				x := x1 + dx * float64(i)
-				xBuf[idx] = triX.Eval(x, y, z)
-				yBuf[idx] = triY.Eval(x, y, z)
-				zBuf[idx] = triZ.Eval(x, y, z)
-				idx++
-			}
-		}
-	}
-}
-*/
 
 func tetraPoints(
 	idx, dir, gw, skip int, xs []rgeom.Vec,
