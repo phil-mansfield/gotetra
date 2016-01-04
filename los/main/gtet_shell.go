@@ -18,6 +18,8 @@ import (
 	intr "github.com/phil-mansfield/gotetra/math/interpolate"
 )
 
+// TODO: Someone needs to come in and restructure this monstrosity.
+
 type Params struct {
 	// HaloProfiles params
 	RBins, Spokes, Rings int
