@@ -98,10 +98,9 @@ func genProfiles(ids, snaps []int, p *Params) ([][]float64, error) {
 		method = Cubic
 	}
 
+	// Set up loop state.
 	buf := loop.NewBuffer()
-	profs, err := newProfiles(
-		ids, snaps, p.MinMult, p.MaxMult, p.RBins, method,
-	)
+	profs, err := newProfiles(ids, snaps, p, method)
 	if err != nil { return nil, err }
 
 	workers := runtime.GOMAXPROCS(runtime.NumCPU())
@@ -118,19 +117,38 @@ func genProfiles(ids, snaps []int, p *Params) ([][]float64, error) {
 		// Call loop.Loop().
 		switch method {
 		case Particle:
-			log.Println("Calling loop.Loop().")
+			loop.Loop(
+				snap, snapProfiles, buf, p.SubsampleLength,
+				loop.Linear, 1, workers,
+			)
+		case Tetra:
+			loop.Loop(
+				snap, snapProfiles, buf, p.SubsampleLength,
+				loop.Linear, 1, workers,
+			)
+		case Linear:
+			loop.Loop(
+				snap, snapProfiles, buf, p.SubsampleLength,
+				loop.Linear, p.Linear, workers,
+			)
+		case Cubic:
+			loop.Loop(
+				snap, snapProfiles, buf, p.SubsampleLength,
+				loop.Cubic, p.Cubic, workers,
+			)
+		case Sphere:
 			loop.Loop(
 				snap, snapProfiles, buf, p.SubsampleLength,
 				loop.Linear, 1, workers,
 			)
 		default:
-			panic("NYI")
+			panic(":3")
 		}
 	}
 
-
+	// Convert Profiles to the needed float slices.
 	hd, err := util.ReadSnapHeader(snaps[0])
-	dx := hd.TotalWidth / (float64(hd.CountWidth) * float64(p.SubsampleLength))
+	dx := hd.TotalWidth / float64(hd.CountWidth) * float64(p.SubsampleLength)
 	
 	var pts int
 	switch method {
@@ -161,7 +179,7 @@ func binBySnap(snaps, ids []int) (snapBins, idxBins map[int][]int) {
 
 // newProfiles creates a slice of new empty profiles.
 func newProfiles(
-	ids, snaps []int, minMult, maxMult float64, rBins int, method Method,
+	ids, snaps []int, p *Params, method Method,
 ) ([]*obj.Profile, error) {
 	snapBins, idxBins := binBySnap(snaps, ids)
 	profs := make([]*obj.Profile, len(ids))
@@ -177,11 +195,18 @@ func newProfiles(
         xs, ys, zs, rs := vals[0], vals[1], vals[2], vals[3]
         for i := range xs {
 			switch method {
-			case Particle:
-				profs[idxs[i]] = obj.NewProfile(
+			case Particle, Linear, Cubic:
+				profs[idxs[i]] = obj.NewParticleProfile(
 					[3]float64{xs[i], ys[i], zs[i]},
-					rs[i]*minMult, rs[i]*maxMult, rBins,
+					rs[i]*p.MinMult, rs[i]*p.MaxMult, p.RBins,
 				)
+			case Tetra:
+				profs[idxs[i]] = obj.NewTetraProfile(
+					[3]float64{xs[i], ys[i], zs[i]},
+					rs[i]*p.MinMult, rs[i]*p.MaxMult, p.RBins, p.Tetra,
+				)
+			case Sphere:
+				panic("NYI")
 			default:
 				panic(fmt.Sprintf("Method %d not implemented.", method))
 			}
@@ -212,6 +237,7 @@ func processCounts(profs []*obj.Profile, dx float64, pts int) [][]float64 {
 			rLo := math.Exp(dlr*float64(j) + lrMin)
 			rHi := math.Exp(dlr*float64(j+1) + lrMin)
 			dV := (rHi*rHi*rHi - rLo*rLo*rLo) * 4 * math.Pi / 3
+
 			rhos[j] = prof.Counts[j] * mp / dV
 		}
 		
