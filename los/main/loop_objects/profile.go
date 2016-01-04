@@ -32,7 +32,7 @@ func NewProfile(
 	p.RMax = rMax
 
 	p.Counts = make([]float64, rBins)
-	p.dlr = math.Log(p.RMax) - math.Log(p.RMin)
+	p.dlr = (math.Log(p.RMax) - math.Log(p.RMin)) / float64(rBins)
 	p.lrMin = math.Log(p.RMin)
 	p.rMin2 = p.RMin * p.RMin
 	p.rMax2 = p.RMax * p.RMax

@@ -388,7 +388,7 @@ func profile(ids, snaps []int, p *Params) ([][]float64, error) {
 func countsToRhos(prof *sphericalProfile, skip, tetraPoints, triPoints int) {
 	dx :=prof.boxWidth / prof.countWidth
 	mp := dx*dx*dx
-
+	
 	if tetraPoints > 0 {
 		mp *= float64(skip*skip*skip) / float64(6*tetraPoints)
 	} else if triPoints > 0 {

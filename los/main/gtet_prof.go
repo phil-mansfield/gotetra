@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"flag"
+	"math"
 	"runtime"
 
 	"github.com/phil-mansfield/gotetra/render/halo"
@@ -117,6 +118,7 @@ func genProfiles(ids, snaps []int, p *Params) ([][]float64, error) {
 		// Call loop.Loop().
 		switch method {
 		case Particle:
+			log.Println("Calling loop.Loop().")
 			loop.Loop(
 				snap, snapProfiles, buf, p.SubsampleLength,
 				loop.Linear, 1, workers,
@@ -126,7 +128,22 @@ func genProfiles(ids, snaps []int, p *Params) ([][]float64, error) {
 		}
 	}
 
-	panic("NYI")
+
+	hd, err := util.ReadSnapHeader(snaps[0])
+	dx := hd.TotalWidth / (float64(hd.CountWidth) * float64(p.SubsampleLength))
+	
+	var pts int
+	switch method {
+	case Particle, Sphere: pts = 1
+	case Tetra: pts = p.Tetra
+	case Linear: pts = p.Linear
+	case Cubic: pts = p.Cubic
+	default:
+		panic(":3")
+	}
+	outs := processCounts(profs, dx, pts)
+	
+	return outs, nil
 }
 
 // binBySnap collects the given IDs into groups that share a common snapshot.
@@ -171,4 +188,35 @@ func newProfiles(
         }
     }
     return profs, nil
+}
+
+// processCounts takes raw count profiles and converts them to properly
+// formatted output profiles. dx is the distance between adjacent particles and
+// pts in the number of points used "one a side" of each Lagrangian unit.
+func processCounts(profs []*obj.Profile, dx float64, pts int) [][]float64 {
+	outs := make([][]float64, len(profs))
+
+	mp := dx*dx*dx / float64(pts*pts*pts)
+	
+	for i, prof := range profs {
+		n := len(prof.Counts)
+		out := make([]float64, 2*n)
+		rs, rhos := out[0:n], out[n:2*n]
+
+		dlr := (math.Log(prof.RMax) - math.Log(prof.RMin)) / float64(n)
+		lrMin := math.Log(prof.RMin)
+		
+		for j := range rs {
+			rs[j] = math.Exp(lrMin + dlr*(float64(j) + 0.5))
+
+			rLo := math.Exp(dlr*float64(j) + lrMin)
+			rHi := math.Exp(dlr*float64(j+1) + lrMin)
+			dV := (rHi*rHi*rHi - rLo*rLo*rLo) * 4 * math.Pi / 3
+			rhos[j] = prof.Counts[j] * mp / dV
+		}
+		
+		outs[i] = out
+	}
+
+	return outs
 }
