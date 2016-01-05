@@ -13,10 +13,14 @@ import (
 
 // InterpolatorType is the type of interpolation used during the iteration.
 type InterpolatorType int
+type UnitType int
 
 const (
 	Cubic InterpolatorType = iota
 	Linear
+
+	Particle UnitType = iota
+	Tetra
 )
 
 // An object which will be passed to Loop(). It must be less than half the
@@ -66,16 +70,16 @@ func NewBuffer() *Buffer {
 	return &Buffer{}
 }
 
-func (b *Buffer) read(hd *io.SheetHeader, file string, skip int) error {
+func (b *Buffer) read(hd *io.SheetHeader, file string, skip, pts int) error {
 	n := int(hd.GridWidth*hd.GridWidth*hd.GridWidth)
 	if n > len(b.vecs) {
 		b.vecs = make([]rgeom.Vec, n)
 		b.ib = newIntrBuffers(int(hd.SegmentWidth),
-			int(hd.GridWidth), skip)
+			int(hd.GridWidth), skip, pts)
 	} else if n < len(b.vecs) {
 		b.vecs = b.vecs[:n]
 		b.ib = newIntrBuffers(int(hd.SegmentWidth),
-			int(hd.GridWidth), skip)
+			int(hd.GridWidth), skip, pts)
 	}
 
 	return io.ReadSheetPositionsAt(file, b.vecs)
@@ -97,16 +101,19 @@ func Loop(snap int, objs []Object, buf *Buffer, skip int,
 	hds, files, err := util.ReadHeaders(snap)
 	if err != nil { return err }
 
+	// Allocate needed buffer space.
 	con := newIntrConstructor(it)
-	intrBins := binHeaderIntersections(hds, objs)
 
+	// Loop over all the segments and objects that intersect with one
+	// another
+	intrBins := binHeaderIntersections(hds, objs)
 	for i := range hds {
 		for _, j := range intrBins[i] {
 			log.Printf("%d%d%d (halo %d)", i / 64, (i / 8) % 8, i % 8, j)
-			err = buf.read(&hds[i], files[i], skip)
+			err = buf.read(&hds[i], files[i], skip, pts)
 			if err != nil { return err }
 
-
+			// Loop over all the points in a particular segment.
 			loopSegment(buf.vecs, pts, objs[j], con, buf.ib, hds[i].TotalWidth)
 		}
 	}
@@ -125,8 +132,28 @@ type intrBuffers struct {
 	gw, sw, kw, skip int
 	xs, ys, zs []float64
 	vecIntr, boxIntr []bool
+
+	// Only one of these two ever actually has data in it.
+	layer layer
+	tetraLayers tetraLayers
 }
 
+type layer struct {
+	x, y, z intr.TriInterpolator
+}
+
+type tetraLayers struct {
+	low, high layer
+	lowPts, highPts [][]rgeom.Vec
+	fullPts [][]rgeom.Vec // lowPts and highPts are slices of fullPts.
+}
+
+//////////////////
+// Constructors //
+//////////////////
+
+// newIntrConstructor returns a function pointer to a TriInterpolator
+// constructor.
 func newIntrConstructor(it InterpolatorType) intrConstructor {
 	switch it {
 	case Linear:
@@ -152,7 +179,7 @@ func newIntrConstructor(it InterpolatorType) intrConstructor {
 
 // newIntrBuffers allocates a new set of buffers for a given set of grid
 // parameters.
-func newIntrBuffers(segWidth, gridWidth, skip int) *intrBuffers {
+func newIntrBuffers(segWidth, gridWidth, skip, pts int) *intrBuffers {
 	buf := &intrBuffers{}
 	buf.gw = gridWidth // Remember! This is the bigger one!!!
 	buf.sw = segWidth
@@ -166,6 +193,19 @@ func newIntrBuffers(segWidth, gridWidth, skip int) *intrBuffers {
 	buf.vecIntr = make([]bool, buf.kw*buf.kw*buf.kw)
 	buf.boxIntr = make([]bool, (buf.kw-1)*(buf.kw-1)*(buf.kw-1))
 
+	buf.tetraLayers.lowPts = make([][]rgeom.Vec, buf.kw - 1)
+	buf.tetraLayers.highPts = make([][]rgeom.Vec, buf.kw - 1)
+	buf.tetraLayers.fullPts = make([][]rgeom.Vec, buf.kw - 1)
+	lowPts := buf.tetraLayers.lowPts
+	highPts := buf.tetraLayers.highPts
+	fullPts := buf.tetraLayers.fullPts
+	n := (pts+1)*(pts+1)
+	for i := range fullPts {
+		fullPts[i] = make([]rgeom.Vec, 2*n)
+		lowPts[i] = fullPts[i][:n]
+		highPts[i] = fullPts[i][n:]
+	}
+	
 	return buf
 }
 
@@ -224,6 +264,10 @@ func (buf *intrBuffers) loadVecs(vecs []rgeom.Vec, obj Object, tw float64) {
 		}
 	}
 }
+
+////////////////////
+// Load Balancing //
+////////////////////
 
 // Used for load balancing.
 func (buf *intrBuffers) zCounts() []int {
@@ -288,9 +332,20 @@ func loopSegment(
 	// This could be improved.
 	runtime.GC()
 
-	triX := con(0, 1, buf.kw, 0, 1, buf.kw, 0, 1, buf.kw, buf.xs)
-	triY := con(0, 1, buf.kw, 0, 1, buf.kw, 0, 1, buf.kw, buf.ys)
-	triZ := con(0, 1, buf.kw, 0, 1, buf.kw, 0, 1, buf.kw, buf.zs)
+	// These should probably use an .init() method or something.
+	if obj.Params().UsesTetra {
+		low, high := &buf.tetraLayers.low, &buf.tetraLayers.high
+		low.x = con(0, 1, buf.kw, 0, 1, buf.kw, 0, 1, buf.kw, buf.xs)
+		low.y = con(0, 1, buf.kw, 0, 1, buf.kw, 0, 1, buf.kw, buf.ys)
+		low.z = con(0, 1, buf.kw, 0, 1, buf.kw, 0, 1, buf.kw, buf.zs)
+		high.x = con(0, 1, buf.kw, 0, 1, buf.kw, 0, 1, buf.kw, buf.xs)
+		high.y = con(0, 1, buf.kw, 0, 1, buf.kw, 0, 1, buf.kw, buf.ys)
+		high.z = con(0, 1, buf.kw, 0, 1, buf.kw, 0, 1, buf.kw, buf.zs)
+	} else {
+		buf.layer.x = con(0, 1, buf.kw, 0, 1, buf.kw, 0, 1, buf.kw, buf.xs)
+		buf.layer.y = con(0, 1, buf.kw, 0, 1, buf.kw, 0, 1, buf.kw, buf.ys)
+		buf.layer.z = con(0, 1, buf.kw, 0, 1, buf.kw, 0, 1, buf.kw, buf.zs)
+	}
 	
 	xBuf := make([]int, 0, buf.kw*buf.kw)
 	yBuf := make([]int, 0, buf.kw*buf.kw)
@@ -310,16 +365,21 @@ func loopSegment(
 		}
 		
 		if len(xBuf) > 0 {
-			xyInterpolate(xBuf, yBuf, z, triX, triY, triZ, pts, obj)
+			if obj.Params().UsesTetra {
+				xyTetraInterpolate(xBuf, yBuf, z, buf.tetraLayers, pts, obj)
+			} else {
+				xyInterpolate(xBuf, yBuf, z, buf.layer, pts, obj)
+			}
 		}
 	}
 }
 
 func xyInterpolate(
 	xBuf, yBuf []int, zIdx int,
-	triX, triY, triZ intr.TriInterpolator,
-	pts int, obj Object,
+	layer layer, pts int, obj Object,
 ) {
+	triX, triY, triZ := layer.x, layer.y, layer.z
+	
 	dp := 1 / float64(pts)
 	z0 := float64(zIdx)
 
@@ -360,6 +420,94 @@ func xyInterpolate(
 		}
 	}
 }
+
+// xyTetraInterpolate is the the interpolation kernel for tetrahedral iteration.
+// It gets pretty scary in here so be care-Aaaarrrrggggh!!!
+// ph'nglui mglw'nafh Cthulhu R'lyeh wgah'nagl fhtagn
+func xyTetraInterpolate(
+	xBuf, yBuf []int, zIdx int,
+	tetraLayers tetraLayers, pts int, obj Object,
+) {
+	low, high := tetraLayers.low, tetraLayers.high
+	lowPts, highPts := tetraLayers.lowPts, tetraLayers.highPts
+	fullPts := tetraLayers.fullPts
+	idxBuf, tet := &rgeom.TetraIdxs{}, &geom.Tetra{}
+	
+	dp := 1 / float64(pts)
+	z0 := float64(zIdx)
+
+	for zi := 0; zi < pts; zi++ {
+		// xl, yl, zl - Lagrangian values in code units.
+		zl := z0 + float64(zi) * dp
+
+		// Iterate over y indices.
+		iStart, iEnd := 0, 0
+		for iEnd < len(xBuf) {
+			yIdx := yBuf[iStart]
+			y0 := float64(yIdx)
+
+			// Find the index range of the current yIdx.
+			for iEnd = iStart; iEnd < len(xBuf); iEnd++ {
+				if yBuf[iEnd] != yIdx { break }
+			}
+
+			for yi := 0; yi < pts+1; yi++ {
+				yl := y0 + float64(yi) * dp
+				// Iterate over x indices. Save all the interpolated points
+				// in the 
+				for _, xIdx := range xBuf[iStart: iEnd] {
+					x0 := float64(xIdx)
+					for xi := 0; xi < pts+1; xi++ {
+						xl := x0 + float64(xi) * dp
+
+						// Interpolate both the low and the high layer. Place
+						// those points into their respective point buffers.
+
+						// Low layer
+						x := low.x.Eval(xl, yl, zl)
+						y := low.y.Eval(xl, yl, zl)
+						z := low.z.Eval(xl, yl, zl)
+						vec := rgeom.Vec{ float32(x), float32(y), float32(z) }
+						ptIdx := xi + yi*(pts+1)
+						lowPts[xIdx][ptIdx] = vec
+
+						// High layer.
+						zlh := z0 + float64(zi+1)*dp
+						x = high.x.Eval(xl, yl, zlh)
+						y = high.y.Eval(xl, yl, zlh)
+						z = high.z.Eval(xl, yl, zlh)
+						vec = rgeom.Vec{ float32(x), float32(y), float32(z) }
+						highPts[xIdx][ptIdx] = vec
+					}
+				}
+			}
+			
+			// Now loop over all the tetrahedra.
+			for yi := 0; yi < pts; yi++ {
+				for _, xIdx := range xBuf[iStart: iEnd] {
+					ptBuf := fullPts[xIdx]
+					for xi := 0; xi < pts; xi++ {
+						idx := xi + yi*(pts+1)
+						for dir := 0; dir < 6; dir++ {
+							idxBuf.Init(int64(idx), int64(pts+1), 1, dir)
+							tet[0] = geom.Vec(ptBuf[idxBuf[0]])
+							tet[1] = geom.Vec(ptBuf[idxBuf[1]])
+							tet[2] = geom.Vec(ptBuf[idxBuf[2]])
+							tet[3] = geom.Vec(ptBuf[idxBuf[3]])
+							obj.UseTetra(tet)
+						}
+					}
+				}
+			}
+			
+			iStart = iEnd
+		}
+		// We're moving up a layer, so use the old high spline as the new low
+		// spline to prevent unneeded moving of the internal spline layer.
+		high, low = low, high
+	}
+}
+// You... you make it out alive! Now, run! Run far away from here!
 
 func binHeaderIntersections(
 	hds []io.SheetHeader, objs []Object,
