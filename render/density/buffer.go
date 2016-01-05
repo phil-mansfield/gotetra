@@ -64,6 +64,9 @@ func NewBuffer(q Quantity, len, wlen int, g *geom.GridLocation) Buffer {
 	panic(":3")
 }
 
+func WrapperDensityBuffer(rhos []float64) Buffer {
+	return &densityBuffer{ scalarBuffer{ rhos } }
+}
 
 /////////////////////////////////
 // scalarBuffer implementation //
