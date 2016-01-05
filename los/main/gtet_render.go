@@ -44,7 +44,7 @@ type Params struct {
 func parseCmd() *Params {
 	p := &Params{}
 
-	flag.IntVar(&p.Pixels, "RBins", 100,
+	flag.IntVar(&p.Pixels, "Pixels", 100,
 		"Number of pixels on one side of render.")
 	flag.IntVar(&p.SubsampleLength, "SubsampleLength", 1,
 		"Grid distance between adjacent points used in interpolation.")
@@ -201,10 +201,10 @@ func newRenderers(
 
         xs, ys, zs, rads := vals[0], vals[1], vals[2], vals[3]
 
-
         for i := range xs {
-			origin := [3]float64{ xs[i]-rads[i], ys[i]-rads[i], zs[i]-rads[i] }
-			pw := 2 * rads[i] / float64(p.Pixels)
+			dr := rads[i] * p.Mult
+			origin := [3]float64{ xs[i]-dr, ys[i]-dr, zs[i]-dr }
+			pw := 2 * dr / float64(p.Pixels)
 			pixels := [3]int{ p.Pixels, p.Pixels, p.Pixels }
 			
 			switch method {
@@ -257,8 +257,7 @@ func fileNames(snaps, ids []int, p *Params, method Method) []string {
 	}
 
 	for i := range snaps {
-		names[i] = fmt.Sprintf("s%d_id%d_%s.gtet",
-			snaps[i], snaps[i], ids[i], paramStr)
+		names[i] = fmt.Sprintf("s%d_id%d_%s.gtet", snaps[i], ids[i], paramStr)
 	}
 
 	return names
