@@ -18,6 +18,7 @@ h_num = 7
 
 sph_file = "data/h%d_sph_prof.dat" % h_num
 tet_prof_base = path.join(dir, "h%d_tet_prof_%%s.dat" % h_num)
+tril_prof_base = path.join(dir, "h%d_tril_prof_%%s.dat" % h_num)
 vol_base = path.join(dir, "h%d_vol_%%s.dat" % h_num)
 
 def convert_rows(rows):
@@ -28,16 +29,13 @@ def convert_rows(rows):
 
 def mass_prof(rs, rhos):
     prev_r = 0.0
-    ms = np.zeros(len(rs))
-    for i in xrange(len(rs)):
-        r = rs[i]
-        vol = 4 * np.pi / 3 * (r**3 - prev_r**3)
-        m = rhos[i] * cosmo.rho_m(0) * vol * 1e9
-        if i == 0 : 
-            ms[i] = m
-        else:
-            ms[i] = m + ms[i-1]
-    return ms
+
+    factor = cosmo.rho_m(0) * 1e9 * 4 * np.pi / 3
+    outer_m = factor * rhos * rs**3
+    inner_m = factor * rhos * np.append([0], rs[:-1]**3)
+    dm = outer_m - inner_m
+
+    return np.cumsum(dm)
         
 
 sph_prof_rs, sph_prof_rhos = convert_rows(np.loadtxt(sph_file))
@@ -46,6 +44,11 @@ prof_rs, tet_prof_rhos_1 = convert_rows(np.loadtxt(tet_prof_base % subs[0]))
 _, tet_prof_rhos_2 = convert_rows(np.loadtxt(tet_prof_base % subs[1]))
 _, tet_prof_rhos_4 = convert_rows(np.loadtxt(tet_prof_base % subs[2]))
 _, tet_prof_rhos_8 = convert_rows(np.loadtxt(tet_prof_base % subs[3]))
+
+_, tril_prof_rhos_1 = convert_rows(np.loadtxt(tril_prof_base % subs[0]))
+_, tril_prof_rhos_2 = convert_rows(np.loadtxt(tril_prof_base % subs[1]))
+_, tril_prof_rhos_4 = convert_rows(np.loadtxt(tril_prof_base % subs[2]))
+_, tril_prof_rhos_8 = convert_rows(np.loadtxt(tril_prof_base % subs[3]))
 
 r_sp_1, r200m, gamma = map(np.array, zip(*np.loadtxt(vol_base % subs[0], usecols=(3, 6, 8))))
 r_sp_2 = np.loadtxt(vol_base % subs[1], usecols=(3,))
@@ -68,10 +71,16 @@ for i in xrange(len(prof_rs)):
     plt.ylabel(r"$\rho / \rho_{\rm m}$")
     plt.xlabel(r"$r\ [{\rm Mpc}/h]$")
     
-    plt.plot(prof_rs[i], tet_prof_rhos_8[i], "m", lw=2, label="gotetra, sub-8")
-    plt.plot(prof_rs[i], tet_prof_rhos_4[i], "b", lw=2, label="gotetra, sub-4")
-    plt.plot(prof_rs[i], tet_prof_rhos_2[i], "g", lw=2, label="gotetra, sub-2")
-    plt.plot(prof_rs[i], tet_prof_rhos_1[i], "r", lw=2, label="gotetra, sub-1")
+    plt.plot(prof_rs[i], tet_prof_rhos_8[i], "m", lw=1, label="gotetra, sub-8")
+    plt.plot(prof_rs[i], tet_prof_rhos_4[i], "b", lw=1, label="gotetra, sub-4")
+    plt.plot(prof_rs[i], tet_prof_rhos_2[i], "g", lw=1, label="gotetra, sub-2")
+    plt.plot(prof_rs[i], tet_prof_rhos_1[i], "r", lw=1, label="gotetra, sub-1")
+
+    plt.plot(prof_rs[i], tril_prof_rhos_8[i], "--m", lw=2)
+    plt.plot(prof_rs[i], tril_prof_rhos_4[i], "--b", lw=2)
+    plt.plot(prof_rs[i], tril_prof_rhos_2[i], "--g", lw=2)
+    plt.plot(prof_rs[i], tril_prof_rhos_1[i], "--r", lw=2)
+
     plt.plot(sph_prof_rs[i], sph_prof_rhos[i], "k", lw=2)
 
     lo, hi = plt.ylim()
@@ -91,13 +100,23 @@ for i in xrange(len(prof_rs)):
               (m200m, float(m200m/1.7e7), gamma[i], f_12, f_24))
 
     plt.plot(prof_rs[i], mass_prof(prof_rs[i], tet_prof_rhos_8[i]),
-             "m", lw=2, label="gotetra, sub-8")
+             "m", lw=1, label="gotetra, sub-8")
     plt.plot(prof_rs[i], mass_prof(prof_rs[i], tet_prof_rhos_4[i]),
-             "b", lw=2, label="gotetra, sub-4")
+             "b", lw=1, label="gotetra, sub-4")
     plt.plot(prof_rs[i], mass_prof(prof_rs[i], tet_prof_rhos_2[i]),
-             "g", lw=2, label="gotetra, sub-2")
+             "g", lw=1, label="gotetra, sub-2")
     plt.plot(prof_rs[i], mass_prof(prof_rs[i], tet_prof_rhos_1[i]),
-             "r", lw=2, label="gotetra, sub-1")
+             "r", lw=1, label="gotetra, sub-1")
+
+    plt.plot(prof_rs[i], mass_prof(prof_rs[i], tril_prof_rhos_8[i]),
+             "--m", lw=2)
+    plt.plot(prof_rs[i], mass_prof(prof_rs[i], tril_prof_rhos_4[i]),
+             "--b", lw=2)
+    plt.plot(prof_rs[i], mass_prof(prof_rs[i], tril_prof_rhos_2[i]),
+             "--g", lw=2)
+    plt.plot(prof_rs[i], mass_prof(prof_rs[i], tril_prof_rhos_1[i]),
+             "--r", lw=2)
+
     plt.plot(sph_prof_rs[i], mass_prof(sph_prof_rs[i], sph_prof_rhos[i]),
              "k", lw=2)
 
