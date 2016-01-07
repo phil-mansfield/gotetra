@@ -2,6 +2,7 @@ package loop_objects
 
 import (
 	"math"
+	gorand "math/rand"
 
 	"github.com/phil-mansfield/gotetra/math/rand"
 	"github.com/phil-mansfield/gotetra/los/geom"
@@ -94,4 +95,95 @@ func (r *Renderer) Params() loop.Params {
     return loop.Params{
         UsesTetra: len(r.vecBuf) != 0,
     }	
+}
+
+////////////////////////////
+// Kernel Implementations //
+////////////////////////////
+
+type BallKernelRenderer struct {
+	Renderer
+	KernelR float64
+	KernelPts int
+	origin, span [3]float64
+}
+
+type GaussianKernelRenderer struct {
+	Renderer
+	KernelR, kR2 float64
+	KernelPts int
+	origin, span [3]float64
+}
+
+func NewBallKernelRenderer(
+	origin [3]float64, pixels [3]int, pw float64,
+	kernelR float64, kernelPts int,
+) *BallKernelRenderer {
+	r := &BallKernelRenderer{}
+	r.Renderer = *NewParticleRenderer(origin, pixels, pw)
+	r.KernelR = kernelR
+	r.KernelPts = kernelPts
+	span := [3]float64{
+		pw*float64(pixels[0]), pw*float64(pixels[1]), pw*float64(pixels[2]),
+	}
+	r.span, r.origin = span, origin
+	for i := 0; i < 3; i++ {
+		r.span[i] += kernelR*2
+		r.origin[i] -= kernelR
+	}
+	return r
+}
+
+func (r *BallKernelRenderer) UsePoint(x, y, z float64) {
+	for i := 0; i < r.KernelPts; i++ {
+		x, y, z := randomBallPoint(r.KernelR)
+		r.Renderer.UsePoint(x, y, z)
+	}
+}
+
+func randomBallPoint(r float64) (x, y, z float64) {
+	x, y, z = gorand.Float64(), gorand.Float64(), gorand.Float64()
+	if x*x + y*y + z*z > 1 { return randomBallPoint(r) }
+	return x*r, y*r, z*r
+}
+
+func (r *BallKernelRenderer) Contains(x, y, z float64) bool {
+    lowX, highX := r.origin[0], r.origin[0] + r.span[0]
+    lowY, highY := r.origin[1], r.origin[1] + r.span[1]
+    lowZ, highZ := r.origin[2], r.origin[2] + r.span[2]
+    return lowX < x && x < highX &&
+        lowY < y && y < highY &&
+        lowZ < z && z < highZ
+}
+
+func NewGaussianKernelRenderer(
+	origin [3]float64, pixels [3]int, pw float64,
+	kernelR float64, kernelPts int,
+) *GaussianKernelRenderer {
+	r := &GaussianKernelRenderer{}
+	r.Renderer = *NewParticleRenderer(origin, pixels, pw)
+	r.KernelR = kernelR
+	r.KernelPts = kernelPts
+	span := [3]float64{
+		pw*float64(pixels[0]), pw*float64(pixels[1]), pw*float64(pixels[2]),
+	}
+	r.span, r.origin = span, origin
+	for i := 0; i < 3; i++ {
+		r.span[i] += kernelR*2
+		r.origin[i] -= kernelR
+	}
+	return r
+}
+
+func (r *GaussianKernelRenderer) Contains(x, y, z float64) bool {
+    lowX, highX := r.origin[0], r.origin[0] + r.span[0]
+    lowY, highY := r.origin[1], r.origin[1] + r.span[1]
+    lowZ, highZ := r.origin[2], r.origin[2] + r.span[2]
+    return lowX < x && x < highX &&
+        lowY < y && y < highY &&
+        lowZ < z && z < highZ
+}
+
+func (r *GaussianKernelRenderer) UsePoint(x, y, z float64) {
+	panic("NYI")
 }
