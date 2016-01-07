@@ -37,7 +37,7 @@ type Params struct {
 	Mult float64
 
 	Sphere float64
-	Tetra, Linear, Cubic int
+	Tetra, Linear, Cubic, SpherePts int
 }
 
 // parseCmd parses the command line options and returns them as a struct.
@@ -53,6 +53,8 @@ func parseCmd() *Params {
 		"Setting to a non-zero value, r, indicates that the particles " +
 			"supplied to the profile should be treated as constant density " +
 			"spheres of radius r instead of particles.")
+	flag.IntVar(&p.SpherePts, "SpherePts", 0,
+		"The number of points to use when using a spherical kernel.")
 	flag.IntVar(&p.Tetra, "Tetra", 0,
 		"Setting to a positive value, n, indicates that profiles should be " + 
 			"generated from constant density tetrahedra instead of " +
@@ -103,9 +105,21 @@ func computeGrids(ids, snaps []int, p *Params) ([]string, error) {
 
 	// Set up loop state.
 	buf := loop.NewBuffer()
-	rs, err := newRenderers(ids, snaps, p, method)
-	if err != nil { return nil, err }
 
+	var (
+		err error
+		rs []*obj.Renderer
+		srs []*obj.BallKernelRenderer
+	)
+	switch method {
+	case Sphere:
+		srs, err = newBallKernelRenderers(ids, snaps, p, method)
+		rs = make([]*obj.Renderer, len(srs))
+		for i := range srs { rs[i] = &srs[i].Renderer }
+	default:
+		rs, err = newRenderers(ids, snaps, p, method)
+	}
+	if err != nil { return nil, err }
 	workers := runtime.GOMAXPROCS(runtime.NumCPU())
 
 	snapBins, snapIdxs := binBySnap(snaps, ids)
@@ -115,16 +129,16 @@ func computeGrids(ids, snaps []int, p *Params) ([]string, error) {
 		// Select out all the halos in a given snapshot.
 		idxs := snapIdxs[snap]
 		snapRs := make([]loop.Object, len(idxs))
-		for i, idx := range idxs { snapRs[i] = rs[idx] }
+		switch method {
+		case Sphere:
+			for i, idx := range idxs { snapRs[i] = srs[idx] }
+		default:
+			for i, idx := range idxs { snapRs[i] = rs[idx] }
+		}
 
 		// Call loop.Loop().
 		switch method {
-		case Particle:
-			loop.Loop(
-				snap, snapRs, buf, p.SubsampleLength,
-				loop.Linear, 1, workers,
-			)
-		case Tetra:
+		case Particle, Tetra, Sphere:
 			loop.Loop(
 				snap, snapRs, buf, p.SubsampleLength,
 				loop.Linear, 1, workers,
@@ -139,11 +153,6 @@ func computeGrids(ids, snaps []int, p *Params) ([]string, error) {
 				snap, snapRs, buf, p.SubsampleLength,
 				loop.Cubic, p.Cubic, workers,
 			)
-		case Sphere:
-			loop.Loop(
-				snap, snapRs, buf, p.SubsampleLength,
-				loop.Linear, 1, workers,
-			)
 		default:
 			panic(":3")
 		}
@@ -155,7 +164,8 @@ func computeGrids(ids, snaps []int, p *Params) ([]string, error) {
 	
 	var pts int
 	switch method {
-	case Particle, Sphere: pts = 1
+	case Particle: pts = 1
+	case Sphere: pts = p.SpherePts
 	case Tetra: pts = p.Tetra
 	case Linear: pts = p.Linear
 	case Cubic: pts = p.Cubic
@@ -217,6 +227,37 @@ func newRenderers(
 			case Sphere:
 				panic("NYI")
 			}
+        }
+    }
+    return rs, nil
+}
+
+func newBallKernelRenderers(
+	ids, snaps []int, p *Params, method Method,
+) ([]*obj.BallKernelRenderer, error) {
+	snapBins, idxBins := binBySnap(snaps, ids)
+	rs := make([]*obj.BallKernelRenderer, len(ids))
+
+	for _, snap := range snaps {
+		snapIDs := snapBins[snap]
+        idxs := idxBins[snap]
+
+        vals, err := util.ReadRockstar(
+            snap, snapIDs, halo.X, halo.Y, halo.Z, halo.Rad200b,
+        )
+        if err != nil { return nil, err }
+
+        xs, ys, zs, rads := vals[0], vals[1], vals[2], vals[3]
+
+        for i := range xs {
+			dr := rads[i] * p.Mult
+			origin := [3]float64{ xs[i]-dr, ys[i]-dr, zs[i]-dr }
+			pw := 2 * dr / float64(p.Pixels)
+			pixels := [3]int{ p.Pixels, p.Pixels, p.Pixels }
+			
+			rs[idxs[i]] = obj.NewBallKernelRenderer(
+				origin, pixels, pw, p.Sphere, p.SpherePts,
+			)
         }
     }
     return rs, nil
