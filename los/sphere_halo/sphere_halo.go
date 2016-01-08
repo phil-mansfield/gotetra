@@ -221,8 +221,9 @@ func (h *SphereHalo) insertToRing(vec geom.Vec, radius, rho float64, ring int) {
 		// Circle contains center.
 		for i := 0; i < h.n; i++ {
 			// b = impact parameter
-			b := cx*h.ringVecs[i][0] + cy*h.ringVecs[i][1]
-			rHi := oneValIntrDist(projDist2, projRad2, b)
+			b := cy*h.ringVecs[i][0] - cx*h.ringVecs[i][1]
+			dir := cx*h.ringVecs[i][0] + cy*h.ringVecs[i][1]
+			rHi := oneValIntrDist(projDist2, projRad2, b, dir)
 			h.profs[ring].Insert(math.Inf(-1), math.Log(rHi), rho, i)
 		}
 	} else {
@@ -234,14 +235,16 @@ func (h *SphereHalo) insertToRing(vec geom.Vec, radius, rho float64, ring int) {
 
 		for i := iLo1; i < iHi1; i++ {
 			// b = impact parameter
-			b := cx*h.ringVecs[i][0] + cy*h.ringVecs[i][1]
+			b := cy*h.ringVecs[i][0] - cx*h.ringVecs[i][1]
 			rLo, rHi := twoValIntrDist(projDist2, projRad2, b)
+			if math.IsNaN(rLo) || math.IsNaN(rHi) { continue }
 			h.profs[ring].Insert(math.Log(rLo), math.Log(rHi), rho, i)
 		}
 
 		for i := iLo2; i < iHi2; i++ {
-			b := cx*h.ringVecs[i][0] + cy*h.ringVecs[i][1]
+			b := cy*h.ringVecs[i][0] - cx*h.ringVecs[i][1]
 			rLo, rHi := twoValIntrDist(projDist2, projRad2, b)
+			if math.IsNaN(rLo) || math.IsNaN(rHi) { continue }
 			h.profs[ring].Insert(math.Log(rLo), math.Log(rHi), rho, i)			
 		}
 	}
@@ -253,7 +256,7 @@ func (h *SphereHalo) insertToRing(vec geom.Vec, radius, rho float64, ring int) {
 //
 // Upper indices are _exclusive_.
 func (h *SphereHalo) idxRange(
-	phiHi, phiLo float64,
+	phiLo, phiHi float64,
 ) (iLo1, iHi1, iLo2, iHi2 int) {
 	// An alternate approach involves doing some modulo calculations.
 	// It is simpler, but slower.
@@ -275,7 +278,7 @@ func (h *SphereHalo) idxRange(
 	default:
 		// not wrapping around at all.
 		iLo := int(phiLo/h.dPhi)
-		iHi := int(phiLo/h.dPhi)+  1
+		iHi := int(phiHi/h.dPhi)+  1
 		return iLo, iHi, 0, 0
 	}
 }
@@ -294,16 +297,25 @@ func halfAngularWidth(dist2, r2 float64) float64 {
 // squared radius of the circle, and b is the impact parameter of the
 // ray and the center of the circle.
 func twoValIntrDist(dist2, rad2, b float64) (lo, hi float64) {
-	midDist := math.Sqrt(dist2 - rad2)
-	diff := math.Sqrt(rad2 - b*b)
+	b2 := b*b
+	midDist := math.Sqrt(dist2 - b2)
+	diff := math.Sqrt(rad2 - b2)
 	return midDist-diff, midDist+diff
 }
 
 // twoValIntrDist returns both the intersection distances for a ray which
 // passes through a circle at one point. dist2 is the squared distance
 // between the origin of the ray and the center of the circle, rad2 is the
-// squared radius of the circle, and b is the impact parameter of the
-// ray and the center of the circle.
-func oneValIntrDist(dist2, rad2, b float64) float64 {
-	return math.Sqrt(rad2 - dist2) + math.Sqrt(rad2 - b*b)
+// squared radius of the circle, b is the impact parameter of the
+// ray and the center of the circle, and dir is the dot product of the
+// the circle's position vector and the normal vector of .
+func oneValIntrDist(dist2, rad2, b, dir float64) float64 {
+	b2 := b*b
+	radMidDist := math.Sqrt(rad2 - b2)
+	cMidDist := math.Sqrt(dist2 - b2)
+	if dir > 0 {
+		return radMidDist + cMidDist
+	} else {
+		return radMidDist - cMidDist
+	}
 }
