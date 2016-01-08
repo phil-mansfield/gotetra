@@ -27,6 +27,27 @@ func (p *ProfileRing) Reuse(lowR, highR float64) {
 	p.dr = (highR - lowR) / float64(p.bins)	
 }
 
+func (p1 *ProfileRing) Join(p2 *ProfileRing) {
+	if p1.n != p2.n || p1.bins != p2.bins {
+		panic("ProfileRing sizes do not match.")
+	} else {
+		for i, val := range p2.derivs { p1.derivs[i] += val }
+	}
+}
+
+func (p1 *ProfileRing) Split(p2 *ProfileRing) {
+	if p1.n != p2.n || p1.bins != p2.bins {
+		p2.Init(p1.lowR, p1.highR, p1.bins, p1.n)
+	} else {
+		p2.bins = p1.bins
+		p2.lowR = p1.lowR
+		p2.highR = p1.highR
+		p2.dr = p2.dr
+
+		for i := range p2.derivs { p2.derivs[i] = 0 }
+	}
+}
+
 // Init initializes a profile ring made up of n profiles each of which consist
 // of the given number of radial bins and extend between the two specified 
 // radii.
