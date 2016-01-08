@@ -100,3 +100,33 @@ func TestIdxRange(t *testing.T) {
 		}
 	}
 }
+
+func TestSphereIntersectRing(t *testing.T) {
+	tests := []struct {
+		ringNorm, c geom.Vec
+		r float64
+		
+		res bool
+	} {
+		{geom.Vec{0, 0, 1}, geom.Vec{0, 0, 2}, 1, false},
+		{geom.Vec{0, 0, 1}, geom.Vec{0, 0, 1}, 1, false},
+		{geom.Vec{0, 0, 1}, geom.Vec{0, 0, 0.5}, 1, true},
+
+		{geom.Vec{0, 1, 0}, geom.Vec{0, 2, 0}, 1, false},
+		{geom.Vec{0, 1, 0}, geom.Vec{0, 0.5, 0}, 1, true},
+
+		{geom.Vec{1, 0, 0}, geom.Vec{2, 0, 0}, 1, false},
+		{geom.Vec{1, 0, 0}, geom.Vec{0.5, 0, 0}, 1, true},
+	}
+
+	for i, test := range tests {
+		h := SphereHalo{}
+		norms := []geom.Vec{test.ringNorm}
+		h.Init(norms, [3]float64{0, 0, 0}, 1, 2, 1, 1)
+		res := h.sphereIntersectRing(test.c, test.r, 0)
+		if res != test.res {
+			t.Errorf("%d) expected sphereIntersect(%v, %g) = %v, but got %v.",
+				i, test.c, test.r, test.res, res)
+		}
+	}
+}
