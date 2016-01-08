@@ -526,6 +526,26 @@ func BenchmarkSolveLine(b *testing.B) {
 	}
 }
 
+func BenchmarkSphereLineSegmentIntersection(b *testing.B) {
+	n := 1000
+	ls := make([]LineSegment, n)
+	for i := range ls {
+		ls[i] = LineSegment{ Vec{ float32(rand.Float64()),
+			float32(rand.Float64()),
+			float32(rand.Float64())}, Vec{0, 0, 1}, 0, 1 }
+	}
+	// Want most of the lines to intersect.
+	sphere := Sphere{ Vec{0.5, 0.5, 0.5}, 0.5 }
+
+	b.ResetTimer()
+	idx := 0
+	for i := 0; i < b.N; i++ {
+		sphere.LineSegmentIntersect(&ls[idx])
+		idx++
+		if idx == n { idx = 0 }
+	}
+}
+
 func coords(idx, cells int64) (x, y, z int64) {
 	x = idx % cells
 	y = (idx % (cells * cells)) / cells
