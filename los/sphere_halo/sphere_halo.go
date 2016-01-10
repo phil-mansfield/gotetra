@@ -140,7 +140,7 @@ func (h *SphereHalo) Intersect(vecs []rgeom.Vec, r float64, intr []bool) {
 	
 	if len(intr) != len(vecs) { panic("len(intr) != len(vecs)") }
 
-	x0, y0, z0 := float32(h.origin[0]), float32(h.origin[1]), float32(h.origin[2])
+	x0, y0, z0 := float32(h.origin[0]),float32(h.origin[1]),float32(h.origin[2])
 	for i, vec := range vecs {
 		x, y, z := vec[0]-x0, vec[1]-y0, vec[2]-z0
 		r2 := x*x + y*y + z*z
@@ -219,6 +219,7 @@ func (h *SphereHalo) insertToRing(vec geom.Vec, radius, rho float64, ring int) {
 	projRad2 := radius*radius - cz*cz
 	if projRad2 > projDist2 {
 		// Circle contains center.
+
 		for i := 0; i < h.n; i++ {
 			// b = impact parameter
 			b := cy*h.ringVecs[i][0] - cx*h.ringVecs[i][1]
@@ -318,4 +319,9 @@ func oneValIntrDist(dist2, rad2, b, dir float64) float64 {
 	} else {
 		return radMidDist - cMidDist
 	}
+}
+
+// GetRhos accesses the given ring and LoS profile
+func (h *SphereHalo) GetRhos(ring, losIdx int, buf []float64) {
+	h.profs[ring].Retrieve(losIdx, buf)
 }
