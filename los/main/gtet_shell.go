@@ -2,10 +2,12 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"math"
 	"runtime"
 	"sort"
+	"strings"
 	
 	"github.com/phil-mansfield/gotetra/los"
 	"github.com/phil-mansfield/gotetra/los/geom"
@@ -20,10 +22,10 @@ import (
 // TODO: Someone needs to come in and restructure this monstrosity.
 
 type Params struct {
-	// HaloProfiles params
+	// Halo profile params
 	RBins, Spokes, Rings int
 	MaxMult, MinMult float64
-	// HaloProfiles params that are only used if set in Sphere mode.
+	// Halo profile params that are only used if set in Sphere mode.
 	SphereMult, BackgroundMult float64
 
 	// Splashback params
@@ -64,46 +66,59 @@ func main() {
 		out[i] = make([]float64, rowLength)
 	}
 
-	loop(ids, snaps, p, out)
+	err = loop(ids, snaps, p, out)
+	if err != nil { log.Fatal(err.Error()) }
 
 	util.PrintRows(ids, snaps, out)
 }
 
-func loop(ids, snaps []int, p *Params, out [][]float64) {
+func loop(ids, snaps []int, p *Params, out [][]float64) error {
 	snapBins, idxBins := binBySnap(snaps, ids)
 	ringBuf := make([]analyze.RingBuffer, p.Rings)
-	for i := range buf { buf[i].Init(p.Spokes, p.RBins) }
+	for i := range ringBuf { ringBuf[i].Init(p.Spokes, p.RBins) }
 
 	sortedSnaps := []int{}
 	for snap := range snapBins {
 		sortedSnaps = append(sortedSnaps, snap)
 	}
 	sort.Ints(sortedSnaps)
+
+	hds, files, err := util.ReadHeaders(sortedSnaps[0])
+	if err != nil { return err }
 	losBuf := los.NewBuffers(files[0], &hds[0], p.SubsampleLength)
 
 	for _, snap := range sortedSnaps { 
 		if snap == -1 { continue }
+		snapIDs := snapBins[snap]
+		idxs := idxBins[snap]
 
 		// Create Halos
 		runtime.GC()
-		halos, err := createHalos(snap, &hds[0], IDs, p)
-		for i := range halos {
-			// Screw it, we're too early in the catalog. Abort!
-			if !halos[i].IsValid { return }
-		}
-		if err != nil { log.Fatal(err.Error()) }
+		halos, err := createHalos(snap, &hds[0], snapIDs, p)
+		if err != nil { return err }
 		printMemStats()
 
-		snapIDs := snapBins[snap]
-		idxs := idxBins[snap]
-		loopSnap(snap, snapIDs, idxs, halos, p, out)
+		switch strings.ToLower(p.Interpolation) {
+		case "tetra":
+			tetraLoop(snap, ids, idxs, halos, p, losBuf, out)
+		case "sphere":
+			panic("NYI")
+		default:
+			panic(fmt.Sprintf("Unknown interpolation mode '%s'",
+				p.Interpolation))
+		}
 		
-		haloAnalysis(idxs, halos, p, out)
+		haloAnalysis(halos, idxs, p, ringBuf, out)
 	}
+
+	return nil
 }
 
 // loopSnap loops over all the halos in a given snapshot.
-func loopSnap(snap int, IDs, idxs []int, p *Params, out [][]float64) {
+func tetraLoop(
+	snap int, IDs, idxs []int, halos []los.Halo, p *Params,
+	losBuf *los.Buffers, out [][]float64,
+) {
 	hds, files, err := util.ReadHeaders(snap)
 	if err != nil { log.Fatal(err.Error()) }
 
@@ -118,35 +133,43 @@ func loopSnap(snap int, IDs, idxs []int, p *Params, out [][]float64) {
 		if len(intrBins[i]) == 0 { continue }
 		hdContainer[0] = hds[i]
 		fileContainer[0] = files[i]
-		los.LoadPtrDensities(
-			intrBins[i], hdContainer, fileContainer, losBuf,
-		)
+
+		hps := make([]*los.HaloProfiles, len(intrBins[i]))
+		for j := range hps {
+			switch t := intrBins[i][j].(type) {
+			case *los.HaloProfiles: hps[i] = t
+			default: panic("Non-HaloProfiles type given to tetraLoop().")
+			}
+		}
+
+		los.LoadPtrDensities(hps, hdContainer, fileContainer, losBuf)
 	}
 }
 
-func haloAnalysis(halos []Halo) {
-	for _, i := range idxs {
-		switch {
-		case p.MedianProfile:
-			// Calculate median profile.
-			for i := range halos {
-				runtime.GC()
-				out[idxs[i]] = calcMedian(halos[i], p)
-			}
-		case p.MeanProfile:
-			// Calculate mean profile.
-			for i := range halos {
-				runtime.GC()
-				out[idxs[i]] = calcMean(halos[i], p)
-			}
-		default:
-			// Calculate Penna coefficients.
-			for i := range halos {
-				runtime.GC()
-				var ok bool
-				out[idxs[i]], ok = calcCoeffs(halos[i], ringBuf, p)
-				if !ok { log.Fatal("Welp, fix this.") }
-			}
+func haloAnalysis(
+	halos []los.Halo, idxs []int, p *Params,
+	ringBuf []analyze.RingBuffer, out [][]float64,
+) {
+	switch {
+	case p.MedianProfile:
+		// Calculate median profile.
+		for i := range halos {
+			runtime.GC()
+			out[idxs[i]] = calcMedian(halos[i], p)
+		}
+	case p.MeanProfile:
+		// Calculate mean profile.
+		for i := range halos {
+			runtime.GC()
+			out[idxs[i]] = calcMean(halos[i], p)
+		}
+	default:
+		// Calculate Penna coefficients.
+		for i := range halos {
+			runtime.GC()
+			var ok bool
+			out[idxs[i]], ok = calcCoeffs(halos[i], ringBuf, p)
+			if !ok { log.Fatal("Welp, fix this.") }
 		}
 	}
 }
@@ -209,7 +232,7 @@ func parseCmd() *Params {
 
 func createHalos(
 	snap int, hd *io.SheetHeader, ids []int, p *Params,
-) ([]los.HaloProfiles, error) {
+) ([]los.Halo, error) {
 	vals, err := util.ReadRockstar(
 		snap, ids, halo.X, halo.Y, halo.Z, halo.Rad200b,
 	)
@@ -219,8 +242,9 @@ func createHalos(
 	g := rand.NewTimeSeed(rand.Xorshift)
 
 	// Initialize halos.
-	halos := make([]los.HaloProfiles, len(ids))
+	halos := make([]los.Halo, len(ids))
 	seenIDs := make(map[int]bool)
+
 	for i, id := range ids {
 		origin := &geom.Vec{
 			float32(xs[i]), float32(ys[i]), float32(zs[i]),
@@ -228,21 +252,32 @@ func createHalos(
 
 		if rs[i] <= 0 { continue }
 		
-		// If we've already seen a halo once, randomize its orientation.
-		if seenIDs[id] {
-			halos[i].Init(
-				id, p.Rings, origin, rs[i] * p.MinMult, rs[i] * p.MaxMult,
-				p.RBins, p.Spokes, hd.TotalWidth, los.Log(true),
-				los.Rotate(float32(g.Uniform(0, 2 * math.Pi)),
-                    float32(g.Uniform(0, 2 * math.Pi)),
-                    float32(g.Uniform(0, 2 * math.Pi))),
-			)
-		} else {
-			seenIDs[id] = true
-			halos[i].Init(
-				id, p.Rings, origin, rs[i] * p.MinMult, rs[i] * p.MaxMult,
-				p.RBins, p.Spokes, hd.TotalWidth, los.Log(true),
-			)
+		switch strings.ToLower(p.Interpolation) {
+		case "tetra":
+			// If we've already seen a halo once, randomize its orientation.
+			halo := &los.HaloProfiles{}
+			if seenIDs[id] {
+				halo.Init(
+					id, p.Rings, origin, rs[i] * p.MinMult, rs[i] * p.MaxMult,
+					p.RBins, p.Spokes, hd.TotalWidth, los.Log(true),
+					los.Rotate(float32(g.Uniform(0, 2 * math.Pi)),
+						float32(g.Uniform(0, 2 * math.Pi)),
+						float32(g.Uniform(0, 2 * math.Pi))),
+				)
+				halos[i] = halo
+			} else {
+				seenIDs[id] = true
+				halo.Init(
+					id, p.Rings, origin, rs[i] * p.MinMult, rs[i] * p.MaxMult,
+					p.RBins, p.Spokes, hd.TotalWidth, los.Log(true),
+				)
+				halos[i] = halo
+			}
+		case "sphere":
+			panic("NYI")
+		default:
+			panic(fmt.Sprintf("Unknown Interpolation mode '%s'.",
+				p.Interpolation))
 		}
 	}
 
@@ -253,7 +288,7 @@ type profileRange struct {
 	rMin, rMax float64
 	v0 rgeom.Vec
 }
-
+	
 func newProfileRanges(ids, snaps []int, p *Params) ([]profileRange, error) {
 	snapBins, idxBins := binBySnap(snaps, ids)
 	ranges := make([]profileRange, len(ids))
@@ -328,54 +363,18 @@ func zSplit(zCounts []int, workers int) [][]int {
 }
 
 func binIntersections(
-	hds []io.SheetHeader, halos []los.HaloProfiles,
-) [][]*los.HaloProfiles {
+	hds []io.SheetHeader, halos []los.Halo,
+) [][]los.Halo {
 
-	bins := make([][]*los.HaloProfiles, len(hds))
+	bins := make([][]los.Halo, len(hds))
 	for i := range hds {
 		for hi := range halos {
-			if (&halos[hi]).SheetIntersect(&hds[i]) {
-				bins[i] = append(bins[i], &halos[hi])
+			if halos[hi].SheetIntersect(&hds[i]) {
+				bins[i] = append(bins[i], halos[hi])
 			}
 		}
 	}
 	return bins
-}
-
-func binRangeIntersections(
-	hds []io.SheetHeader, ranges []profileRange, idxs []int,
-) [][]int {
-	bins := make([][]int, len(hds))
-	for i := range hds {
-		for _, j := range idxs {
-			if sheetIntersect(ranges[idxs[j]], &hds[i]) {
-				bins[i] = append(bins[i], j)
-			}
-		}
-	}
-	return bins
-}
-
-func sheetIntersect(r profileRange, hd *io.SheetHeader) bool {
-	tw := float32(hd.TotalWidth)
-	return inRange(r.v0[0], float32(r.rMax), hd.Origin[0], hd.Width[0], tw) &&
-		inRange(r.v0[1], float32(r.rMax), hd.Origin[1], hd.Width[1], tw) &&
-		inRange(r.v0[2], float32(r.rMax), hd.Origin[2], hd.Width[2], tw)
-}
-
-func inRange(x, r, low, width, tw float32) bool {
-	return wrapDist(x, low, tw) > -r && wrapDist(x, low + width, tw) < r
-}
-
-func wrapDist(x1, x2, width float32) float32 {
-	dist := x1 - x2
-	if dist > width / 2 {
-		return dist - width
-	} else if dist < width / -2 {
-		return dist + width
-	} else {
-		return dist
-	}
 }
 
 func prependRadii(rhos [][]float64, ranges []profileRange) [][]float64 {
@@ -393,7 +392,7 @@ func prependRadii(rhos [][]float64, ranges []profileRange) [][]float64 {
 }
 
 func calcCoeffs(
-	halo *los.HaloProfiles, buf []analyze.RingBuffer, p *Params,
+	halo los.Halo, buf []analyze.RingBuffer, p *Params,
 ) ([]float64, bool) {
 	for i := range buf {
 		buf[i].Clear()
@@ -405,14 +404,14 @@ func calcCoeffs(
 	return cs, true
 }
 
-func calcMedian(halo *los.HaloProfiles, p *Params) []float64 {
+func calcMedian(halo los.Halo, p *Params) []float64 {
 	rs := make([]float64, p.RBins)
 	halo.GetRs(rs)
 	rhos := halo.MedianProfile()
 	return append(rs, rhos...)
 }
 
-func calcMean(halo *los.HaloProfiles, p *Params) []float64 {
+func calcMean(halo los.Halo, p *Params) []float64 {
 	rs := make([]float64, p.RBins)
 	halo.GetRs(rs)
 	rhos := halo.MeanProfile()

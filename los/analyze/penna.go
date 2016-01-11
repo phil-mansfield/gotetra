@@ -102,7 +102,7 @@ func PennaFunc(cs []float64, I, J, K int) Shell {
 
 
 func PennaVolumeFit(
-	xs, ys [][]float64, h *los.HaloProfiles, I, J int,
+	xs, ys [][]float64, h los.Halo, I, J int,
 ) (cs []float64, shell Shell) {
 	n := 0
 	for i := range xs { n += len(xs[i]) }

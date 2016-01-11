@@ -492,6 +492,8 @@ func (hp *HaloProfiles) GetRhos(ring, prof int, out []float64) {
 	r.Retrieve(prof, out)
 }
 
+// I hate all of this :(
+
 func LoadDensities(
 	hs []HaloProfiles, hds []io.SheetHeader,
 	files []string, buf *Buffers,
