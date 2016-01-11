@@ -37,6 +37,7 @@ import (
 
 	"github.com/phil-mansfield/gotetra/los"
 	"github.com/phil-mansfield/gotetra/math/mat"
+	"github.com/phil-mansfield/gotetra/math/sort"
 	rgeom "github.com/phil-mansfield/gotetra/render/geom"
 	"github.com/phil-mansfield/gotetra/los/geom"
 )
@@ -44,8 +45,9 @@ import (
 // Type SphereHalo represents a halo which can have spheres inserted into it.
 type SphereHalo struct {
 	origin [3]float64
-	rMin, rMax float64
 	rings, bins, n int // bins = radial bins, n = number of lines per 
+	rMin, rMax float64
+	rs []float64
 
 	ringVecs [][2]float64
 	ringPhis []float64
@@ -66,6 +68,8 @@ func (h *SphereHalo) Init(
 ) {
 	h.origin = origin
 	h.rMin, h.rMax = rMin, rMax
+	h.rs = make([]float64, h.bins)
+
 	h.rings, h.bins, h.n = len(norms), bins, n
 	h.norms = norms
 
@@ -321,7 +325,64 @@ func oneValIntrDist(dist2, rad2, b, dir float64) float64 {
 	}
 }
 
-// GetRhos accesses the given ring and LoS profile
+// GetRhos writes the density of the LoS at a given ring and LoS profile
+// into buf.
 func (h *SphereHalo) GetRhos(ring, losIdx int, buf []float64) {
 	h.profs[ring].Retrieve(losIdx, buf)
+}
+
+// GetRs writes the radial values of each bin into a a buffer.
+func (h *SphereHalo) GetRs(buf []float64) {
+	if len(buf) != h.bins { panic("|buf| != h.bins") }
+
+	dlr := (math.Log(h.rMax) - math.Log(h.rMin))/float64(h.bins)
+	lrMin := math.Log(h.rMin)
+	for i := range buf { buf[i] = math.Exp(lrMin + dlr*(float64(i)+0.5)) }
+}
+
+// MedianProfile computes the median value of all the halo's LoS profiles.
+func (h *SphereHalo) MedianProfile() []float64 {
+	// Read Densities
+	rhoBufs := make([][]float64, h.n * h.rings)
+	for i := range rhoBufs {
+		rhoBufs[i] = make([]float64, h.bins)
+	}
+	
+	idx := 0
+	for r := 0; r < h.rings; r++ {
+		for prof := 0; prof < h.n; prof++ {
+			h.GetRhos(r, prof, rhoBufs[idx])
+			idx++
+		}
+	}
+	
+	// Find median of each radial bin.
+	medBuf := make([]float64, h.n * h.rings)
+	out := make([]float64, h.bins)
+	for j := 0; j < h.bins; j++ {
+		for i := range medBuf {
+			medBuf[i] = rhoBufs[i][j]
+		}
+		out[j] = sort.Median(medBuf, medBuf)
+	}
+	
+	return out
+}
+
+// MeanProfile computes the mean value of all the halo's LoS profiles.
+func (h *SphereHalo) MeanProfile() []float64 {
+	mean := make([]float64, h.bins)
+	buf := make([]float64, h.bins)
+	
+	// Find the spherically averaged rho profile
+	for r := 0; r < h.rings; r++ {
+		for i := 0; i < h.n; i++ {
+			h.GetRhos(r, i, buf)
+			for j := range buf { mean[j] += buf[j] }
+		}
+	}
+
+	n := float64(h.rings * h.n)
+	for j := range mean { mean[j] /= n }
+	return mean
 }
