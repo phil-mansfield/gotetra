@@ -35,6 +35,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/phil-mansfield/gotetra/render/io"
 	"github.com/phil-mansfield/gotetra/los"
 	"github.com/phil-mansfield/gotetra/math/mat"
 	"github.com/phil-mansfield/gotetra/math/sort"
@@ -408,4 +409,30 @@ func (h *SphereHalo) LineSegment(ring, losIdx int, out *geom.LineSegment) {
 
 	*out = geom.LineSegment{ Origin: origin, Dir: vec,
 		StartR: float32(h.rMin), EndR: float32(h.rMax) }
+}
+
+func wrapDist(x1, x2, width float64) float64 {
+	dist := x1 - x2
+	if dist > width / 2 {
+		return dist - width
+	} else if dist < width / -2 {
+		return dist + width
+	} else {
+		return dist
+	}
+}
+
+func inRange(x, r, low, width, tw float64) bool {
+	return wrapDist(x, low, tw) > -r && wrapDist(x, low + width, tw) < r
+}
+
+// SheetIntersect returns true if the given halo and sheet intersect one another
+// and false otherwise.
+func (h *SphereHalo) SheetIntersect(hd *io.SheetHeader) bool {
+	return inRange(h.origin[0], h.rMax, float64(hd.Origin[0]),
+		float64(hd.Width[0]), hd.TotalWidth) &&
+			inRange(h.origin[1], h.rMax, float64(hd.Origin[1]),
+			float64(hd.Width[1]), hd.TotalWidth) &&
+				inRange(h.origin[2], h.rMax, float64(hd.Origin[2]), 
+				float64(hd.Width[2]), hd.TotalWidth)
 }

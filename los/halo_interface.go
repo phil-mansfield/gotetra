@@ -1,6 +1,7 @@
 package los
 
 import (
+	"github.com/phil-mansfield/gotetra/render/io"
 	"github.com/phil-mansfield/gotetra/los/geom"
 )
 
@@ -14,6 +15,7 @@ type Halo interface {
 	MedianProfile() []float64
 	Phi(i int) float64
 	LineSegment(ring, losIdx int, out *geom.LineSegment)
+	SheetIntersect(hd *io.SheetHeader) bool
 }
 
 // typechecking
