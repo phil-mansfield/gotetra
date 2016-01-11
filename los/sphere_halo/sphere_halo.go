@@ -58,6 +58,8 @@ type SphereHalo struct {
 	profs []los.ProfileRing
 }
 
+var _ Halo = &SphereHalo{}
+
 // Init initializes a halo centered at origin with minimum and maximum radii
 // given by rMin, and rMax. It will consist of a family of rings whose normals
 // are given by the slice of vectors, norms. Each ring will consists of n

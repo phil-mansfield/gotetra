@@ -384,14 +384,14 @@ func (hp *HaloProfiles) Mass(rhoM float64) float64 {
 
 // rho returns the total enclosed density of the halo as estimate by averaging
 // the halo's profiles.
-func (hp *HaloProfiles) Rho(shs ...geom.Sphere) float64 {
+func (hp *HaloProfiles) Rho() float64 {
 	rBuf, rAvg := make([]float64, hp.bins), make([]float64, hp.bins)
 	count := make([]int, hp.bins)
 
 	// Find the spherically averaged rho profile
 	for r := 0; r < len(hp.rs); r++ {
 		for i := 0; i < hp.n; i++ {
-			hp.GetRhos(r, i, rBuf, shs...)
+			hp.GetRhos(r, i, rBuf)
 			hp.rs[r].Retrieve(i, rBuf)
 			for j := range rBuf {
 				if !math.IsNaN(rBuf[j]) {
@@ -484,41 +484,10 @@ func change(x, anchor, bw float32) float32 {
 	return 0
 }
 
-func (hp *HaloProfiles) GetRhos(
-	ring, prof int, out []float64, shs ...geom.Sphere,
-) {
+func (hp *HaloProfiles) GetRhos(ring, prof int, out []float64) {
 	if hp.bins != len(out) { panic("Length of out array != hp.Bins().") }
 	r := &hp.rs[ring]
 	r.Retrieve(prof, out)
-
-	ls := new(geom.LineSegment)
-	r.LineSegment(prof, ls)
-
-	dx, bw := [3]float32{}, hp.boxWidth
-	for i := range shs {
-		for j := 0; j < 3; j++ {
-			dx[j] = change(shs[i].C[j], ls.Origin[j], bw)
-			shs[i].C[j] += dx[j]
-		}
-		enter32, exit32, enters, exits := shs[i].LineSegmentIntersect(ls)
-		for j := 0; j < 3; j++ {
-			shs[i].C[j] -= dx[j]
-		}
-
-		if !enters && !exits { continue }
-		enter, exit := float64(enter32), float64(exit32)
-
-		enterIdx, exitIdx := 0, hp.bins
-		if enters && exits {
-			enterIdx, exitIdx = r.BinIdx(enter), r.BinIdx(exit) + 1
-		} else if enters {
-			enterIdx = r.BinIdx(enter)
-		} else if exits  {
-			exitIdx = r.BinIdx(exit) + 1
-		}
-
-		for i := enterIdx; i < exitIdx; i++ { out[i] = math.NaN() }
-	}
 }
 
 func LoadDensities(
