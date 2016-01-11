@@ -439,6 +439,6 @@ func (h *SphereHalo) SheetIntersect(hd *io.SheetHeader) bool {
 
 func (h *SphereHalo) PlaneToVolume(ring int, px, py float64) (x, y, z float64) {
 	v := &geom.Vec{float32(px), float32(py), 0}
-	v.Rotate(&irots[ring])
+	v.Rotate(&h.irots[ring])
 	return float64(v[0]), float64(v[1]), float64(v[2])
 }
