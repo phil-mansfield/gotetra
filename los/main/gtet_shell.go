@@ -23,11 +23,16 @@ type Params struct {
 	// HaloProfiles params
 	RBins, Spokes, Rings int
 	MaxMult, MinMult float64
+	// HaloProfiles params that are only used if set in Sphere mode.
+	SphereMult, BackgroundMult float64
 
 	// Splashback params
 	HFactor float64
 	Order, Window, Levels, SubsampleLength int
 	Cutoff float64
+
+	// Interpolation
+	Interpolation string
 
 	// Alternate modes
 	MedianProfile, MeanProfile bool
@@ -44,17 +49,6 @@ func main() {
 	
 	// Compute coefficients.
 	out := make([][]float64, len(ids))
-	snapBins, idxBins := binBySnap(snaps, ids)
-	buf := make([]analyze.RingBuffer, p.Rings)
-	for i := range buf { buf[i].Init(p.Spokes, p.RBins) }
-
-	sortedSnaps := []int{}
-	for snap := range snapBins {
-		sortedSnaps = append(sortedSnaps, snap)
-	}
-	sort.Ints(sortedSnaps)
-
-	var losBuf *los.Buffers
 
 	var rowLength int
 	switch {
@@ -70,74 +64,101 @@ func main() {
 		out[i] = make([]float64, rowLength)
 	}
 
-	
-MainLoop:
+	loop(ids, snaps, p, out)
+
+	util.PrintRows(ids, snaps, out)
+}
+
+func loop(ids, snaps []int, p *Params, out [][]float64) {
+	snapBins, idxBins := binBySnap(snaps, ids)
+	ringBuf := make([]analyze.RingBuffer, p.Rings)
+	for i := range buf { buf[i].Init(p.Spokes, p.RBins) }
+
+	sortedSnaps := []int{}
+	for snap := range snapBins {
+		sortedSnaps = append(sortedSnaps, snap)
+	}
+	sort.Ints(sortedSnaps)
+	losBuf := los.NewBuffers(files[0], &hds[0], p.SubsampleLength)
+
 	for _, snap := range sortedSnaps { 
 		if snap == -1 { continue }
-		snapIDs := snapBins[snap]
-		idxs := idxBins[snap]
 
-		// Bin halos
-		hds, files, err := util.ReadHeaders(snap)
-		
-		if err != nil { log.Fatal(err.Error()) }
-		if losBuf == nil {
-			losBuf = los.NewBuffers(files[0], &hds[0], p.SubsampleLength)
-		}
-		halos, err := createHalos(snap, &hds[0], snapIDs, p)
+		// Create Halos
+		runtime.GC()
+		halos, err := createHalos(snap, &hds[0], IDs, p)
 		for i := range halos {
 			// Screw it, we're too early in the catalog. Abort!
-			if !halos[i].IsValid { continue MainLoop }
+			if !halos[i].IsValid { return }
 		}
-
-		ms := runtime.MemStats{}
-		runtime.ReadMemStats(&ms)
-		log.Printf(
-			"gtet_shell: Alloc: %d MB, Sys: %d MB",
-			ms.Alloc / 1000000, ms.Sys / 1000000,
-		)
-		
 		if err != nil { log.Fatal(err.Error()) }
-		intrBins := binIntersections(hds, halos)
-		
-		// Add densities. Done header by header to limit I/O time.
-		hdContainer := make([]io.SheetHeader, 1)
-		fileContainer := make([]string, 1)
-		for i := range hds {
-			runtime.GC()
+		printMemStats()
 
-			if len(intrBins[i]) == 0 { continue }
-			hdContainer[0] = hds[i]
-			fileContainer[0] = files[i]
-			los.LoadPtrDensities(
-				intrBins[i], hdContainer, fileContainer, losBuf,
-			)
-		}
+		snapIDs := snapBins[snap]
+		idxs := idxBins[snap]
+		loopSnap(snap, snapIDs, idxs, halos, p, out)
 		
-		if p.MedianProfile {
+		haloAnalysis(idxs, halos, p, out)
+	}
+}
+
+// loopSnap loops over all the halos in a given snapshot.
+func loopSnap(snap int, IDs, idxs []int, p *Params, out [][]float64) {
+	hds, files, err := util.ReadHeaders(snap)
+	if err != nil { log.Fatal(err.Error()) }
+
+	intrBins := binIntersections(hds, halos)
+	
+	// Add densities. Done header by header to limit I/O time.
+	hdContainer := make([]io.SheetHeader, 1)
+	fileContainer := make([]string, 1)
+	for i := range hds {
+		runtime.GC()
+		
+		if len(intrBins[i]) == 0 { continue }
+		hdContainer[0] = hds[i]
+		fileContainer[0] = files[i]
+		los.LoadPtrDensities(
+			intrBins[i], hdContainer, fileContainer, losBuf,
+		)
+	}
+}
+
+func haloAnalysis(halos []Halo) {
+	for _, i := range idxs {
+		switch {
+		case p.MedianProfile:
 			// Calculate median profile.
 			for i := range halos {
 				runtime.GC()
-				out[idxs[i]] = calcMedian(&halos[i], p)
+				out[idxs[i]] = calcMedian(halos[i], p)
 			}
-		} else if p.MeanProfile {
+		case p.MeanProfile:
+			// Calculate mean profile.
 			for i := range halos {
 				runtime.GC()
-				out[idxs[i]] = calcMean(&halos[i], p)
+				out[idxs[i]] = calcMean(halos[i], p)
 			}
-		} else {
+		default:
 			// Calculate Penna coefficients.
 			for i := range halos {
 				runtime.GC()
 				var ok bool
-				out[idxs[i]], ok = calcCoeffs(&halos[i], buf, p)
+				out[idxs[i]], ok = calcCoeffs(halos[i], ringBuf, p)
 				if !ok { log.Fatal("Welp, fix this.") }
 			}
 		}
-		
 	}
-	
-	util.PrintRows(ids, snaps, out)
+}
+
+// printMemStats prints out allocation statistics to the log files.
+func printMemStats() {
+	ms := runtime.MemStats{}
+	runtime.ReadMemStats(&ms)
+	log.Printf(
+		"gtet_shell: Alloc: %d MB, Sys: %d MB",
+		ms.Alloc / 1000000, ms.Sys / 1000000,
+	)
 }
 
 func parseCmd() *Params {
@@ -173,6 +194,15 @@ func parseCmd() *Params {
 	flag.BoolVar(&p.MeanProfile, "MeanProfile", false,
 		"Compute the mean halo profile instead of the shell. " + 
 			"KILL THIS OPTION.")
+	flag.StringVar(&p.Interpolation, "Interpolation", "Tetra",
+		"Interpolation Mode. Must be one of [Tetra | Sphere]. Will " + 
+			"eventaully support Cubic and Linear. Case insensitive.")
+	flag.Float64Var(&p.SphereMult, "SphereMult", 0.1,
+		"The radius of the spherical kernels as a multiplier of the halo's " +
+			"R200m. Only valid if Interpolation flag is set to Sphere.")
+	flag.Float64Var(&p.BackgroundMult, "BackgroundMult", 0.5,
+		"The density assigned to zero-density cells as a multiplier " + 
+			"of the dnesity of a single spherical kernel.")
 	flag.Parse()
 	return p
 }

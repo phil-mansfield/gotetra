@@ -18,7 +18,7 @@ func (r *RingBuffer) Init(n, bins int) {
 	r.N, r.Bins = n, bins
 
 	r.PlaneXs, r.PlaneYs = make([]float64, n), make([]float64, n)
-	r.Xs, r.Ys, r.Zs = make([]float64, n), make([]float64, n), make([]float64, n)
+	r.Xs, r.Ys, r.Zs = make([]float64, n), make([]float64, n), make([]float64,n)
 	r.Phis, r.Rs = make([]float64, n), make([]float64, n)
 	r.Oks = make([]bool, n)
 
@@ -41,7 +41,7 @@ func (r *RingBuffer) Clear() {
 }
 
 func (r *RingBuffer) Splashback(
-	h *los.HaloProfiles, ring int, window int, dLim float64,
+	h los.Halo, ring int, window int, dLim float64,
 ) {
 	h.GetRs(r.profRs)
 	ls := new(geom.LineSegment)
