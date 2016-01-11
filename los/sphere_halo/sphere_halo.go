@@ -53,12 +53,12 @@ type SphereHalo struct {
 	ringPhis []float64
 	dPhi float64
 
-	rots []mat.Matrix32
+	rots, irots []mat.Matrix32
 	norms []geom.Vec
 	profs []los.ProfileRing
 }
 
-var _ Halo = &SphereHalo{}
+var _ los.Halo = &SphereHalo{}
 
 // Init initializes a halo centered at origin with minimum and maximum radii
 // given by rMin, and rMax. It will consist of a family of rings whose normals
@@ -79,11 +79,13 @@ func (h *SphereHalo) Init(
 
 	h.profs = make([]los.ProfileRing, h.rings)
 	h.rots = make([]mat.Matrix32, h.rings)
+	h.irots = make([]mat.Matrix32, h.rings)
 
 	for i := range h.profs {
 		h.profs[i].Init(math.Log(h.rMin), math.Log(h.rMax), h.bins, h.n)
 		h.rots[i].Init(make([]float32, 9), 3, 3)
 		geom.EulerMatrixBetweenAt(&norms[i], zAxis, &h.rots[i])
+		geom.EulerMatrixBetweenAt(zAxis, &norms[i], &h.irots[i])
 	}
 
 	h.ringPhis = make([]float64, h.n)
@@ -387,4 +389,23 @@ func (h *SphereHalo) MeanProfile() []float64 {
 	n := float64(h.rings * h.n)
 	for j := range mean { mean[j] /= n }
 	return mean
+}
+
+// Phi returns the angle corresponding to the given LoS index.
+func (h *SphereHalo) Phi(losIdx int) float64 { return h.ringPhis[losIdx] }
+
+// LineSegment calculates a line segment corresponding to a given profile
+// and writes it to out.
+func (h *SphereHalo) LineSegment(ring, losIdx int, out *geom.LineSegment) {
+	vec := geom.Vec{}
+    sin, cos := math.Sincos(float64(h.ringPhis[losIdx]))
+    vec[0], vec[1] = float32(cos), float32(sin)
+    vec.Rotate(&h.irots[ring])
+
+	origin := geom.Vec{
+		float32(h.origin[0]), float32(h.origin[1]), float32(h.origin[2]),
+	}
+
+	*out = geom.LineSegment{ Origin: origin, Dir: vec,
+		StartR: float32(h.rMin), EndR: float32(h.rMax) }
 }

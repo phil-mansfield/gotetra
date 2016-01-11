@@ -438,7 +438,9 @@ func (hp *HaloProfiles) Rings() int { return len(hp.rs) }
 func (hp *HaloProfiles) Bins() int { return hp.bins }
 func (hp *HaloProfiles) Profiles() int { return hp.n }
 
-func (hp *HaloProfiles) Phi(prof int) float32 { return hp.rs[0].phis[prof] }
+func (hp *HaloProfiles) Phi(prof int) float64 {
+	return float64(hp.rs[0].phis[prof])
+}
 
 func (hr *HaloProfiles) LineSegment(ring, prof int, out *geom.LineSegment) {
 	hr.rs[ring].LineSegment(prof, out)

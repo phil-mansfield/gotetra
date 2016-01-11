@@ -1,5 +1,9 @@
 package los
 
+import (
+	"github.com/phil-mansfield/gotetra/los/geom"
+)
+
 // Halo is a _very leaky_ abstraction around the different types of halos.
 // Mainly provided as a convenience for the already terrible gtet_shell.go
 // file.
@@ -8,6 +12,8 @@ type Halo interface {
 	GetRhos(ring, losIdx int, buf []float64)
 	MeanProfile() []float64
 	MedianProfile() []float64
+	Phi(i int) float64
+	LineSegment(ring, losIdx int, out *geom.LineSegment)
 }
 
 // typechecking
