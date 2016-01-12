@@ -27,7 +27,7 @@ type Params struct {
 	RBins, Spokes, Rings int
 	MaxMult, MinMult float64
 	// Halo profile params that are only used if set in Sphere mode.
-	SphereMult, BackgroundMult float64
+	SphereMult, DefaultRhoMult float64
 
 	// Splashback params
 	HFactor float64
@@ -118,6 +118,7 @@ func loop(ids, snaps []int, p *Params, out [][]float64) error {
 		if err != nil { return err }
 		printMemStats()
 
+		// Loop over objects.
 		switch strings.ToLower(p.Interpolation) {
 		case "tetra":
 			err := tetraLoop(snap, ids, idxs, halos, p, losBuf, out)
@@ -129,7 +130,8 @@ func loop(ids, snaps []int, p *Params, out [][]float64) error {
 			panic(fmt.Sprintf("Unknown interpolation mode '%s'",
 				p.Interpolation))
 		}
-		
+
+		// Analysis
 		haloAnalysis(halos, idxs, p, ringBuf, out)
 	}
 
@@ -211,7 +213,7 @@ func chanLoadSphereVec(
 	pl := hd.TotalWidth / float64(int(hd.CountWidth) / p.SubsampleLength)
 	pVol := pl*pl*pl
 
-	rho := sphVol / pVol
+	rho := pVol / sphVol
 
 	for _, z := range zIdxs {
 		if z >= sw { continue }
@@ -338,7 +340,7 @@ func parseCmd() *Params {
 	flag.Float64Var(&p.SphereMult, "SphereMult", 0.1,
 		"The radius of the spherical kernels as a multiplier of the halo's " +
 			"R200m. Only valid if Interpolation flag is set to Sphere.")
-	flag.Float64Var(&p.BackgroundMult, "BackgroundMult", 0.5,
+	flag.Float64Var(&p.DefaultRhoMult, "DefaultRhoMult", 0.5,
 		"The density assigned to zero-density cells as a multiplier " + 
 			"of the dnesity of a single spherical kernel.")
 	flag.Parse()
@@ -359,16 +361,16 @@ func createHalos(
 	// Initialize halos.
 	halos := make([]los.Halo, len(ids))
 	seenIDs := make(map[int]bool)
-
+	
 	for i, id := range ids {
-		origin := &geom.Vec{
-			float32(xs[i]), float32(ys[i]), float32(zs[i]),
-		}
-
 		if rs[i] <= 0 { continue }
 		
 		switch strings.ToLower(p.Interpolation) {
 		case "tetra":
+			origin := &geom.Vec{
+				float32(xs[i]), float32(ys[i]), float32(zs[i]),
+			}
+			
 			// If we've already seen a halo once, randomize its orientation.
 			halo := &los.HaloProfiles{}
 			if seenIDs[id] {
@@ -388,8 +390,22 @@ func createHalos(
 				)
 				halos[i] = halo
 			}
+			
 		case "sphere":
-			panic("NYI")
+			norms := normVecs(p.Rings)
+			origin := [3]float64{
+				float64(xs[i]), float64(ys[i]), float64(zs[i]),
+			}
+			rMax, rMin := rs[i] * p.MaxMult, rs[i] * p.MinMult
+			sphVol := 4*math.Pi/3*rs[i]*rs[i]*rs[i]
+			pl := hd.TotalWidth/float64(int(hd.CountWidth)/p.SubsampleLength)
+			pVol := pl*pl*pl
+			rho := pVol / sphVol
+			defaultRho := rho * p.DefaultRhoMult
+			
+			halo := &sph.SphereHalo{}
+			halo.Init(norms, origin, rMin, rMax, p.RBins, p.Spokes, defaultRho)
+
 		default:
 			panic(fmt.Sprintf("Unknown Interpolation mode '%s'.",
 				p.Interpolation))
@@ -397,6 +413,34 @@ func createHalos(
 	}
 
 	return halos, nil
+}
+
+func normVecs(n int) []geom.Vec {
+	var vecs []geom.Vec
+	gen := rand.NewTimeSeed(rand.Xorshift)
+	switch n {
+	case 3:
+		vecs = []geom.Vec{{0, 0, 1}, {0, 1, 0}, {1, 0, 0}}
+	default:
+		vecs = make([]geom.Vec, n)
+		for i := range vecs {
+			for {
+				x := gen.Uniform(-1, +1)
+				y := gen.Uniform(-1, +1)
+				z := gen.Uniform(-1, +1)
+				r := math.Sqrt(x*x + y*y + z*z)
+
+				if r < 1 {
+					vecs[i] = geom.Vec{
+						float32(x/r), float32(y/r), float32(z/r),
+					}
+					break
+				}
+			}
+		}
+	}
+	
+	return vecs
 }
 
 type profileRange struct {
