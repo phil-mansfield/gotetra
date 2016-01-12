@@ -57,6 +57,8 @@ type SphereHalo struct {
 	rots, irots []mat.Matrix32
 	norms []geom.Vec
 	profs []los.ProfileRing
+
+	defaultRho float64
 }
 
 var _ los.Halo = &SphereHalo{}
@@ -68,6 +70,7 @@ var _ los.Halo = &SphereHalo{}
 func (h *SphereHalo) Init(
 	norms []geom.Vec, origin [3]float64,
 	rMin, rMax float64, bins, n int,
+	defaultRho float64,
 ) {
 	h.origin = origin
 	h.rMin, h.rMax = rMin, rMax
@@ -75,6 +78,8 @@ func (h *SphereHalo) Init(
 
 	h.rings, h.bins, h.n = len(norms), bins, n
 	h.norms = norms
+
+	h.defaultRho = defaultRho
 
 	zAxis := &geom.Vec{0, 0, 1}
 
@@ -85,6 +90,7 @@ func (h *SphereHalo) Init(
 	for i := range h.profs {
 		h.profs[i].Init(math.Log(h.rMin), math.Log(h.rMax), h.bins, h.n)
 		h.rots[i].Init(make([]float32, 9), 3, 3)
+		h.irots[i].Init(make([]float32, 9), 3, 3)
 		geom.EulerMatrixBetweenAt(&norms[i], zAxis, &h.rots[i])
 		geom.EulerMatrixBetweenAt(zAxis, &norms[i], &h.irots[i])
 	}
@@ -107,7 +113,8 @@ func (h *SphereHalo) Split(hs []SphereHalo) {
 	for i := range hs {
 		hi := &hs[i]
 		if h.rings != hi.rings || h.bins != hi.bins || h.n != hi.n {
-			hi.Init(h.norms, h.origin, h.rMin, h.rMax, h.bins, h.n)
+			hi.Init(h.norms, h.origin, h.rMin,
+				h.rMax, h.bins, h.n, h.defaultRho)
 		} else {
 			hi.norms = h.norms
 			hi.rots = h.rots
@@ -334,6 +341,9 @@ func oneValIntrDist(dist2, rad2, b, dir float64) float64 {
 // into buf.
 func (h *SphereHalo) GetRhos(ring, losIdx int, buf []float64) {
 	h.profs[ring].Retrieve(losIdx, buf)
+	for i, rho := range buf {
+		if rho < h.defaultRho { buf[i] = h.defaultRho }
+	}
 }
 
 // GetRs writes the radial values of each bin into a a buffer.
@@ -442,3 +452,5 @@ func (h *SphereHalo) PlaneToVolume(ring int, px, py float64) (x, y, z float64) {
 	v.Rotate(&h.irots[ring])
 	return float64(v[0]), float64(v[1]), float64(v[2])
 }
+
+func (h *SphereHalo) RMax() float64 { return h.rMax }
