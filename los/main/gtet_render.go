@@ -256,7 +256,8 @@ func newBallKernelRenderers(
 			pixels := [3]int{ p.Pixels, p.Pixels, p.Pixels }
 			
 			rs[idxs[i]] = obj.NewBallKernelRenderer(
-				origin, pixels, pw, p.Sphere, p.SpherePts,
+				origin, pixels, pw, p.Sphere * rads[i],
+				p.SpherePts*p.SpherePts*p.SpherePts,
 			)
         }
     }

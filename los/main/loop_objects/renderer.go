@@ -136,13 +136,13 @@ func NewBallKernelRenderer(
 
 func (r *BallKernelRenderer) UsePoint(x, y, z float64) {
 	for i := 0; i < r.KernelPts; i++ {
-		x, y, z := randomBallPoint(r.KernelR)
-		r.Renderer.UsePoint(x, y, z)
+		rx, ry, rz := randomBallPoint(r.KernelR)
+		r.Renderer.UsePoint(x+rx, y+ry, z+rz)
 	}
 }
 
 func randomBallPoint(r float64) (x, y, z float64) {
-	x, y, z = gorand.Float64(), gorand.Float64(), gorand.Float64()
+	x, y, z = gorand.Float64()*2-1, gorand.Float64()*2-1, gorand.Float64()*2-1
 	if x*x + y*y + z*z > 1 { return randomBallPoint(r) }
 	return x*r, y*r, z*r
 }
