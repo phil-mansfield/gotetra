@@ -10,6 +10,7 @@ import (
 	"strings"
 	
 	"github.com/phil-mansfield/gotetra/los"
+	sph "github.com/phil-mansfield/gotetra/los/sphere_halo"
 	"github.com/phil-mansfield/gotetra/los/geom"
 	rgeom "github.com/phil-mansfield/gotetra/render/geom"
 	"github.com/phil-mansfield/gotetra/los/analyze"
@@ -85,7 +86,26 @@ func loop(ids, snaps []int, p *Params, out [][]float64) error {
 
 	hds, files, err := util.ReadHeaders(sortedSnaps[0])
 	if err != nil { return err }
-	losBuf := los.NewBuffers(files[0], &hds[0], p.SubsampleLength)
+
+	// Create buffers for the different methods.
+	var (
+		losBuf *los.Buffers
+		sphBuf *sphBuffers
+	)
+	switch strings.ToLower(p.Interpolation) {
+	case "tetra":
+		losBuf = los.NewBuffers(files[0], &hds[0], p.SubsampleLength)
+	case "sphere":
+		workers := runtime.NumCPU()
+		gw := hds[0].GridWidth
+		sphBuf = &sphBuffers{
+			intr: make([]bool, gw*gw*gw),
+			vecs: make([]rgeom.Vec, gw*gw*gw),
+			sphWorkers: make([]sph.SphereHalo, workers - 1),
+		}
+	default:
+		panic(fmt.Sprintf("Unknown interpolation mode '%s'", p.Interpolation))
+	}
 
 	for _, snap := range sortedSnaps { 
 		if snap == -1 { continue }
@@ -100,9 +120,11 @@ func loop(ids, snaps []int, p *Params, out [][]float64) error {
 
 		switch strings.ToLower(p.Interpolation) {
 		case "tetra":
-			tetraLoop(snap, ids, idxs, halos, p, losBuf, out)
+			err := tetraLoop(snap, ids, idxs, halos, p, losBuf, out)
+			if err != nil { return err }
 		case "sphere":
-			panic("NYI")
+			err := sphereLoop(snap, ids, idxs, halos, p, sphBuf, out)
+			if err != nil { return err }
 		default:
 			panic(fmt.Sprintf("Unknown interpolation mode '%s'",
 				p.Interpolation))
@@ -114,13 +136,105 @@ func loop(ids, snaps []int, p *Params, out [][]float64) error {
 	return nil
 }
 
+func sphereLoop(
+	snap int, IDs, ids []int, halos []los.Halo, p *Params,
+	sphBuf *sphBuffers, out [][]float64,
+) error {
+	hds, files, err := util.ReadHeaders(snap)
+	if err != nil { return err }
+	intrBins := binIntersections(hds, halos)
+
+	for i := range hds {
+		runtime.GC()
+		if len(intrBins[i]) == 0 { continue }
+		
+		err := io.ReadSheetPositionsAt(files[i], sphBuf.vecs)
+		if err != nil { return err }
+
+		binHs := intrBins[i]
+		for j := range binHs {
+			h, ok := binHs[j].(*sph.SphereHalo)
+			if !ok { panic("Invalid Halo interface given to sphereLoop().") }
+			loadSphereVecs(h, sphBuf, &hds[i], p)
+		}
+		
+	}
+
+	return nil
+}
+
+type sphBuffers struct {
+	sphWorkers []sph.SphereHalo
+	vecs []rgeom.Vec
+	intr []bool
+}
+
+func loadSphereVecs(
+	h *sph.SphereHalo, sphBuf *sphBuffers, hd *io.SheetHeader, p *Params,
+) {
+	workers := runtime.NumCPU()
+	runtime.GOMAXPROCS(workers)
+	sphWorkers, vecs, intr := sphBuf.sphWorkers, sphBuf.vecs, sphBuf.intr
+	if len(sphWorkers) + 1 != workers { panic("impossible")}
+
+	sync := make(chan bool, workers)
+
+	h.Transform(vecs, hd.TotalWidth)
+	rad := h.RMax() * p.SphereMult / p.MaxMult
+	h.Intersect(vecs, rad, intr)
+
+	counts := zCounts(sphBuf.intr, int(hd.GridCount))
+	zIdxs := zSplit(counts, workers)
+
+	h.Split(sphWorkers)
+
+	for i := range sphWorkers {
+		wh := &sphBuf.sphWorkers[i]
+		go chanLoadSphereVec(wh, vecs, intr, zIdxs[i], hd, p, sync)
+	}
+	chanLoadSphereVec(h, vecs, intr, zIdxs[workers-1], hd, p, sync)
+
+	for i := 0; i < workers; i++ { <-sync }
+
+	h.Join(sphWorkers)
+}
+
+func chanLoadSphereVec(
+	h *sph.SphereHalo, vecs []rgeom.Vec, intr []bool,
+	zIdxs []int, hd *io.SheetHeader,  p *Params, sync chan bool,
+) {
+	gw, sw := int(hd.GridWidth), int(hd.SegmentWidth)
+
+	rad := h.RMax() * p.SphereMult / p.MaxMult
+	sphVol := 4*math.Pi/3*rad*rad*rad
+
+	pl := hd.TotalWidth / float64(int(hd.CountWidth) / p.SubsampleLength)
+	pVol := pl*pl*pl
+
+	rho := sphVol / pVol
+
+	for _, z := range zIdxs {
+		if z >= sw { continue }
+
+		for y := 0; y < sw; y++ {
+			for x := 0; x < sw; x++ {
+
+				idx := x + y*gw + z*gw*gw
+				if !intr[idx] { h.Insert(geom.Vec(vecs[idx]), rad, rho) }
+			}
+		}
+	}
+
+	sync <- true
+}
+
 // loopSnap loops over all the halos in a given snapshot.
 func tetraLoop(
 	snap int, IDs, idxs []int, halos []los.Halo, p *Params,
 	losBuf *los.Buffers, out [][]float64,
-) {
+) error {
 	hds, files, err := util.ReadHeaders(snap)
-	if err != nil { log.Fatal(err.Error()) }
+	if err != nil { return err }
 
 	intrBins := binIntersections(hds, halos)
 	
@@ -136,14 +250,15 @@ func tetraLoop(
 
 		hps := make([]*los.HaloProfiles, len(intrBins[i]))
 		for j := range hps {
-			switch t := intrBins[i][j].(type) {
-			case *los.HaloProfiles: hps[i] = t
-			default: panic("Non-HaloProfiles type given to tetraLoop().")
-			}
+			var ok bool
+			hps[j], ok = intrBins[i][j].(*los.HaloProfiles)
+			if !ok { panic("Invalid Halo given to tetraLoop().") }
 		}
 
 		los.LoadPtrDensities(hps, hdContainer, fileContainer, losBuf)
 	}
+
+	return nil
 }
 
 func haloAnalysis(
