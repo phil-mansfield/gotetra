@@ -233,12 +233,15 @@ func (h *SphereHalo) insertToRing(vec geom.Vec, radius, rho float64, ring int) {
 	cx, cy, cz := float64(vec[0]), float64(vec[1]), float64(vec[2])
 	projDist2 := cx*cx + cy*cy
 	projRad2 := radius*radius - cz*cz
+	if projRad2 < 0 { projRad2 = 0 }
+	
 	if projRad2 > projDist2 {
 		// Circle contains center.
 
 		for i := 0; i < h.n; i++ {
 			// b = impact parameter
 			b := cy*h.ringVecs[i][0] - cx*h.ringVecs[i][1]
+			if b < 0 { b = 0 }
 			dir := cx*h.ringVecs[i][0] + cy*h.ringVecs[i][1]
 			rHi := oneValIntrDist(projDist2, projRad2, b, dir)
 			h.profs[ring].Insert(math.Inf(-1), math.Log(rHi), rho, i)
@@ -251,8 +254,9 @@ func (h *SphereHalo) insertToRing(vec geom.Vec, radius, rho float64, ring int) {
 		iLo1, iHi1, iLo2, iHi2 := h.idxRange(phiStart, phiEnd)
 
 		for i := iLo1; i < iHi1; i++ {
-			// b = impact parameter
+			// b = impact parameter			
 			b := cy*h.ringVecs[i][0] - cx*h.ringVecs[i][1]
+			if b < 0 { b = 0 }
 			rLo, rHi := twoValIntrDist(projDist2, projRad2, b)
 			if math.IsNaN(rLo) || math.IsNaN(rHi) { continue }
 			h.profs[ring].Insert(math.Log(rLo), math.Log(rHi), rho, i)
@@ -260,6 +264,7 @@ func (h *SphereHalo) insertToRing(vec geom.Vec, radius, rho float64, ring int) {
 
 		for i := iLo2; i < iHi2; i++ {
 			b := cy*h.ringVecs[i][0] - cx*h.ringVecs[i][1]
+			if b < 0 { b = 0 }
 			rLo, rHi := twoValIntrDist(projDist2, projRad2, b)
 			if math.IsNaN(rLo) || math.IsNaN(rHi) { continue }
 			h.profs[ring].Insert(math.Log(rLo), math.Log(rHi), rho, i)			
