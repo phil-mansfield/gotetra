@@ -561,3 +561,5 @@ func (hp *HaloProfiles) MeanProfile() []float64 {
 	for j := range mean { mean[j] /= n }
 	return mean
 }
+
+func (hp *HaloProfiles) RMax() float64 { return hp.rMax }

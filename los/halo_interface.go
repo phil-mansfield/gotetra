@@ -17,6 +17,7 @@ type Halo interface {
 	LineSegment(ring, losIdx int, out *geom.LineSegment)
 	SheetIntersect(hd *io.SheetHeader) bool
 	PlaneToVolume(ring int, px, py float64) (x, y, z float64)
+	RMax() float64
 }
 
 // typechecking
