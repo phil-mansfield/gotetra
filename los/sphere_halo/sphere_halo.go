@@ -63,6 +63,13 @@ type SphereHalo struct {
 
 var _ los.Halo = &SphereHalo{}
 
+var (
+	OneCountProf []int
+	TwoCountProf []int
+	OneCount int
+	TwoCount int
+)
+
 // Init initializes a halo centered at origin with minimum and maximum radii
 // given by rMin, and rMax. It will consist of a family of rings whose normals
 // are given by the slice of vectors, norms. Each ring will consists of n
@@ -102,6 +109,9 @@ func (h *SphereHalo) Init(
 		h.ringVecs[i][1], h.ringVecs[i][0] = math.Sincos(h.ringPhis[i])
 	}
 	h.dPhi = 1 / float64(n) * (2 * math.Pi)
+
+	OneCountProf = make([]int, h.bins)
+	TwoCountProf = make([]int, h.bins)
 }
 
 // Split splits the halo h into copies and stores those copies in hs. The
@@ -150,9 +160,9 @@ func (h *SphereHalo) Join(hs []SphereHalo) {
 //
 // Intersect must be called after Transform is called on the vectors.
 func (h *SphereHalo) Intersect(vecs []rgeom.Vec, r float64, intr []bool) {
-	rMin, rMax := h.rMin + r, h.rMax + r
+	rMin, rMax := h.rMin - r, h.rMax + r
+	if rMin < 0 { rMin = 0 }
 	rMin2, rMax2 := float32(rMin*rMin), float32(rMax*rMax)
-	if rMin <= 0 { rMin2 = 0 }
 	
 	if len(intr) != len(vecs) { panic("len(intr) != len(vecs)") }
 
@@ -241,7 +251,6 @@ func (h *SphereHalo) insertToRing(vec geom.Vec, radius, rho float64, ring int) {
 		for i := 0; i < h.n; i++ {
 			// b = impact parameter
 			b := cy*h.ringVecs[i][0] - cx*h.ringVecs[i][1]
-			if b < 0 { b = 0 }
 			dir := cx*h.ringVecs[i][0] + cy*h.ringVecs[i][1]
 			rHi := oneValIntrDist(projDist2, projRad2, b, dir)
 			h.profs[ring].Insert(math.Inf(-1), math.Log(rHi), rho, i)
@@ -256,7 +265,6 @@ func (h *SphereHalo) insertToRing(vec geom.Vec, radius, rho float64, ring int) {
 		for i := iLo1; i < iHi1; i++ {
 			// b = impact parameter			
 			b := cy*h.ringVecs[i][0] - cx*h.ringVecs[i][1]
-			if b < 0 { b = 0 }
 			rLo, rHi := twoValIntrDist(projDist2, projRad2, b)
 			if math.IsNaN(rLo) || math.IsNaN(rHi) { continue }
 			h.profs[ring].Insert(math.Log(rLo), math.Log(rHi), rho, i)
@@ -264,10 +272,9 @@ func (h *SphereHalo) insertToRing(vec geom.Vec, radius, rho float64, ring int) {
 
 		for i := iLo2; i < iHi2; i++ {
 			b := cy*h.ringVecs[i][0] - cx*h.ringVecs[i][1]
-			if b < 0 { b = 0 }
 			rLo, rHi := twoValIntrDist(projDist2, projRad2, b)
 			if math.IsNaN(rLo) || math.IsNaN(rHi) { continue }
-			h.profs[ring].Insert(math.Log(rLo), math.Log(rHi), rho, i)			
+			h.profs[ring].Insert(math.Log(rLo), math.Log(rHi), rho, i)
 		}
 	}
 }

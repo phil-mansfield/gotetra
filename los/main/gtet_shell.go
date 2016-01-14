@@ -185,7 +185,7 @@ func loadSphereVecs(
 	rad := h.RMax() * p.SphereMult / p.MaxMult
 	h.Intersect(vecs, rad, intr)
 
-	counts := zCounts(sphBuf.intr, int(hd.GridCount))
+	counts := zCounts(sphBuf.intr, int(hd.GridWidth))
 	zIdxs := zSplit(counts, workers)
 
 	h.Split(sphWorkers)
@@ -214,7 +214,6 @@ func chanLoadSphereVec(
 	pVol := pl*pl*pl
 
 	rho := pVol / sphVol
-
 	for _, z := range zIdxs {
 		if z >= sw { continue }
 
@@ -222,7 +221,7 @@ func chanLoadSphereVec(
 			for x := 0; x < sw; x++ {
 
 				idx := x + y*gw + z*gw*gw
-				if !intr[idx] { h.Insert(geom.Vec(vecs[idx]), rad, rho) }
+				if intr[idx] { h.Insert(geom.Vec(vecs[idx]), rad, rho) }
 			}
 		}
 	}
@@ -321,7 +320,7 @@ func parseCmd() *Params {
 	flag.IntVar(&p.Order, "Order", 5,
 		"Order of the shell fitting function.")
 	flag.IntVar(&p.Window, "Window", 121,
-		"Number of bins within smoothign window. Must be odd.")
+		"Number of bins within smoothing window. Must be odd.")
 	flag.IntVar(&p.Levels, "Levels", 4,
 		"The number of recurve max-finding levels used by the 2D edge finder.")
 	flag.IntVar(&p.SubsampleLength, "SubsampleLength", 1,
@@ -356,7 +355,7 @@ func createHalos(
 	if err != nil { return nil, err }
 
 	xs, ys, zs, rs := vals[0], vals[1], vals[2], vals[3]
-	g := rand.NewTimeSeed(rand.Xorshift)
+	g := rand.New(rand.Xorshift, 0)
 
 	// Initialize halos.
 	halos := make([]los.Halo, len(ids))
@@ -397,7 +396,8 @@ func createHalos(
 				float64(xs[i]), float64(ys[i]), float64(zs[i]),
 			}
 			rMax, rMin := rs[i] * p.MaxMult, rs[i] * p.MinMult
-			sphVol := 4*math.Pi/3*rs[i]*rs[i]*rs[i]
+			rad := rs[i]*p.SphereMult
+			sphVol := 4*math.Pi/3*rad*rad*rad
 			pl := hd.TotalWidth/float64(int(hd.CountWidth)/p.SubsampleLength)
 			pVol := pl*pl*pl
 			rho := pVol / sphVol
@@ -406,6 +406,7 @@ func createHalos(
 			halo := &sph.SphereHalo{}
 			halo.Init(norms, origin, rMin, rMax, p.RBins, p.Spokes, defaultRho)
 
+			halos[i] = halo
 		default:
 			panic(fmt.Sprintf("Unknown Interpolation mode '%s'.",
 				p.Interpolation))
@@ -417,7 +418,7 @@ func createHalos(
 
 func normVecs(n int) []geom.Vec {
 	var vecs []geom.Vec
-	gen := rand.NewTimeSeed(rand.Xorshift)
+	gen := rand.New(rand.Xorshift, 0)
 	switch n {
 	case 3:
 		vecs = []geom.Vec{{0, 0, 1}, {0, 1, 0}, {1, 0, 0}}
@@ -474,7 +475,7 @@ func newProfileRanges(ids, snaps []int, p *Params) ([]profileRange, error) {
 // Used for load balancing.
 func zCounts(grid []bool, n int) []int {
 	counts := make([]int, n)
-
+	
 	i := 0
 	for z := 0; z < n; z++ {
 		for y := 0; y < n; y++ {
