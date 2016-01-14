@@ -1,7 +1,6 @@
 package loop
 
 import (
-	"log"
 	"runtime"
 
 	"github.com/phil-mansfield/gotetra/render/io"
@@ -109,7 +108,6 @@ func Loop(snap int, objs []Object, buf *Buffer, skip int,
 	intrBins := binHeaderIntersections(hds, objs)
 	for i := range hds {
 		for _, j := range intrBins[i] {
-			log.Printf("%d%d%d (halo %d)", i / 64, (i / 8) % 8, i % 8, j)
 			err = buf.read(&hds[i], files[i], skip, pts)
 			if err != nil { return err }
 
