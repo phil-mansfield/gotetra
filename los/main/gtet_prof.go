@@ -31,7 +31,7 @@ type Params struct {
 	MaxMult, MinMult float64
 
 	Sphere float64
-	Tetra, Linear, Cubic int
+	Tetra, Linear, Cubic, SpherePts int
 }
 
 // parseCmd parses the command line options and returns them as a struct.
@@ -50,6 +50,10 @@ func parseCmd() *Params {
 		"Setting to a non-zero value, r, indicates that the particles " +
 			"supplied to the profile should be treated as constant density " +
 			"spheres of radius r instead of particles.")
+	flag.IntVar(&p.SpherePts, "SpherePts", 1,
+		"The numner of points 'on a side' used to MC integrate the volume " + 
+			"of each sphere. Note that this is the same convention " + 
+			"used by the various tesselation methods for point counting.")
 	flag.IntVar(&p.Tetra, "Tetra", 0,
 		"Setting to a positive value, n, indicates that profiles should be " + 
 			"generated from constant density tetrahedra instead of " +
@@ -152,7 +156,8 @@ func genProfiles(ids, snaps []int, p *Params) ([][]float64, error) {
 	
 	var pts int
 	switch method {
-	case Particle, Sphere: pts = 1
+	case Particle: pts = 1
+	case Sphere: pts = p.SpherePts
 	case Tetra: pts = p.Tetra
 	case Linear: pts = p.Linear
 	case Cubic: pts = p.Cubic
@@ -206,7 +211,11 @@ func newProfiles(
 					rs[i]*p.MinMult, rs[i]*p.MaxMult, p.RBins, p.Tetra,
 				)
 			case Sphere:
-				panic("NYI")
+				profs[idxs[i]] = obj.NewSphereProfile(
+					[3]float64{xs[i], ys[i], zs[i]},
+					rs[i]*p.MinMult, rs[i]*p.MaxMult, p.RBins,
+					p.SpherePts, p.Sphere*rs[i],
+				)
 			default:
 				panic(fmt.Sprintf("Method %d not implemented.", method))
 			}
