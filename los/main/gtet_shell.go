@@ -355,7 +355,7 @@ func createHalos(
 	if err != nil { return nil, err }
 
 	xs, ys, zs, rs := vals[0], vals[1], vals[2], vals[3]
-	g := rand.New(rand.Xorshift, 0)
+	g := rand.NewTimeSeed(rand.Xorshift)
 
 	// Initialize halos.
 	halos := make([]los.Halo, len(ids))
@@ -418,7 +418,7 @@ func createHalos(
 
 func normVecs(n int) []geom.Vec {
 	var vecs []geom.Vec
-	gen := rand.New(rand.Xorshift, 0)
+	gen := rand.NewTimeSeed(rand.Xorshift)
 	switch n {
 	case 3:
 		vecs = []geom.Vec{{0, 0, 1}, {0, 1, 0}, {1, 0, 0}}
