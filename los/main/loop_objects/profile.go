@@ -71,7 +71,7 @@ func newProfile(
 		p.gen = rand.NewTimeSeed(rand.Xorshift)
 	} else if ptRad > 0 && pts > 0 {
 		p.gen = rand.NewTimeSeed(rand.Xorshift)
-		p.pts = pts
+		p.pts = pts*pts*pts
 		p.ptRad = ptRad
 	}
 	
