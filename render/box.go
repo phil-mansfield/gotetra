@@ -567,6 +567,7 @@ func (w *segmentOverlap3D) Interpolate(
 			pt := xs[idx]
 			x, y, z := int(pt[0]), int(pt[1]), int(pt[2])
 			bufIdx := x + y * length + z * area
+			if bufIdx < 0 || bufIdx >= len(buf) { continue }
 			buf[bufIdx] += ptVal
 			if countValid { counts[bufIdx]++ }
 		}
@@ -575,6 +576,7 @@ func (w *segmentOverlap3D) Interpolate(
 			pt := xs[idx]
 			x, y, z := int(pt[0]), int(pt[1]), int(pt[2])
 			bufIdx := x + y * length + z * area
+			if bufIdx < 0 || bufIdx >= len(buf) { continue }
 			buf[bufIdx] += ptVal * wbuf[idx]
 			if countValid { counts[bufIdx]++ }
 		}
