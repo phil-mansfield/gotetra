@@ -79,7 +79,7 @@ func main() {
 	flag.StringVar(
 		&exampleConfig,
 		"ExampleConfig", "", "Prints an example configuration file of the " + 
-			"specified type to stdout. Accepted arguments are 'Density', " +
+			"specified type to stdout. Accepted arguments are 'Render', " +
 			"'ConvertSnapshot', and 'Bounds'.",
 	)
 
@@ -165,7 +165,7 @@ func main() {
 		default:
 			log.Fatal(
 				"Unrecognized 'ExampleConfig' argument. Only recognized " +
-					"arguments are 'Density', 'Bounds', and 'ConvertSnapshot'.",
+					"arguments are 'Render', 'Bounds', and 'ConvertSnapshot'.",
 			)
 		}
 	default:
