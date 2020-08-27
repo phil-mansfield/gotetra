@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"code.google.com/p/gcfg"
+	//"code.google.com/p/gcfg"
+	"gopkg.in/gcfg.v1"
 	// I'm not sure if I hate this dependency or not.
 	"github.com/phil-mansfield/gotetra/render/density"
 )

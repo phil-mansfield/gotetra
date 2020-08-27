@@ -13,7 +13,8 @@ import (
 	"os"
 	"io/ioutil"
 
-	"code.google.com/p/gcfg"
+	//"code.google.com/p/gcfg"
+	"gopkg.in/gcfg.v1"
 
 	ren "github.com/phil-mansfield/gotetra/render"
 	"github.com/phil-mansfield/gotetra/render/density"
