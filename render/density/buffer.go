@@ -6,7 +6,6 @@ import (
 	"github.com/phil-mansfield/gotetra/render/geom"
 )
 
-// This is a giant clusterfuck.
 type Buffer interface {
 	// Array Management
 	Slice(low, high int)
