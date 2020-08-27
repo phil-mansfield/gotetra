@@ -203,10 +203,10 @@ func ReadGadgetParticlesAt(
 	readInt64AsByte(f, order, ids)
 	//_ = readInt32(f, order)
 
-	fmt.Printf("%.3g\n", xs[:20])
-	fmt.Printf("%.3g\n", vs[:20])
-	fmt.Printf("%d\n", ids[:20])
-	fmt.Printf("%x\n", ids[:20])
+	//fmt.Printf("%.3g\n", xs[:20])
+	//fmt.Printf("%.3g\n", vs[:20])
+	//fmt.Printf("%d\n", ids[:20])
+	//fmt.Printf("%x\n", ids[:20])
 	
 	rootA := float32(math.Sqrt(float64(gh.Time)))
 	for i := range xs {
