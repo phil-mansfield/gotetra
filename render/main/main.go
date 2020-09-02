@@ -13,10 +13,9 @@ import (
 	"os"
 	"io/ioutil"
 
-	//"code.google.com/p/gcfg"
 	"gopkg.in/gcfg.v1"
 
-	ren "github.com/phil-mansfield/gotetra/render"
+	"github.com/phil-mansfield/gotetra/render"
 	"github.com/phil-mansfield/gotetra/render/density"
 	"github.com/phil-mansfield/gotetra/render/geom"
 	"github.com/phil-mansfield/gotetra/render/io"
@@ -28,10 +27,12 @@ const (
 	catalogBufLen = 1<<12
 )
 
+// FileGroup contains utility files for logging and writing profiles to.
 type FileGroup struct {
 	log, prof *os.File
 }
 
+// Close closes the files inside FileGroup.
 func (fg *FileGroup) Close() {
 	if fg.log != nil {
 		err := fg.log.Close()
@@ -45,12 +46,8 @@ func (fg *FileGroup) Close() {
 	}
 }
 
-type SnapshotReader func(*io.ConvertSnapshotConfig)
 var (
 	gadgetEndianness = binary.LittleEndian
-	SnapshotReaders  = map[string]SnapshotReader {
-		"LGadget-2": lGadget2Main,
-	}
 )
 
 func main() {
@@ -65,7 +62,7 @@ func main() {
 	}
 
 	flag.IntVar(
-		&ren.NumCores, "Threads", runtime.NumCPU(),
+		&render.NumCores, "Threads", runtime.NumCPU(),
 		"Number of threads used. Default is the number of logical cores.",
 	)
 	flag.StringVar(
@@ -142,18 +139,13 @@ func main() {
 			log.Fatal("Only one of IteratedInput and IteratedOutput is set.")
 		}
 
-		reader, ok := SnapshotReaders[con.InputFormat]
-		if !ok {
-			validFormats := []string{}
-			for name := range SnapshotReaders {
-				validFormats = append(validFormats, name)
-			}
-
-			log.Fatalf("Invalid/non-existent 'InputFormat'. The only accepted" +
-				" formats are: %s.", strings.Join(validFormats, ", "))
+		switch con.InputFormat {
+		case "LGadget-2":
+			lGadget2Main(con)
+		default:
+			log.Fatalf("Only LGadget-2 snapshots can be read at this time.")
 		}
 
-		reader(con)
 	case "ExampleConfig":
 		switch exampleConfig {
 		case "ConvertSnapshot":
@@ -499,11 +491,11 @@ func renderMain(con *io.RenderConfig, bounds []string) {
 		log.Fatalf("Invalid quantity, '%s'", con.Quantity)
 	}
 	
-	boxes := make([]ren.Box, len(configBoxes))
+	boxes := make([]render.Box, len(configBoxes))
 	for i := range boxes {
 		cells := totalPixels(con, &configBoxes[i], hd.TotalWidth)
 		pts := particles(con, &configBoxes[i], hd.TotalWidth)
-		boxes[i] = ren.NewBox(
+		boxes[i] = render.NewBox(
 			hd.TotalWidth, pts, cells, q, &configBoxes[i],
 		)
 		log.Println(
@@ -513,7 +505,7 @@ func renderMain(con *io.RenderConfig, bounds []string) {
 	}
 
 	// Interpolate.
-	man, err := ren.NewManager(fileNames, boxes, true, q)
+	man, err := render.NewManager(fileNames, boxes, true, q)
 	if err != nil { log.Fatal(err.Error()) }
 
 	man.Subsample(con.SubsampleLength)

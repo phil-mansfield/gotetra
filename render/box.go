@@ -1,4 +1,4 @@
-package gotetra
+package render
 
 import (
 	"math"
