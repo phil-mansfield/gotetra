@@ -5,7 +5,6 @@ import (
 	"path"
 	"encoding/binary"
 	"strings"
-	"strconv"
 	"math"
 	"log"
 	"runtime"
@@ -47,10 +46,16 @@ func (fg *FileGroup) Close() {
 }
 
 var (
+	// All Gadget files are little endian.
 	gadgetEndianness = binary.LittleEndian
 )
 
 func main() {
+	// The main function manages input sanitization and calls the secondary
+	// main functions for each mode. The code tries to fail gracefully if the
+	// user provides incorrect input. This takes a lot more code than you would
+	// think.
+
 	var (
 		renderStr, convertSnapshot string
 		exampleConfig string
@@ -67,7 +72,8 @@ func main() {
 	)
 	flag.StringVar(
 		&renderStr, "Render", "",
-		"Configuration file for [Render] mode.",
+		"Configuration file for [Render] mode, along with at least one " + 
+			"Bounds file that specifies the render range.",
 	)
 	flag.StringVar(
 		&convertSnapshot, "ConvertSnapshot", "",
@@ -82,9 +88,13 @@ func main() {
 
 	flag.Parse()
 
+	// Figure out the mode and fail with a descriptive error is the user gave 
+	// incorrect flags.
 	modeName, err := getModeName(vars)
 	if err != nil { log.Fatal(err.Error()) }
-
+	
+	// Based on the mode being run, do some basic input sanitization and 
+	// run the econdary main function.
 	switch modeName {
 	case "Render":
 		wrap := io.DefaultRenderWrapper()
@@ -128,7 +138,6 @@ func main() {
 		if err != nil { log.Fatal(err.Error()) }
 		con := &wrap.ConvertSnapshot
 
-		// (I could do this more generally, but why bother?)
 		if !con.ValidInput() && !con.ValidIteratedInput() {
 			log.Fatal("Invalid/non-existent 'Input' value.")
 		} else if !con.ValidOutput() && !con.ValidIteratedOutput() {
@@ -165,6 +174,8 @@ func main() {
 	}
 }
 
+// getModeName returns the name of the mode and fails with a descriptive error 
+// if the user provided less or more than one mode flag.
 func getModeName(vars map[string]*string) (string, error) {
 	setNames := []string{}
 
@@ -187,41 +198,16 @@ func getModeName(vars map[string]*string) (string, error) {
 	return setNames[0], nil
 }
 
-// pasreDir reads one of Benedikt's sim directory names and returns the relevent
-// physical information.
-func parseDir(dir string) (int, int, string, error) {
-	parts := strings.Split(dir, "_")
-
-	if len(parts) != 4 {
-		return dirErr(dir)
-	} else if len(parts[1]) != 5 {
-		return dirErr(dir)
-	} else if len(parts[2]) != 5 {
-		return dirErr(dir)
-	}
-
-	l, err := strconv.Atoi(parts[1][1:5])
-	if err != nil {
-		return 0, 0, "", err
-	}
-	n, err := strconv.Atoi(parts[2][1:5])
-	if err != nil {
-		return 0, 0, "", err
-	}
-
-	return l, n, parts[3], nil
-}
-
-func dirErr(dir string) (int, int, string, error) {
-	return 0, 0, "", fmt.Errorf("Invalid source directory '%s'.", dir)
-}
-
+// lGadget2Main converts a set of LGadget-2 snapshots to gotetra files
+// based on the input config file.
 func lGadget2Main(con *io.ConvertSnapshotConfig) {
 	if !con.ValidIteratedInput() {
 		con.IterationStart = 0
 		con.IterationEnd = 0
 	}
 
+	// If the user supplied format strings for iterated output, loop over the
+	// iteration range. Otherwise, just use the supplied snapshot.
 	for i := con.IterationStart; i <= con.IterationEnd; i++ {
 		input, output := con.Input, con.Output
 		if con.ValidIteratedInput() {
@@ -237,16 +223,20 @@ func lGadget2Main(con *io.ConvertSnapshotConfig) {
 			files[i] = path.Join(input, info.Name())
 		}
 
-		
+		// Part 1: read data into memory and put it into a single in-memory
+		// grid.
 		hd, xs, vs := createGrids(files)
 
 		if err = os.MkdirAll(output, 0777); err != nil {
 			log.Fatalf(err.Error())
 		}
+
+		// Part 2: write that grid into gtet files.
 		writeGrids(output, hd, con.Cells, xs, vs)
 	}
 }
 
+// createGrids reads reads snapshot data into memory.
 func createGrids(
 	catalogs []string,
 ) (hd *io.CatalogHeader, xs, vs []geom.Vec) {
@@ -255,13 +245,7 @@ func createGrids(
 		hs[i] = *io.ReadGadgetHeader(catalogs[i], gadgetEndianness)
 	}
 
-	maxLen := int64(0)
-	for _, h := range hs {
-		if h.Count > maxLen {
-			maxLen = h.Count
-		}
-	}
-
+	// Monitor memory usage.
 	ms := &runtime.MemStats{}
 	runtime.ReadMemStats(ms)
 	log.Printf("Allocated %d MB %d B (sys: %d MB)\n",
@@ -271,9 +255,17 @@ func createGrids(
 		(hs[0].TotalCount * int64(unsafe.Sizeof(geom.Vec{}))) / 1000000,
 	)
 	runtime.GC()
+
+	// Allocate position/velocity grids and sinle-file buffers.
 	xs = make([]geom.Vec, hs[0].TotalCount)
 	vs = make([]geom.Vec, hs[0].TotalCount)
 	
+	maxLen := int64(0)
+	for _, h := range hs {
+		if h.Count > maxLen {
+			maxLen = h.Count
+		}
+	}
 	idBuf := make([]int64, maxLen)
 	xBuf := make([]geom.Vec, maxLen)
 	vBuf := make([]geom.Vec, maxLen)
@@ -281,6 +273,7 @@ func createGrids(
 	buf := io.NewParticleBuffer(xs, vs, catalogBufLen)
 
 	for i, cat := range catalogs {
+		// Read in a single snapsot file.
 		if i % 25 == 0 {
 			log.Printf("Read %d/%d catalogs", i, len(catalogs))
 		}
@@ -309,22 +302,14 @@ func createGrids(
 	return &hs[0], xs, vs
 }
 
-func round(x float64) float64 {
-	floor := math.Floor(x)
-	diff := x - floor
-	if diff > 0.5 {
-		return floor + 1
-	} else {
-		return floor
-	}
-}
-
+// intCubeRoot returns the cube root of a perfect cube.
 func intCubeRoot(x int64) int64 {
 	cr := int64(round(math.Pow(float64(x), 1.0 / 3.0)))
 	if cr * cr * cr != x { panic("You gave a non-cube to intCubeRoot") }
 	return cr
 }
 
+// writeGrids writes the in-memory grids to disk as gtet files.
 func writeGrids(outDir string, hd *io.CatalogHeader,
 	cells int, xs, vs []geom.Vec) {
 
@@ -336,6 +321,7 @@ func writeGrids(outDir string, hd *io.CatalogHeader,
 	xsSeg := make([]geom.Vec, gridWidth * gridWidth * gridWidth)
 	vsSeg := make([]geom.Vec, gridWidth * gridWidth * gridWidth)
 
+	// Write the header
 	shd := &io.SheetHeader{}
 	shd.Cosmo = hd.Cosmo
 	shd.CountWidth = hd.CountWidth
@@ -348,6 +334,7 @@ func writeGrids(outDir string, hd *io.CatalogHeader,
 	shd.GridCount = int64(shd.GridWidth * shd.GridWidth * shd.GridWidth)
 	shd.Cells = int64(cells)
 
+	// Write the data. (x, y, z) indexes over the files.
 	for z := int64(0); z < shd.Cells; z++ {
 		for y := int64(0); y < shd.Cells; y++ {
 			for x := int64(0); x < shd.Cells; x++ {
@@ -374,19 +361,24 @@ func writeGrids(outDir string, hd *io.CatalogHeader,
 	}
 }
 
-// Note, this only works for the collections of points where each point is
-// relatively close to the existing bounding box.
+// boundingBox is the smallest bounding box which contains a group of particles
+// in a periodic simulation box. The algorithm I used here is not perfect, but
+// avoids needing to sort the particles. It is only garuanteed to work if the
+// particles span less than half the width of the box.
 type boundingBox struct {
 	Width float64
 	Center geom.Vec
 	ToMax, ToMin, ToPt geom.Vec
 }
 
+// Init greates a boundingBox with an initial center, pt, within a box of a
+// given width.
 func (box *boundingBox) Init(pt *geom.Vec, width float64) {
 	box.Width = width
 	box.Center = *pt
 }
 
+// Add inserts a point into the boundingBox.
 func (box *boundingBox) Add(pt *geom.Vec) {
 	pt.SubAt(&box.Center, box.Width, &box.ToPt)
 
@@ -396,7 +388,8 @@ func (box *boundingBox) Add(pt *geom.Vec) {
 		)
 	}
 
-	//ToPt is now a buffer for the neccesary shift in the center
+	//ToPt is now a buffer for the neccesary shift in the center.
+	// I don't really understand how this works or why this is so complicated.
 	box.ToMax.AddAt(&box.ToMin, &box.ToPt)
 	box.ToPt.ScaleSelf(0.5)
 	box.Center.AddSelf(&box.ToPt)
@@ -404,7 +397,7 @@ func (box *boundingBox) Add(pt *geom.Vec) {
     box.ToMin.SubSelf(&box.ToPt, box.Width)
 }
 
-
+// minMax returns the minimum and maximum of (min, max, x), given the min < max.
 func minMax(min, max, x float32) (outMin, outMax float32) {
 	if x > max {
 		return min, x
@@ -415,6 +408,9 @@ func minMax(min, max, x float32) (outMin, outMax float32) {
 	}
 }
 
+// copyToSegment copies the x and v values in xs and vs into Lagrangian sheet
+// segments, xsSeg and vsSeg. Information about the sheet is given by
+// SheetHeader.
 func copyToSegment(shd *io.SheetHeader, xs, vs, xsSeg, vsSeg []geom.Vec) {
 	xStart := shd.SegmentWidth * (shd.Idx % shd.Cells)
 	yStart := shd.SegmentWidth * ((shd.Idx / shd.Cells) % shd.Cells)
@@ -425,6 +421,7 @@ func copyToSegment(shd *io.SheetHeader, xs, vs, xsSeg, vsSeg []geom.Vec) {
 	box := &boundingBox{}
 	box.Init(&xs[xStart + N * yStart + N2 * zStart], shd.TotalWidth)
 
+	// smallidx is the index within the segment.
 	smallIdx := 0
 	vMin := vs[0]
 	vMax := vs[0]
@@ -439,11 +436,14 @@ func copyToSegment(shd *io.SheetHeader, xs, vs, xsSeg, vsSeg []geom.Vec) {
 				xIdx := x
 				if xIdx == shd.CountWidth { xIdx = 0 }
 
+				// largeIdx is the index within the overall sheet.
 				largeIdx := xIdx + yIdx * N + zIdx * N2
 				
+				// Copy.
 				xsSeg[smallIdx] = xs[largeIdx]
 				vsSeg[smallIdx] = vs[largeIdx]
 
+				// Update x and v bounding boxes.
 				box.Add(&xsSeg[smallIdx])
 				for dim, v := range vs[largeIdx] {
 					if v < vMin[dim] {
@@ -466,31 +466,33 @@ func copyToSegment(shd *io.SheetHeader, xs, vs, xsSeg, vsSeg []geom.Vec) {
 	for dim := range vMax { shd.VelocityWidth[dim] = vMax[dim] - vMin[dim] }
 }
 
+// validCellNum returns true if cells is a power of two.
 func validCellNum(cells int) bool {
 	for cells > 1 { cells /= 2 }
 	return cells == 1
 }
 
+// renderMain is the main function for rendering density fields.
 func renderMain(con *io.RenderConfig, bounds []string) {
+	// Get the I/O essentials.
 	fileNames, hd, fg := densitySetupIO(con)
 	defer fg.Close()
 
 	// Generate bounds files.
-
 	configBoxes := make([]io.BoxConfig, 0)
-
 	for _, boundsFile := range bounds {
 		boxes, err := io.ReadBoundsConfig(boundsFile, hd.TotalWidth)
 		if err != nil { log.Fatal(err.Error()) }
 		configBoxes = append(configBoxes, boxes...)
 	}
 
-	
+	// Figure out which quantity we're rendering.
 	q, ok := density.QuantityFromString(con.Quantity)
 	if !ok {
 		log.Fatalf("Invalid quantity, '%s'", con.Quantity)
 	}
 	
+	// Figure out cell sizes, pixel sizes, and particle counts.
 	boxes := make([]render.Box, len(configBoxes))
 	for i := range boxes {
 		cells := totalPixels(con, &configBoxes[i], hd.TotalWidth)
@@ -507,12 +509,10 @@ func renderMain(con *io.RenderConfig, bounds []string) {
 	// Interpolate.
 	man, err := render.NewManager(fileNames, boxes, true, q)
 	if err != nil { log.Fatal(err.Error()) }
-
 	man.Subsample(con.SubsampleLength)
-	man.RenderDensity()
+	man.RenderDensity() // This actually means "render quantity"
 
 	// Write output.
-
 	for i, cBox := range configBoxes {
 		box := boxes[i]
 
@@ -537,17 +537,21 @@ func renderMain(con *io.RenderConfig, bounds []string) {
 			cBox.ProjectionAxis,
 		)
 
-		// TODO: don't keep creating new float32 buffers, man.
 		io.WriteBuffer(box.Vals(), cos, renderInfo, loc, f)
 	}
 }
 
+// toFloat32 converts a float64 array to a float32 array.
 func toFloat32(xs []float64) []float32 {
 	ys := make([]float32, len(xs))
 	for i := range xs { ys[i] = float32(xs[i]) }
 	return ys
 }
 
+// densitySetupIO sets up the I/O for a routine which reads gotetra sheet files.
+// It gets the relevant filenames, a header for the sheet (i.e. the header of
+// an arbitrary file to be read), and a FileGroup struct which handles logging
+// and profiling. The filenames have not been filtered by location yet.
 func densitySetupIO(con *io.RenderConfig) (
 	files []string,
 	hd *io.SheetHeader,
@@ -557,14 +561,14 @@ func densitySetupIO(con *io.RenderConfig) (
 	fg = new(FileGroup)
 	hd = new(io.SheetHeader)
 
+	// Set up log file.
 	if con.ValidLogFile() {
 		fg.log, err = os.Create(con.LogFile)
 		if err != nil { log.Fatal(err.Error()) }
 		log.SetOutput(fg.log)
 	}
 
-	log.Println("Running BoundedRender main.")
-
+	// Set up profile file.
 	if con.ValidProfileFile() {
 		fg.prof, err = os.Create(con.ProfileFile)
 		if err != nil { log.Fatal(err.Error()) }
@@ -572,16 +576,28 @@ func densitySetupIO(con *io.RenderConfig) (
 		if err != nil { log.Fatal(err.Error()) }
 	}
 
+	// Get file names.
 	infos, err := ioutil.ReadDir(con.Input)
 	if err != nil { log.Fatal(err.Error()) }
-
 	files = make([]string, len(infos))
 	for i := range infos { files[i] = path.Join(con.Input, infos[i].Name()) }
+
 	io.ReadSheetHeaderAt(files[0], hd)
 
 	return files, hd, fg
 }
 
+// round rounds x to the nearest integer
+func round(x float64) int {
+	floor, ceil := math.Floor(x), math.Ceil(x)
+	if ceil - x > x - floor {
+		return int(ceil)
+	} else {
+		return int(floor)
+	}
+}
+
+// totalPixels counts the number of pixels implied by the 
 func totalPixels(
 	con *io.RenderConfig, box *io.BoxConfig, boxWidth float64,
 ) int {
@@ -594,7 +610,7 @@ func totalPixels(
 			) 
 		}
 
-		return int(boxWidth / w * float64(con.ImagePixels))
+		return round(boxWidth / w * float64(con.ImagePixels))
 	}
 	return con.TotalPixels
 }
