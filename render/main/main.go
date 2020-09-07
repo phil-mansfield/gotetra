@@ -615,7 +615,7 @@ func totalPixels(
 	return con.TotalPixels
 }
 
-
+// maxWidth returns the dimension of box width the largest width.
 func maxWidth(box *io.BoxConfig) float64 {
 	var max float64
 	if box.XWidth > box.YWidth {
@@ -631,6 +631,8 @@ func maxWidth(box *io.BoxConfig) float64 {
 	}
 }
 
+// particles computes the number of particles (Monte Carlo samples) which will
+// be used per tetrahedron.
 func particles(con *io.RenderConfig, box *io.BoxConfig, boxWidth float64) int {
 
 	if con.AutoParticles {
