@@ -61,24 +61,11 @@ func NewManager(
 	man := new(Manager)
 	man.log = logFlag
 
-	gen := rand.NewTimeSeed(rand.Tausworthe)
-	man.unitBufs = make([][]geom.Vec, UnitBufCount)
-
 	maxPoints := 0
 	for _, b := range boxes {
 		if b.Points() > maxPoints { maxPoints = b.Points() }
 	}
-
-	for bi := range man.unitBufs {
-		man.unitBufs[bi] = make([]geom.Vec, maxPoints)
-		buf := man.unitBufs[bi]
-		for j := range buf {
-			for k := 0; k < 3; k++ {
-				buf[j][k] = float32(gen.Uniform(0, 1))
-			}
-		}
-		geom.DistributeUnit(buf)
-	}
+	man.unitBufs = unitBufs(UnitBufCount, maxPoints)
 	
 	man.skip = 1
 
@@ -145,7 +132,7 @@ func NewManager(
 	}
 
 	man.q = q
-	// Fuck. This feature is way more trouble than it's worth.
+	// Ugh. This feature is way more trouble than it's worth.
 	for i := range man.workspaces {
 		man.workspaces[i].buf = density.NewBuffer(
 			q, maxBufSize, maxPoints, man.renderers[0].g,
@@ -161,6 +148,26 @@ func NewManager(
 	}
 
 	return man, nil
+}
+
+// unitBufs generates nUnit collections of vectors distributed uniformly over
+// a unit cube. Each cube has pts points inside it.
+func unitBufs(nUnit, pts int) [][]geom.Vec {
+	gen := rand.NewTimeSeed(rand.Tausworthe)
+	unitBufs := make([][]geom.Vec, nUnit)
+
+	for bi := range unitBufs {
+		unitBufs[bi] = make([]geom.Vec, pts)
+		buf := unitBufs[bi]
+		for j := range buf {
+			for k := 0; k < 3; k++ {
+				buf[j][k] = float32(gen.Uniform(0, 1))
+			}
+		}
+		geom.DistributeUnit(buf)
+	}
+
+	return unitBufs
 }
 
 func (r *renderer) requiresFile(file string) bool {

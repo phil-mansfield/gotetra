@@ -22,13 +22,8 @@ const (
 	DefaultEndiannessFlag int32 = -1
 )
 
-// This is a terrible idea and shouldn't exist.
-type Particle struct {
-	Xs, Vs geom.Vec
-	Id int64
-}
-
-// CatalogHeader describes meta-information about the current catalog.
+// CatalogHeader describes meta-information about the current catalog. This
+// serves as a standardized version of the different header formats.
 type CatalogHeader struct {
 	Cosmo CosmologyHeader
 
@@ -154,9 +149,6 @@ func ReadGadgetHeader(path string, order binary.ByteOrder) *CatalogHeader {
 // it to the given particle buffer, ps. floatBuf and intBuf are used internally.
 // The length of all three buffers must be equal to  the number of particles in
 // the catalog.
-//
-// This call signature, and espeically the Particle type are all a consequence
-// of soem shockingly poor early design decisions.
 func ReadGadgetParticlesAt(
 	path string,
 	order binary.ByteOrder,
@@ -202,12 +194,8 @@ func ReadGadgetParticlesAt(
 	_ = readInt32(f, order)
 	readInt64AsByte(f, order, ids)
 	//_ = readInt32(f, order)
-
-	//fmt.Printf("%.3g\n", xs[:20])
-	//fmt.Printf("%.3g\n", vs[:20])
-	//fmt.Printf("%d\n", ids[:20])
-	//fmt.Printf("%x\n", ids[:20])
 	
+	// Convert gadget velocities out of code units.
 	rootA := float32(math.Sqrt(float64(gh.Time)))
 	for i := range xs {
 		for j := 0; j < 3; j++ {
@@ -245,6 +233,7 @@ func endianness(flag int32) binary.ByteOrder {
 	}
 }
 
+// readSheetHeaderAt reads the header of a sheet file into the buffer hdBuf.
 func readSheetHeaderAt(
 	file string, hdBuf *SheetHeader,
 ) (*os.File, binary.ByteOrder, error) {
@@ -287,7 +276,7 @@ func ReadSheetPositionsAt(file string, xsBuf []geom.Vec) error {
 	if err != nil { return nil }
 
 	if h.GridCount != int64(len(xsBuf)) {
-		return fmt.Errorf("Position buffer has length %d, but file %s has %d " + 
+		return fmt.Errorf("Position buffer has length %d, but file %s has %d "+ 
 			"vectors.", len(xsBuf), file, h.GridCount)
 	}
 
@@ -355,6 +344,8 @@ func WriteSheet(file string, h *SheetHeader, xs, vs []geom.Vec) {
 	}
 }
 
+// CellBounds returns the bounds  of a given sheet aligned to the boundaries of
+// the voxels with a given granularity.
 func (hd *SheetHeader) CellBounds(cells int) *geom.CellBounds {
 	cb := &geom.CellBounds{}
 	cellWidth := hd.TotalWidth / float64(cells)
@@ -373,6 +364,8 @@ func (hd *SheetHeader) CellBounds(cells int) *geom.CellBounds {
 	return cb
 }
 
+// readVecAsByte reads vectors from rd without needing intermediary interface
+// allocations.
 func readVecAsByte(rd io.Reader, end binary.ByteOrder, buf []geom.Vec) error {
 	bufLen := len(buf)
 
@@ -399,6 +392,8 @@ func readVecAsByte(rd io.Reader, end binary.ByteOrder, buf []geom.Vec) error {
 	return nil
 }
 
+// writeVecAsByte writes an array of vectors to wr without needing to make
+// intermediate interface allocations.
 func writeVecAsByte(wr io.Writer, end binary.ByteOrder, buf []geom.Vec) error {
 	bufLen := len(buf)
 
@@ -426,6 +421,7 @@ func writeVecAsByte(wr io.Writer, end binary.ByteOrder, buf []geom.Vec) error {
 	return nil
 }
 
+// readInt64AsByte reads int64 values from rd.
 func readInt64AsByte(rd io.Reader, end binary.ByteOrder, buf []int64) error {
 	bufLen := len(buf)
 
@@ -452,6 +448,7 @@ func readInt64AsByte(rd io.Reader, end binary.ByteOrder, buf []int64) error {
 	return nil
 }
 
+// isSysOrder returns true if end is the system endianness order.
 func isSysOrder(end binary.ByteOrder) bool {
 	buf32 := []int32{1}
 

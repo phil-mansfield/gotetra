@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	//"code.google.com/p/gcfg"
 	"gopkg.in/gcfg.v1"
-	// I'm not sure if I hate this dependency or not.
 	"github.com/phil-mansfield/gotetra/render/density"
 )
 
@@ -124,6 +122,40 @@ Z = 80.7
 
 Radius = 2.17
 RadiusMultiplier = 3 # optional`
+	ExampleTetraHist = `[TetraHist]
+
+#######################
+# Required Parameters #
+#######################
+
+# The property which a distribution is being measured for. Supported properties:
+# Density: The mass-weighted density.
+Quantity = Density
+
+HistMin = 1e4
+HistMax = 1e-2
+HistBins = 200
+
+# Must be "Log" or "Linear"
+HistScale = Log
+
+Particles = 50
+
+Input = path/to/grid.gtet
+Output = path/to/outut/dir/
+
+#######################
+# Optional Parameters #
+#######################
+
+# SubsampleLength = 1
+
+# Will result in files named pre_*foo*_app.txt:
+# PrependName = pre_
+# AppendName  = _app
+
+# ProfileFile = prof.out
+# LogFile = log.out`
 )
 
 type SharedConfig struct {
@@ -405,3 +437,52 @@ func ReadBoundsConfig(fname string, totalWidth float64) ([]BoxConfig, error) {
 
 	return boxes, nil
 }
+
+type TetraHistConfig struct {
+	SharedConfig
+
+	Quantity string
+
+	HistMin, HistMax float64
+	HistBins int
+	HistScale string
+
+	Particles int
+	
+	SubsampleLength int
+
+	AppendName, PrependName string
+}
+
+func DefaultTetraHistConfig() *TetraHistConfig {
+	return &TetraHistConfig{ SubsampleLength: 1 }
+}
+
+func (con *TetraHistConfig) QuantityValid() bool {
+	switch con.Quantity {
+	case "Density":
+		return true
+	}
+	return false
+}
+
+func (con *TetraHistConfig) HistMinValid() bool {
+	return (con.HistScale == "Linear" ||
+		(con.HistScale == "Log" && con.HistMin > 0)) && 
+		con.HistMin < con.HistMax
+}
+
+func (con *TetraHistConfig) HistMaxValid() bool {
+	return (con.HistScale == "Linear" ||
+		(con.HistScale == "Log" && con.HistMax > 0)) &&
+		con.HistMin < con.HistMax
+}
+
+func (con *TetraHistConfig) HistBinsValid() bool {
+	return con.HistBins > 0
+}
+
+func (con *TetraHistConfig) HistScaleValid() bool {
+	return con.HistScale == "Linear" || con.HistScale == "Log"
+}
+

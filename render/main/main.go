@@ -510,7 +510,8 @@ func renderMain(con *io.RenderConfig, bounds []string) {
 	man, err := render.NewManager(fileNames, boxes, true, q)
 	if err != nil { log.Fatal(err.Error()) }
 	man.Subsample(con.SubsampleLength)
-	man.RenderDensity() // This actually means "render quantity"
+	err = man.RenderDensity() // This actually means "render quantity"
+	if err != nil { log.Fatalf(err.Error()) }
 
 	// Write output.
 	for i, cBox := range configBoxes {
@@ -586,6 +587,45 @@ func densitySetupIO(con *io.RenderConfig) (
 
 	return files, hd, fg
 }
+
+
+// tetraHisSetupIO is similar to densitySetupIO, except for the TetraHist config
+// file.
+func tetraHistSetupIO(con *io.TetraHistConfig) (
+	files []string,
+	hd *io.SheetHeader,
+	fg *FileGroup,
+) {
+	var err error
+	fg = new(FileGroup)
+	hd = new(io.SheetHeader)
+
+	// Set up log file.
+	if con.ValidLogFile() {
+		fg.log, err = os.Create(con.LogFile)
+		if err != nil { log.Fatal(err.Error()) }
+		log.SetOutput(fg.log)
+	}
+
+	// Set up profile file.
+	if con.ValidProfileFile() {
+		fg.prof, err = os.Create(con.ProfileFile)
+		if err != nil { log.Fatal(err.Error()) }
+		err = pprof.StartCPUProfile(fg.prof)
+		if err != nil { log.Fatal(err.Error()) }
+	}
+
+	// Get file names.
+	infos, err := ioutil.ReadDir(con.Input)
+	if err != nil { log.Fatal(err.Error()) }
+	files = make([]string, len(infos))
+	for i := range infos { files[i] = path.Join(con.Input, infos[i].Name()) }
+
+	io.ReadSheetHeaderAt(files[0], hd)
+
+	return files, hd, fg
+}
+
 
 // round rounds x to the nearest integer
 func round(x float64) int {
@@ -666,4 +706,63 @@ func particles(con *io.RenderConfig, box *io.BoxConfig, boxWidth float64) int {
 	}
 
 	return con.Particles
+}
+
+func tetraHistMain(con *io.TetraHistConfig, bounds []string) {
+	// Get the I/O essentials.
+	fileNames, hd, fg := tetraHistSetupIO(con)
+	defer fg.Close()
+
+	// Generate bounds files.
+	configBoxes := make([]io.BoxConfig, 0)
+	for _, boundsFile := range bounds {
+		boxes, err := io.ReadBoundsConfig(boundsFile, hd.TotalWidth)
+		if err != nil { log.Fatal(err.Error()) }
+		configBoxes = append(configBoxes, boxes...)
+	}
+	
+	// Figure out cell sizes, pixel sizes, and particle counts.
+	boxes := make([]render.HistBox, len(configBoxes))
+	for i := range boxes {
+		pts := con.Particles
+		boxes[i] = render.NewHistBox(&configBoxes[i], con.HistBins)
+		log.Println(
+			"Computing statistics in box:", boxes[i].Origin, boxes[i].Span,
+			pts, "particles per tetrahedron",
+		)
+	}
+
+	// Interpolate.
+	man, err := render.NewHistManager(
+		fileNames, boxes, con.Particles, con.Quantity, con.Input,
+	)
+	if err != nil { log.Fatal(err.Error()) }
+	man.Subsample(con.SubsampleLength)
+	info := &render.HistInfo{
+		con.HistMin, con.HistMax, con.HistBins, con.HistScale,
+	}
+	err = man.Hist(info)
+	if err != nil { log.Fatalf(err.Error()) }
+
+	// Write output.
+	for i, cBox := range configBoxes {
+		box := boxes[i]
+
+		out := path.Join(con.Output, fmt.Sprintf("%s%s%s.txt",
+			con.PrependName, cBox.Name, con.AppendName))
+
+		log.Printf("Writing to %s", out)
+		f, err := os.Create(out)
+		defer f.Close()
+		if err != nil { log.Fatalf("Could not create %s.", out) }
+		
+		fmt.Fprintf(f, "# %s histogram ranging from %g to %g " +
+			"# with %d bins (%s scaled).\n", con.Quantity, con.HistMin,
+			con.HistMax, con.HistBins, strings.ToLower(con.HistScale))
+		fmt.Fprintf(f, "# Column 0 - bin centers.\n")
+		fmt.Fprintf(f, "# Column 1 - bin counts.\n")
+		for j := range box.Counts {
+			fmt.Fprintf(f, "%8.4g %d\n", box.Centers[j], box.Counts[j])
+		}
+	}	
 }
