@@ -161,12 +161,17 @@ func main() {
 			fmt.Println(io.ExampleConvertSnapshotFile)
 		case "Render":
 			fmt.Println(io.ExampleRenderFile)
-		case "Bounds":
-			fmt.Println(io.ExampleBoundsFile)
+		case "TetraHist":
+			fmt.Println(io.ExampleTetraHistFile)
+		case "Box":
+			fmt.Println(io.ExampleBoxFile)
+		case "Ball":
+			fmt.Println(io.ExampleBallFile)
 		default:
 			log.Fatal(
 				"Unrecognized 'ExampleConfig' argument. Only recognized " +
-					"arguments are 'Render', 'Bounds', and 'ConvertSnapshot'.",
+					"arguments are 'Render', 'Box', 'Ball', 'TetraHist', " + 
+					"and 'ConvertSnapshot'.",
 			)
 		}
 	default:
