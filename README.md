@@ -23,8 +23,11 @@ that you don't have root access to, follow the Linux instructions and replace
 4. Add a line to your `.profile`/`.bashrc`/`.bash_profile` which tells the Go compiler where
 this code will be. If you your code directory is `~/code/go/`, write
 `export GOPATH=$HOME/code/go`.
-5. Download this package into right place by running
-`$ go get https://github.com/phil-mansfield/gotetra`.
+5. Download this package and dependencies into right directories by running
+```
+$ go get github.com/phil-mansfield/gotetra
+$ go get gopkg.in/gcfg.v1
+```
 6. Go to `$GOPATH/src/github.com/phil-mansfield/gotetra/render/main` and run the command
 `go build main.go`. This will create the main gotetra binary.
 7. Test this binary was created correctly by running `./main -help`.
