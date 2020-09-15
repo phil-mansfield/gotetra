@@ -16,57 +16,105 @@ const (
 # Required Parameters #
 #######################
 
+# Directory containing the input files.
 Input = path/to/input/dir
+# Directory which output files will be written to.
 Output = path/to/output/dir
 
+# The format of the input files. LGadget-2 is currently the only format
+# supported. I think vanilla Gadget-2 files should also work here, but keep
+# an eye out for any bugs. Support for other file formats will come in the
+# future.
 InputFormat = LGadget-2
 
-Cells = 8 # It's unlikely that you will want to change this.
+# Specifies the geometry of the output files. It's unlikely that you will want
+# to change this.
+Cells = 8 
 
 #######################
 # Optional Parameters #
 #######################
 
-# ProfileFile = pprof.out
+# Output files which are useful for profiling and debugging. Generally, there
+# isn't a reason to use these unless something goes wrong.
+# ProfileFile = prof.out
 # LogFile = log.out
 
+# In some cases, you might want to convert several snapshots at once (e.g.
+# sims/output/snapdir001, sims/output/snapdir002, etc.) This can be done with
+# IteratedInput and IteratedOutput, which are printf format strings that
+# describe your output format (e.g. sims/output/snapdir%03d). You must create
+# all the directories which IteratedOutput will use before running, which is
+# easiest to do with a Python loop over os.system("mkdir ...") calls.
 # IteratedInput = path/to/iterated/input_with_single_%d_format
 # IteratedOutput = path/to/iterated/input_with_single_%d_format
 
+# (Inclusive) range for this iteration. If IterationEnd isn't set, folders will
+# be iterated through until an invalid one is found.
 # IterationStart = 0 
-# IterationEnd = 100
-# Inclusive. If IterationEnd isn't set, folders will be iterated through until
-# an invalid one is found.`
+# IterationEnd = 100`
 	ExampleRenderFile = `[Render]
+
+# Render specified 
 
 ######################
 # RequiredParameters #
 ######################
 
 # Quantity can be set to one of:
-# [ Density | Velocity | DensityGradient | VelocityCurl | VelocityDivergence ].
+# [ Density ]
+# In the future, 
+# [ Velocity | DensityGradient | VelocityCurl | VelocityDivergence ]
+# will be supported.
 Quantity = Density
 
+# Directory containing the input files.
 Input  = path/to/input/dir
+# Directory where the output .gtet files will be written to.
 Output = path/to/output/dir
 
-# Default way of specifying pixel size: the number of pixels which would
-# be required to render the entire box. All rendered boxes will have the same
-# pixel size.
+# Default way of specifying pixel size. TotalPixels gives the number of pixels
+# across one side of the entire simulation box. This is useful if you are
+# rendering many images with various sizes and want a fixed pixel size. You
+# do not need to specify this if you use ImagePixels instead.
 TotalPixels = 500
 
-# Default way of specifying particle count: the number of particles per
-# tetrahedron.
+# Alternative way of specifying pixel size: the number of pixels required to
+# render the longest axis of eaxh boxing box. This is a more natural way to
+# specify pixl size if you are only rendering a single image at a time.
+# ImagePixels = 100
+
+# Default way of specifying redering resolution. Rendering is performed by
+# populating tetrahedra with points, and this variable to controls the number
+# of points used. You can think of this as "increasing" the number of particles
+# in the simulation by a factor of 6*Particles.
+# Expect to rerun the rendering a couple times to get this number right.
 Particles = 25
 
 #####################
 # OptionalParamters #
 #####################
 
-# Alternative way of specifying pixel size: the number of pixels required to
-# render the longest axis of each box. All rendered boxes will, in general,
-# not have the same number of pixels.
-# ImagePixels = 100
+# SubsampleLength allows you to render the image/volume using a subselection of
+# the particles in the snapshot files. This is useful for resolution tests and
+# some science applications. SubsampleLength must be a power of 2.
+# SubsampleLength = 2
+
+# Rendering output files are named after the bounding box. For example, a
+# bounding box with the header [Box "halo_1"] will be written to halo_1.gtet.
+# You can add leading and ending text to these files names using the following
+# two variables (e.g. pre_halo_1_app.gtet). This is useful if you want to
+# annotate file names with rendering information, like pixel size or particle
+# count.
+# PrependName = pre_
+# AppendName  = _app
+
+# Output files which are useful for profiling and debugging. Generally, there
+# isn't a reason to use these unless something goes wrong.
+# ProfileFile = prof.out
+# LogFile = log.out
+
+# Use these next two options with caution: I need to do much more testing.
 
 # Alternative way of specifying the particle count. gotetra will (attempt to)
 # automatically calculate how many particles are needed so that all projections
@@ -77,28 +125,19 @@ Particles = 25
 # Alternative way of specifying the particle count. Identical to specifying
 # AutoParticles, except that projections with a depth below ProjectionDepth
 # may contain artifacts. 
-# ProjectionDepth = 3
-
-# ProfileFile = prof.out
-# LogFile = log.out
-
-# SubsampleLength = 2
-
-# Will result in files named pre_*foo*_app.gtet:
-# PrependName = pre_
-# AppendName  = _app`
-	ExampleBoundsFile = `[Box "my_z_slice"]
-# A thin slice containing a big halo for the L0125 box.
-
-#######################
-# Required Parameters #
-#######################
+# ProjectionDepth = 3`
+	ExampleBoxFile = `[Box "my_z_slice"]
+# This file creates a bounding box which specified a volume or image that will
+# be rendered. It is paired with a Render config file. If ProjectionAxis is set,
+# an image will be rendered. If ProjectionAxis is not set, a 3D volume will
+# be rendered.
 
 # Location of lowermost corner:
 X = 107.9
 Y = 79
 Z = 78.5
 
+# Width of the box in each dimension:
 XWidth = 42.14
 YWidth = 42.14
 ZWidth = 4.21
@@ -107,22 +146,30 @@ ZWidth = 4.21
 # Optional Parameters #
 #######################
 
-# Given axis must be one of [ X | Y | Z ].
-# ProjectionAxis = Z
-
-[Ball "my_halo"]
-Quantity = VelocityCurl
-
-# A bounding box around a sphere whose radius is three times larger than
-# the halo's R_vir.
+# Projection axis must be one of [ X | Y | Z ].
+# ProjectionAxis = Z`
+	ExampleBallFile = `[Ball "my_halo"]
+# This file creates a bounding box defined by a sphere with a given radius.
+# This is an alternative to using Box to specify rendering regions and is
+# convenient when you're looking at individual haloes.
 
 X = 4.602
 Y = 100.7
 Z = 80.7
 
 Radius = 2.17
-RadiusMultiplier = 3 # optional`
-	ExampleTetraHist = `[TetraHist]
+
+#######################
+# Optional Parameters #
+#######################
+
+# Creates an image instead of a volume rendering when set. It must be one of
+# [ X | Y | Z ].
+# ProjectionAxis = Z
+
+# Multiplies Radius by a constant.
+# RadiusMultiplier = 3`
+	ExampleTetraHistFile = `[TetraHist]
 
 #######################
 # Required Parameters #
