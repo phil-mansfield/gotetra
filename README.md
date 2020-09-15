@@ -2,8 +2,7 @@
 
 `gotetra` is a Go-based package which uses phase-space tesselation techniques
 to extract information about cosmological N-body simulations. The key
-applications of this code are the measurement of splahsback shells around halos
-and the generation of high resolution images of density fields.
+application this code is the generation of high resolution images of density fields.
 
 This README describes how to install and use gotetra. Programmers interested in
 modifying or using the source code can find documentation at https://godoc.org/github.com/phil-mansfield/gotetra.
