@@ -21,7 +21,7 @@ that you don't have root access to, follow the Linux instructions and replace
 `/usr/local` with some directory that you do have access to (I use `~/local/go/`).
 2. Test that the Go compiler works by running `$ go version`.
 3. Create a directory that will host all your Go code. (I use `~/code/go/`).
-4. Add a line to your `.profile` or `.bashrc` which tells the Go compiler where
+4. Add a line to your `.profile`/`.bashrc`/`.bash_profile` which tells the Go compiler where
 this code will be. If you your code directory is `~/code/go/`, write
 `export GOPATH=$HOME/code/go`.
 5. Download this package into right place by running
