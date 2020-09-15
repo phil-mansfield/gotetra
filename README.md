@@ -75,10 +75,16 @@ Python code for interfacing with `gotetra` output is provided in the `python/`
 directory. `gotetra.py` is both a python library and a command line utility.
 Running it as `$ python gotetra.py my_gotetra_file.gtet` will print out
 information about the file, and importing it will give you access to functions
-which can read in `gotetra` headers and arrays.
+which can read in `gotetra` headers and arrays. `gotetra.py` describes the functions
+and data structures in more depth, but `read_header()` returns bit a bunch of 
+information about the rendering and `read_grid()` returns the grid corresponding to the
+image or volume being rendered.
 
-The documentation for this is not fantastic, and I plan to make it better later.
+`example.py` contains some example Python code that uses `gotetra.py`.
 
+`render.py` is an incomprehensible blob of Python code that I use to generate images from
+`.gtet` files. I don't plan to document or maintain this, but you are free to use it
+if you'd like.
 
 ## Version
 
