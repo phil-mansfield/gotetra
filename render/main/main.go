@@ -146,6 +146,8 @@ func main() {
 			log.Fatal("Invalid/non-existent 'Cells' value.")
 		} else if con.ValidIteratedInput() != con.ValidIteratedOutput() {
 			log.Fatal("Only one of IteratedInput and IteratedOutput is set.")
+		} else if !con.ValidGadget2IDSize() {
+			log.Fatal("Gadget2IDSize must be set to 32 or 64.")
 		}
 
 		switch con.InputFormat {
@@ -230,7 +232,7 @@ func lGadget2Main(con *io.ConvertSnapshotConfig) {
 
 		// Part 1: read data into memory and put it into a single in-memory
 		// grid.
-		hd, xs, vs := createGrids(files)
+		hd, xs, vs := createGrids(files, con.Gadget2IDSize)
 
 		if err = os.MkdirAll(output, 0777); err != nil {
 			log.Fatalf(err.Error())
@@ -243,7 +245,7 @@ func lGadget2Main(con *io.ConvertSnapshotConfig) {
 
 // createGrids reads reads snapshot data into memory.
 func createGrids(
-	catalogs []string,
+	catalogs []string, idSize int,
 ) (hd *io.CatalogHeader, xs, vs []geom.Vec) {
 	hs := make([]io.CatalogHeader, len(catalogs))
 	for i := range hs {
@@ -290,7 +292,7 @@ func createGrids(
 		vBuf = vBuf[0: N]
 
 		io.ReadGadgetParticlesAt(
-			cat, gadgetEndianness, xBuf, vBuf, idBuf,
+			cat, gadgetEndianness, xBuf, vBuf, idBuf, idSize,
 		)
 
 		runtime.GC()
