@@ -670,7 +670,7 @@ func tetraHistSetupIO(con *io.TetraHistConfig) (
 // round rounds x to the nearest integer
 func round(x float64) int {
 	floor, ceil := math.Floor(x), math.Ceil(x)
-	if ceil - x > x - floor {
+	if ceil - x < x - floor {
 		return int(ceil)
 	} else {
 		return int(floor)
