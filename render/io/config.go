@@ -35,6 +35,10 @@ Cells = 8
 # Optional Parameters #
 #######################
 
+# Gadget2IDSize specifies the size in bits of the IDs used in your Gadget-2
+# files. Default is 64.
+# Gadget2IDSize = 64
+
 # Output files which are useful for profiling and debugging. Generally, there
 # isn't a reason to use these unless something goes wrong.
 # ProfileFile = prof.out
@@ -230,6 +234,7 @@ type ConvertSnapshotConfig struct {
 	SharedConfig
 	// Required
 	Cells int
+	Gadget2IDSize int
 	InputFormat string
 
 	// Optional
@@ -241,11 +246,16 @@ func DefaultConvertSnapshotWrapper() *ConvertSnapshotWrapper {
 	con := ConvertSnapshotConfig{}
 	con.IterationStart = 0
 	con.IterationEnd = -1
+	con.Gadget2IDSize = 64
 	return &ConvertSnapshotWrapper{con}
 }
 
+
 func (con *ConvertSnapshotConfig) ValidCells() bool {
 	return con.Cells > 0
+}
+func (con *ConvertSnapshotConfig) ValidGadget2IDSize() bool {
+	return con.Gadget2IDSize == 64 || con.Gadget2IDSize == 32
 }
 func (con *ConvertSnapshotConfig) ValidInputFormat() bool {
 	return con.InputFormat != ""

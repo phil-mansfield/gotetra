@@ -8,7 +8,8 @@ import (
 	"log"
 	"os"
 	"reflect"
-
+	"runtime"
+	
 	"unsafe"
 
 	"github.com/phil-mansfield/gotetra/render/geom"
@@ -154,6 +155,7 @@ func ReadGadgetParticlesAt(
 	order binary.ByteOrder,
 	xs, vs []geom.Vec,
 	ids []int64,
+	idSize int,
 ) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -192,7 +194,15 @@ func ReadGadgetParticlesAt(
 	readVecAsByte(f, order, vs)
 	_ = readInt32(f, order)
 	_ = readInt32(f, order)
-	readInt64AsByte(f, order, ids)
+	if idSize == 64 {
+		readInt64AsByte(f, order, ids)
+	} else if idSize == 32 {
+		runtime.GC()
+		readInt32AsByte(f, order, ids)
+		runtime.GC()
+	} else {
+		panic("ID size other than 32 bits or 64 bits given.")
+	}
 	//_ = readInt32(f, order)
 	
 	// Convert gadget velocities out of code units.
@@ -209,7 +219,7 @@ func ReadGadgetParticlesAt(
 // and written with the given endianness. Its header and particle sequence
 // are returned in a standardized format.
 func ReadGadget(
-	path string, order binary.ByteOrder,
+	path string, order binary.ByteOrder, idSize int,
 ) (hd *CatalogHeader, xs, vs []geom.Vec, ids []int64) {
 
 	hd = ReadGadgetHeader(path, order)
@@ -217,7 +227,7 @@ func ReadGadget(
 	vs = make([]geom.Vec,  hd.Count)
 	ids = make([]int64, hd.Count)
 
-	ReadGadgetParticlesAt(path, order, xs, vs, ids)
+	ReadGadgetParticlesAt(path, order, xs, vs, ids, idSize)
 	return hd, xs, vs, ids
 }
 
@@ -445,6 +455,39 @@ func readInt64AsByte(rd io.Reader, end binary.ByteOrder, buf []int64) error {
 	hd.Len /= 8
 	hd.Cap /= 8
 
+	return nil
+}
+
+// readInt64AsByte reads int32 values from rd and converts them into an int64
+// buffer.
+func readInt32AsByte(rd io.Reader, end binary.ByteOrder, buf64 []int64) error {
+	bufLen := len(buf64)
+	buf := make([]int32, bufLen)
+	
+	hd := *(*reflect.SliceHeader)(unsafe.Pointer(&buf))
+	hd.Len *= 4
+	hd.Cap *= 4
+	
+	byteBuf := *(*[]byte)(unsafe.Pointer(&hd))
+	_, err := rd.Read(byteBuf)
+	if err != nil { return err }
+
+	if !isSysOrder(end) {
+		for i := 0; i < bufLen; i++ {
+			for j := 0; j < 2; j++ {
+				idx1, idx2 := i*4 + j, i*4 + 3 - j
+				byteBuf[idx1], byteBuf[idx2] = byteBuf[idx2], byteBuf[idx1]
+			}
+		}
+	}
+
+	hd.Len /= 4
+	hd.Cap /= 4
+
+	for i := range buf {
+		buf64[i] = int64(buf[i])
+	}
+	
 	return nil
 }
 
