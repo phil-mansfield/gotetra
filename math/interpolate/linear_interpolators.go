@@ -1,6 +1,7 @@
 package interpolate
 
 import (
+	"encoding/binary"
 	"fmt"
 )
 
@@ -225,23 +226,25 @@ func (bi *biLinearRef) Ref() BiInterpolator {
 type TriLinear struct {
 	xs, ys, zs searcher
 	vals       []float64
-	nx, ny     int
+	nx, ny, nz int
+	byteOrder  binary.ByteOrder
 }
 
 // NewTriLinear creates a tri-linear interpolator on top of a grid with the
 // values given by vals. The values of the x, y, and z grid lines are given by
-// xs, ys, and zs respectively. The vals grid is indexed in the usual way:
-// vals(ix, iy, iz) -> vals[ix + iy*nx + iz*nx*ny].
+// xs, ys, and zs respectively. The vals grid is indexed in either big or little endian order.
 //
 // Panics if len(xs) * len(ys) * len(zs) != len(vals).
-func NewTriLinear(xs, ys, zs, vals []float64) *TriLinear {
+func NewTriLinear(xs, ys, zs, vals []float64, byteOrder binary.ByteOrder) *TriLinear {
 	tri := &TriLinear{}
 	tri.xs.init(xs)
 	tri.ys.init(ys)
 	tri.zs.init(zs)
 	tri.nx = len(xs)
 	tri.ny = len(ys)
+	tri.nz = len(zs)
 	tri.vals = vals
+	tri.byteOrder = byteOrder
 
 	if len(xs)*len(ys)*len(zs) != len(vals) {
 		panic(fmt.Sprintf(
@@ -256,8 +259,7 @@ func NewTriLinear(xs, ys, zs, vals []float64) *TriLinear {
 // NewUniformTriLinear creates a tri-linear interpolator on top of a uniform
 // grid with the values given by vals. The values of the x, y, and z grid lines
 // start at x0, y0, and z0 and increase with steps of dx, dy, and dz,
-// respectively. The vals grid is indexed in the usual way: vals(ix, iy, iz) ->
-// vals[ix + iy*nx + iz*nx*ny].
+// respectively. The vals grid is indexed in either big or little endian order.
 //
 // Panics if len(xs) * len(ys) != len(vals).
 func NewUniformTriLinear(
@@ -265,6 +267,7 @@ func NewUniformTriLinear(
 	y0, dy float64, ny int,
 	z0, dz float64, nz int,
 	vals []float64,
+	byteOrder binary.ByteOrder,
 ) *TriLinear {
 
 	tri := &TriLinear{}
@@ -274,7 +277,9 @@ func NewUniformTriLinear(
 	tri.zs.unifInit(z0, dz, nz)
 	tri.nx = nx
 	tri.ny = ny
+	tri.nz = nz
 	tri.vals = vals
+	tri.byteOrder = byteOrder
 
 	if nx*ny*nz != len(vals) {
 		panic(fmt.Sprintf(
@@ -291,8 +296,17 @@ func (tri *TriLinear) Eval(x, y, z float64) float64 {
 	iy := tri.ys.search(y)
 	iz := tri.ys.search(z)
 
-	dix, diy, diz := 1, tri.nx, tri.nx*tri.ny
-	i := ix + iy*tri.nx + iz*tri.ny*tri.nx
+	var i, dix, diy, diz int
+	switch tri.byteOrder {
+	case binary.LittleEndian:
+		dix, diy, diz = 1, tri.nx, tri.nx*tri.ny
+		i = ix + iy*tri.nx + iz*tri.ny*tri.nx
+	case binary.BigEndian:
+		dix, diy, diz = tri.ny*tri.nz, tri.nz, 1
+		i = ix*tri.ny*tri.nz + iy*tri.nz + iz
+	default:
+		panic(fmt.Sprintf("unknown byte order %s", tri.byteOrder))
+	}
 
 	v111 := tri.vals[i+0+0+0]
 	v112 := tri.vals[i+0+0+diz]
@@ -368,14 +382,14 @@ func NewUniformBiLinearInterpolator(
 	return NewUniformBiLinear(x0, dx, nx, y0, dy, ny, vals)
 }
 func NewTriLinearInterpolator(xs, ys, zs, vals []float64) TriInterpolator {
-	return NewTriLinear(xs, ys, zs, vals)
+	return NewTriLinear(xs, ys, zs, vals, binary.LittleEndian)
 }
 func NewUniformTriLinearInterpolator(
 	x0, dx float64, nx int,
 	y0, dy float64, ny int,
 	z0, dz float64, nz int, vals []float64,
 ) TriInterpolator {
-	return NewUniformTriLinear(x0, dx, nx, y0, dy, ny, z0, dz, nz, vals)
+	return NewUniformTriLinear(x0, dx, nx, y0, dy, ny, z0, dz, nz, vals, binary.LittleEndian)
 }
 
 //////////////////////////////
@@ -385,26 +399,28 @@ func NewUniformTriLinearInterpolator(
 // TriLinearMulti is a tri-linear interpolator with multi-dimensional output
 type TriLinearMulti struct {
 	xs, ys, zs searcher
-	nx, ny     int
+	nx, ny, nz int
 	vals       [][]float64
 	valsDim    int
+	byteOrder  binary.ByteOrder
 }
 
 // NewTriLinearMulti creates a tri-linear interpolator on top of a grid with the
 // values given by vals. The values of the x, y, and z grid lines are given by
-// xs, ys, and zs respectively. The vals grid is indexed in the usual way:
-// vals(ix, iy, iz) -> vals[ix + iy*nx + iz*nx*ny].
+// xs, ys, and zs respectively. The vals grid is indexed in either big or little endian order.
 //
 // Panics if len(xs) * len(ys) * len(zs) != len(vals).
-func NewTriLinearMulti(xs, ys, zs []float64, vals [][]float64) *TriLinearMulti {
+func NewTriLinearMulti(xs, ys, zs []float64, vals [][]float64, byteOrder binary.ByteOrder) *TriLinearMulti {
 	tri := &TriLinearMulti{}
 	tri.xs.init(xs)
 	tri.ys.init(ys)
 	tri.zs.init(zs)
 	tri.nx = len(xs)
 	tri.ny = len(ys)
+	tri.nz = len(zs)
 	tri.vals = vals
 	tri.valsDim = len(vals[0])
+	tri.byteOrder = byteOrder
 
 	if len(xs)*len(ys)*len(zs) != len(vals) {
 		panic(fmt.Sprintf(
@@ -419,8 +435,7 @@ func NewTriLinearMulti(xs, ys, zs []float64, vals [][]float64) *TriLinearMulti {
 // NewUniformTriLinearMulti creates a tri-linear interpolator on top of a uniform
 // grid with the values given by vals. The values of the x, y, and z grid lines
 // start at x0, y0, and z0 and increase with steps of dx, dy, and dz,
-// respectively. The vals grid is indexed in the usual way: vals(ix, iy, iz) ->
-// vals[ix + iy*nx + iz*nx*ny].
+// respectively. The vals grid is indexed in either big or little endian order.
 //
 // Panics if len(xs) * len(ys) != len(vals).
 func NewUniformTriLinearMulti(
@@ -428,6 +443,7 @@ func NewUniformTriLinearMulti(
 	y0, dy float64, ny int,
 	z0, dz float64, nz int,
 	vals [][]float64,
+	byteOrder binary.ByteOrder,
 ) *TriLinearMulti {
 
 	tri := &TriLinearMulti{}
@@ -437,8 +453,10 @@ func NewUniformTriLinearMulti(
 	tri.zs.unifInit(z0, dz, nz)
 	tri.nx = nx
 	tri.ny = ny
+	tri.nz = nz
 	tri.vals = vals
 	tri.valsDim = len(vals[0])
+	tri.byteOrder = byteOrder
 
 	if nx*ny*nz != len(vals) {
 		panic(fmt.Sprintf(
@@ -461,8 +479,17 @@ func (tri *TriLinearMulti) Eval(x, y, z float64) []float64 {
 	xd := (x - x1) / (x2 - x1)
 	yd := (y - y1) / (y2 - y1)
 	zd := (z - z1) / (z2 - z1)
-	dix, diy, diz := 1, tri.nx, tri.nx*tri.ny
-	i := ix + iy*tri.nx + iz*tri.ny*tri.nx
+	var i, dix, diy, diz int
+	switch tri.byteOrder {
+	case binary.LittleEndian:
+		dix, diy, diz = 1, tri.nx, tri.nx*tri.ny
+		i = ix + iy*tri.nx + iz*tri.ny*tri.nx
+	case binary.BigEndian:
+		dix, diy, diz = tri.ny*tri.nz, tri.nz, 1
+		i = ix*tri.ny*tri.nz + iy*tri.nz + iz
+	default:
+		panic(fmt.Sprintf("unknown byte order %s", tri.byteOrder))
+	}
 
 	out := make([]float64, tri.valsDim)
 	for j := 0; j < tri.valsDim; j++ {
