@@ -377,3 +377,112 @@ func NewUniformTriLinearInterpolator(
 ) TriInterpolator {
 	return NewUniformTriLinear(x0, dx, nx, y0, dy, ny, z0, dz, nz, vals)
 }
+
+//////////////////////////////
+// TriLinearMulti Implementation //
+//////////////////////////////
+
+// TriLinearMulti is a tri-linear interpolator with multi-dimensional output
+type TriLinearMulti struct {
+	xs, ys, zs searcher
+	nx, ny     int
+	vals       [][]float64
+	valsDim    int
+}
+
+// NewTriLinearMulti creates a tri-linear interpolator on top of a grid with the
+// values given by vals. The values of the x, y, and z grid lines are given by
+// xs, ys, and zs respectively. The vals grid is indexed in the usual way:
+// vals(ix, iy, iz) -> vals[ix + iy*nx + iz*nx*ny].
+//
+// Panics if len(xs) * len(ys) * len(zs) != len(vals).
+func NewTriLinearMulti(xs, ys, zs []float64, vals [][]float64) *TriLinearMulti {
+	tri := &TriLinearMulti{}
+	tri.xs.init(xs)
+	tri.ys.init(ys)
+	tri.zs.init(zs)
+	tri.nx = len(xs)
+	tri.ny = len(ys)
+	tri.vals = vals
+	tri.valsDim = len(vals[0])
+
+	if len(xs)*len(ys)*len(zs) != len(vals) {
+		panic(fmt.Sprintf(
+			"len(vals) = %d, but len(xs) = %d, len(ys) = %d, and len(zs) = %d",
+			len(vals), len(xs), len(ys), len(zs),
+		))
+	}
+
+	return tri
+}
+
+// NewUniformTriLinearMulti creates a tri-linear interpolator on top of a uniform
+// grid with the values given by vals. The values of the x, y, and z grid lines
+// start at x0, y0, and z0 and increase with steps of dx, dy, and dz,
+// respectively. The vals grid is indexed in the usual way: vals(ix, iy, iz) ->
+// vals[ix + iy*nx + iz*nx*ny].
+//
+// Panics if len(xs) * len(ys) != len(vals).
+func NewUniformTriLinearMulti(
+	x0, dx float64, nx int,
+	y0, dy float64, ny int,
+	z0, dz float64, nz int,
+	vals [][]float64,
+) *TriLinearMulti {
+
+	tri := &TriLinearMulti{}
+
+	tri.xs.unifInit(x0, dx, nx)
+	tri.ys.unifInit(y0, dy, ny)
+	tri.zs.unifInit(z0, dz, nz)
+	tri.nx = nx
+	tri.ny = ny
+	tri.vals = vals
+	tri.valsDim = len(vals[0])
+
+	if nx*ny*nz != len(vals) {
+		panic(fmt.Sprintf(
+			"len(vals) = %d, but nx = %d, ny = %d, and nz = %d",
+			len(vals), nx, ny, nz,
+		))
+	}
+
+	return tri
+}
+
+// Eval returns the interpolated values
+func (tri *TriLinearMulti) Eval(x, y, z float64) []float64 {
+	ix := tri.xs.search(x)
+	iy := tri.ys.search(y)
+	iz := tri.ys.search(z)
+	x1, x2 := tri.xs.val(ix), tri.xs.val(ix+1)
+	y1, y2 := tri.ys.val(iy), tri.ys.val(iy+1)
+	z1, z2 := tri.ys.val(iz), tri.ys.val(iz+1)
+	xd := (x - x1) / (x2 - x1)
+	yd := (y - y1) / (y2 - y1)
+	zd := (z - z1) / (z2 - z1)
+	dix, diy, diz := 1, tri.nx, tri.nx*tri.ny
+	i := ix + iy*tri.nx + iz*tri.ny*tri.nx
+
+	out := make([]float64, tri.valsDim)
+	for j := 0; j < tri.valsDim; j++ {
+		v111 := tri.vals[i+0+0+0][j]
+		v112 := tri.vals[i+0+0+diz][j]
+		v121 := tri.vals[i+0+diy+0][j]
+		v122 := tri.vals[i+0+diy+diz][j]
+		v211 := tri.vals[i+dix+0+0][j]
+		v212 := tri.vals[i+dix+0+diz][j]
+		v221 := tri.vals[i+dix+diy+0][j]
+		v222 := tri.vals[i+dix+diy+diz][j]
+
+		c11 := v111*(1-xd) + v211*xd
+		c21 := v121*(1-xd) + v221*xd
+		c12 := v112*(1-xd) + v212*xd
+		c22 := v122*(1-xd) + v222*xd
+
+		c1 := c11*(1-yd) + c21*yd
+		c2 := c12*(1-yd) + c22*yd
+		out[j] = c1*(1-zd) + c2*zd
+	}
+	return out
+}
