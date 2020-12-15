@@ -10,7 +10,7 @@ import (
 
 // Linear is a linear interpolator.
 type Linear struct {
-	xs searcher
+	xs   searcher
 	vals []float64
 }
 
@@ -50,7 +50,7 @@ func (lin *Linear) Eval(x float64) float64 {
 	x1, x2 := lin.xs.val(i1), lin.xs.val(i2)
 	v1, v2 := lin.vals[i1], lin.vals[i2]
 
-	return ((v2 - v1) / (x2 - x1)) * (x - x1) + v1
+	return ((v2-v1)/(x2-x1))*(x-x1) + v1
 }
 
 // EvalAll evaluates the interpolator at all the given x values. If an output
@@ -59,11 +59,14 @@ func (lin *Linear) Eval(x float64) float64 {
 //
 // If more than one output array is provided, only the first is used.
 func (lin *Linear) EvalAll(xs []float64, out ...[]float64) []float64 {
-	if len(out) == 0 { out = [][]float64{ make([]float64, len(xs)) } }
-	for i, x := range xs { out[0][i] = lin.Eval(x) }
+	if len(out) == 0 {
+		out = [][]float64{make([]float64, len(xs))}
+	}
+	for i, x := range xs {
+		out[0][i] = lin.Eval(x)
+	}
 	return out[0]
 }
-
 
 func (lin *Linear) Ref() Interpolator {
 	panic("NYI")
@@ -91,8 +94,8 @@ func (lin *linearRef) Ref() Interpolator {
 // BiLinear is a bi-linear interpolator.
 type BiLinear struct {
 	xs, ys searcher
-	vals []float64
-	nx int
+	vals   []float64
+	nx     int
 }
 
 // NewBiLinear creates a bi-linear interpolator on top of a grid with the
@@ -108,7 +111,7 @@ func NewBiLinear(xs, ys, vals []float64) *BiLinear {
 	bi.nx = len(xs)
 	bi.vals = vals
 
-	if len(xs) * len(ys) != len(vals) {
+	if len(xs)*len(ys) != len(vals) {
 		panic(fmt.Sprintf(
 			"len(vals) = %d, but len(xs) = %d and len(ys) = %d",
 			len(vals), len(xs), len(ys),
@@ -137,7 +140,7 @@ func NewUniformBiLinear(
 	bi.nx = nx
 	bi.vals = vals
 
-	if nx * ny  != len(vals) {
+	if nx*ny != len(vals) {
 		panic(fmt.Sprintf(
 			"len(vals) = %d, but nx = %d and ny = %d",
 			len(vals), nx, ny,
@@ -153,7 +156,7 @@ func NewUniformBiLinear(
 func (bi *BiLinear) Eval(x, y float64) float64 {
 	ix1 := bi.xs.search(x)
 	iy1 := bi.ys.search(y)
-	ix2, iy2 := ix1 + 1, iy1 + 1
+	ix2, iy2 := ix1+1, iy1+1
 	if ix2 == bi.xs.n {
 		ix1--
 		ix2--
@@ -166,18 +169,18 @@ func (bi *BiLinear) Eval(x, y float64) float64 {
 	x1, x2 := bi.xs.val(ix1), bi.xs.val(ix2)
 	y1, y2 := bi.ys.val(iy1), bi.ys.val(iy2)
 
-	i11, i12 := ix1 + bi.nx*iy1, ix1 + bi.nx*iy2
-	i21, i22 := ix2 + bi.nx*iy1, ix2 + bi.nx*iy2
+	i11, i12 := ix1+bi.nx*iy1, ix1+bi.nx*iy2
+	i21, i22 := ix2+bi.nx*iy1, ix2+bi.nx*iy2
 
 	v11, v12 := bi.vals[i11], bi.vals[i12]
 	v21, v22 := bi.vals[i21], bi.vals[i22]
 
-	dx, dy := x2 - x1, y2 - y1
-	dx1, dx2 := x - x1, x2 - x
-	dy1, dy2 := y - y1, y2 - y
+	dx, dy := x2-x1, y2-y1
+	dx1, dx2 := x-x1, x2-x
+	dy1, dy2 := y-y1, y2-y
 
 	return (v11*dx2*dy2 + v12*dx2*dy1 +
-		v21*dx1*dy2 + v22*dx1*dy1) / (dx*dy)
+		v21*dx1*dy2 + v22*dx1*dy1) / (dx * dy)
 }
 
 // EvalAll evaluates the interpolator at all the given (x, y) values. If an
@@ -186,8 +189,12 @@ func (bi *BiLinear) Eval(x, y float64) float64 {
 //
 // If more than one output array is provided, only the first is used.
 func (bi *BiLinear) EvalAll(xs, ys []float64, out ...[]float64) []float64 {
-	if len(out) == 0 { out = [][]float64{ make([]float64, len(xs)) } }
-	for i := range xs { out[0][i] = bi.Eval(xs[i], ys[i]) }
+	if len(out) == 0 {
+		out = [][]float64{make([]float64, len(xs))}
+	}
+	for i := range xs {
+		out[0][i] = bi.Eval(xs[i], ys[i])
+	}
 	return out[0]
 }
 
@@ -217,8 +224,8 @@ func (bi *biLinearRef) Ref() BiInterpolator {
 // TriLinear is a tri-linear interpolator.
 type TriLinear struct {
 	xs, ys, zs searcher
-	vals []float64
-	nx, ny int
+	vals       []float64
+	nx, ny     int
 }
 
 // NewTriLinear creates a tri-linear interpolator on top of a grid with the
@@ -236,7 +243,7 @@ func NewTriLinear(xs, ys, zs, vals []float64) *TriLinear {
 	tri.ny = len(ys)
 	tri.vals = vals
 
-	if len(xs) * len(ys) * len(zs) != len(vals) {
+	if len(xs)*len(ys)*len(zs) != len(vals) {
 		panic(fmt.Sprintf(
 			"len(vals) = %d, but len(xs) = %d, len(ys) = %d, and len(zs) = %d",
 			len(vals), len(xs), len(ys), len(zs),
@@ -269,7 +276,7 @@ func NewUniformTriLinear(
 	tri.ny = ny
 	tri.vals = vals
 
-	if nx * ny * nz != len(vals) {
+	if nx*ny*nz != len(vals) {
 		panic(fmt.Sprintf(
 			"len(vals) = %d, but nx = %d, ny = %d, and nz = %d",
 			len(vals), nx, ny, nz,
@@ -286,39 +293,43 @@ func (tri *TriLinear) Eval(x, y, z float64) float64 {
 
 	dix, diy, diz := 1, tri.nx, tri.nx*tri.ny
 	i := ix + iy*tri.nx + iz*tri.ny*tri.nx
-	
-	v111 := tri.vals[i +   0 +   0 +   0]
-	v112 := tri.vals[i +   0 +   0 + diz]
-	v121 := tri.vals[i +   0 + diy +   0]
-	v122 := tri.vals[i +   0 + diy + diz]
-	v211 := tri.vals[i + dix +   0 +   0]
-	v212 := tri.vals[i + dix +   0 + diz]
-	v221 := tri.vals[i + dix + diy +   0]
-	v222 := tri.vals[i + dix + diy + diz]
-	
-	x1, x2 := tri.xs.val(ix), tri.xs.val(ix + 1)
-	y1, y2 := tri.ys.val(iy), tri.ys.val(iy + 1)
-	z1, z2 := tri.ys.val(iz), tri.ys.val(iz + 1)
-	
+
+	v111 := tri.vals[i+0+0+0]
+	v112 := tri.vals[i+0+0+diz]
+	v121 := tri.vals[i+0+diy+0]
+	v122 := tri.vals[i+0+diy+diz]
+	v211 := tri.vals[i+dix+0+0]
+	v212 := tri.vals[i+dix+0+diz]
+	v221 := tri.vals[i+dix+diy+0]
+	v222 := tri.vals[i+dix+diy+diz]
+
+	x1, x2 := tri.xs.val(ix), tri.xs.val(ix+1)
+	y1, y2 := tri.ys.val(iy), tri.ys.val(iy+1)
+	z1, z2 := tri.ys.val(iz), tri.ys.val(iz+1)
+
 	xd := (x - x1) / (x2 - x1)
 	yd := (y - y1) / (y2 - y1)
 	zd := (z - z1) / (z2 - z1)
-	
-	c11 := v111*(1 - xd) + v211*xd
-	c21 := v121*(1 - xd) + v221*xd
-	c12 := v112*(1 - xd) + v212*xd
-	c22 := v122*(1 - xd) + v222*xd
-	
-	c1 := c11*(1 - yd) + c21*yd
-	c2 := c12*(1 - yd) + c22*yd
 
-	return c1*(1 - zd) + c2*zd
+	c11 := v111*(1-xd) + v211*xd
+	c21 := v121*(1-xd) + v221*xd
+	c12 := v112*(1-xd) + v212*xd
+	c22 := v122*(1-xd) + v222*xd
+
+	c1 := c11*(1-yd) + c21*yd
+	c2 := c12*(1-yd) + c22*yd
+
+	return c1*(1-zd) + c2*zd
 }
 
 func (tri *TriLinear) EvalAll(xs, ys, zs []float64, out ...[]float64) []float64 {
-	if len(out) == 0 { out = [][]float64{ make([]float64, len(xs)) } }
-	for i := range xs { out[0][i] = tri.Eval(xs[i], ys[i], zs[i]) }
-	return out[0]	
+	if len(out) == 0 {
+		out = [][]float64{make([]float64, len(xs))}
+	}
+	for i := range xs {
+		out[0][i] = tri.Eval(xs[i], ys[i], zs[i])
+	}
+	return out[0]
 }
 
 func (tri *TriLinear) Ref() TriInterpolator {
