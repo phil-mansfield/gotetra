@@ -85,7 +85,7 @@ func NewHistManager(
 
 	// Create the unit cubes used to populate tetrahedra with points.
 	man.unitBufs = unitBufs(UnitBufCount, points)
-	
+
 	// Set number of workers to number of available cores.
 	man.workers = NumCores
 	runtime.GOMAXPROCS(man.workers)
@@ -94,6 +94,8 @@ func NewHistManager(
 	if err != nil { return nil, err }
 	man.grid, err = io.ReadGrid(gridFile)
 	if err != nil { return nil, err }
+
+	man.boxes = boxes
 
 	return man, nil
 }
@@ -129,7 +131,8 @@ func (man *HistManager) Hist(info *HistInfo) error {
 	}
 
 	// Loop over files and do work.
-	for _, file := range man.files {
+	for i, file := range man.files {
+		log.Printf("Analyzed files %d/%d", i, len(man.files))
 		err := man.HistFromFile(file, info)
 		if err != nil { return err }
 	}
@@ -157,14 +160,14 @@ func histCenters(info *HistInfo) []float64 {
 // HistFromFile updates the histograms of each box using only the particles in
 // the given file.
 func (man *HistManager) HistFromFile(file string, info *HistInfo) error {
-	hd := &io.SheetHeader{ }
 	err := io.ReadSheetHeaderAt(file, &man.hd)
 	if err != nil { return  err }
-
 	out := make(chan int, man.workers)
 
 	for bi := range man.boxes {
-		if !histIntersect(hd, &man.boxes[bi]) { continue }
+		if !histIntersect(&man.hd, &man.boxes[bi]) { continue }
+
+		io.ReadSheetPositionsAt(file, man.xs)
 
 		for id := 0; id < man.workers; id++ {
 			go man.chanHistogram(id, &man.boxes[bi], info, out)
@@ -178,6 +181,10 @@ func (man *HistManager) HistFromFile(file string, info *HistInfo) error {
 			}			
 		}
 
+		sum := 0
+		for i := range man.boxes[bi].Counts {
+			sum += man.boxes[bi].Counts[i]
+		}
 	}
 	return nil
 }
@@ -226,18 +233,20 @@ func (man *HistManager) chanHistogram(
 	// Convenience variables.
 	gridWidth := int(man.hd.GridWidth)
 	segWidth := int(man.hd.SegmentWidth)
-	jump := man.skip * man.workers
 	hist, qs, inBox := man.hists[worker], man.qs[worker], man.inBox[worker]
 	vecBuf := man.vecBufs[worker]
 
 	// Evaluate whatever quantity is being measured.
 	switch strings.ToLower(man.quantity) {
-	case strings.ToLower("MassWeightedDensity"):
+	case strings.ToLower("Density"):
+		for z := 0; z < segWidth; z += man.skip {
+			for y := 0; y < segWidth; y += man.skip {
+				for x := 0; x < segWidth; x += man.skip {
+					idx := x + y*gridWidth + z*gridWidth*gridWidth
+					if idx%(man.skip*man.skip*man.skip*man.workers) != worker {
+						continue
+					}
 
-		for z := 0; z < gridWidth; z += jump {
-			for y := 0; y < gridWidth; y += jump {
-				for x := 0; x < gridWidth; x += jump {
-					idx := x + y*segWidth + z*segWidth*segWidth
 					if !man.cubeIntersects(idx) { continue }
 					for dir := 0; dir < geom.TetraDirCount; dir++ {
 						man.getDensities(idx, dir, box, vecBuf, qs, inBox)
@@ -249,6 +258,8 @@ func (man *HistManager) chanHistogram(
 	default:
 		panic("Non-implemented quantity: " + man.quantity)
 	}
+
+	out <- worker
 }
 
 // tetIntersects returns true if the cube at idx intersects with the currently
@@ -363,13 +374,12 @@ func (man *HistManager) getDensities(
 		idx := gridIndex(man.gridHd, vecBuf[i])
 		if idx >= 0 {
 			densities[i] = man.grid[idx]
+			//densities[i] = cloudInCell(man.grid, man.gridHd, idx, vecBuf[i])
 			inBox[i] = true
 		} else {
 			densities[i] = -1
 			inBox[i] = false
 		}
-
-		panic("Not yet implemented")
 	}
 }
 
@@ -414,6 +424,7 @@ func histogram(x []float64, ok []bool, info *HistInfo, counts []int) {
 
 			idx := (math.Log10(x[i]) - min) / dx
 			if idx < 0 || idx >= fBins { continue }
+
 			counts[int(idx)]++
 			
 		}

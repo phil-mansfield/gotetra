@@ -183,8 +183,8 @@ Radius = 2.17
 # Density: The mass-weighted density.
 Quantity = Density
 
-HistMin = 1e4
-HistMax = 1e-2
+HistMin = 1e-2
+HistMax = 1e4
 HistBins = 200
 
 # Must be "Log" or "Linear"
@@ -192,8 +192,9 @@ HistScale = Log
 
 Particles = 50
 
-Input = path/to/grid.gtet
+Input = path/to/input/dir/
 Output = path/to/outut/dir/
+GridFile = path/to/gtet/grid.gtet
 
 #######################
 # Optional Parameters #
@@ -508,14 +509,32 @@ type TetraHistConfig struct {
 	
 	SubsampleLength int
 
+	GridFile string
 	AppendName, PrependName string
 }
 
-func DefaultTetraHistConfig() *TetraHistConfig {
-	return &TetraHistConfig{ SubsampleLength: 1 }
+type TetraHistWrapper struct {
+	TetraHist TetraHistConfig
 }
 
-func (con *TetraHistConfig) QuantityValid() bool {
+func DefaultTetraHistWrapper() *TetraHistWrapper {
+	cfg := TetraHistConfig{ SubsampleLength: 1 }
+	return &TetraHistWrapper{ cfg }
+}
+
+func (con *TetraHistConfig) ValidInput() bool {
+	return con.Input != ""
+}
+
+func (con *TetraHistConfig) ValidOutput() bool {
+	return con.Output != ""
+}
+
+func (con *TetraHistConfig) ValidGridFile() bool {
+	return con.GridFile != ""
+}
+
+func (con *TetraHistConfig) ValidQuantity() bool {
 	switch con.Quantity {
 	case "Density":
 		return true
@@ -523,23 +542,33 @@ func (con *TetraHistConfig) QuantityValid() bool {
 	return false
 }
 
-func (con *TetraHistConfig) HistMinValid() bool {
+func (con *TetraHistConfig) ValidHistMin() bool {
 	return (con.HistScale == "Linear" ||
 		(con.HistScale == "Log" && con.HistMin > 0)) && 
 		con.HistMin < con.HistMax
 }
 
-func (con *TetraHistConfig) HistMaxValid() bool {
+func (con *TetraHistConfig) ValidHistMax() bool {
 	return (con.HistScale == "Linear" ||
 		(con.HistScale == "Log" && con.HistMax > 0)) &&
 		con.HistMin < con.HistMax
 }
 
-func (con *TetraHistConfig) HistBinsValid() bool {
+func (con *TetraHistConfig) ValidHistBins() bool {
 	return con.HistBins > 0
 }
 
-func (con *TetraHistConfig) HistScaleValid() bool {
+func (con *TetraHistConfig) ValidHistScale() bool {
 	return con.HistScale == "Linear" || con.HistScale == "Log"
 }
 
+func (con *TetraHistConfig) ValidSubsampleLength() bool {
+	s := con.SubsampleLength
+	if s <= 0 { return false }
+
+	for {
+		if s == 1 { return true }
+		if s % 2 == 1 { return false }
+		s /= 2
+	}
+}

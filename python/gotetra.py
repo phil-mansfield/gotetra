@@ -6,8 +6,8 @@ gotetra output file to stdout.
 
 Supported functions:
 
-read_header(filename : string) -> gotetra.Header
-read_grid(filename   : string) -> numpy.ndarray
+read_header(filename) -> gotetra.Header
+read_grid(filename) -> numpy.ndarray
 
 Supported classes:
 

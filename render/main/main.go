@@ -57,13 +57,14 @@ func main() {
 	// think.
 
 	var (
-		renderStr, convertSnapshot string
+		renderStr, convertSnapshot, tetraHistStr string
 		exampleConfig string
 	)
 	vars := map[string]*string {
 		"Render": &renderStr,
 		"ConvertSnapshot": &convertSnapshot,
 		"ExampleConfig": &exampleConfig,
+		"TetraHist": &tetraHistStr,
 	}
 
 	flag.IntVar(
@@ -85,7 +86,12 @@ func main() {
 			"specified type to stdout. Accepted arguments are 'Render', " +
 			"'ConvertSnapshot', and 'Bounds'.",
 	)
-
+	flag.StringVar(
+		&tetraHistStr, "TetraHist", "", 
+		"Prints a histogram of the mass-weighted properties of tetrahedra " + 
+			"within a given bounding box.",
+	)
+	
 	flag.Parse()
 
 	// Figure out the mode and fail with a descriptive error is the user gave 
@@ -104,11 +110,12 @@ func main() {
 		con := &wrap.Render
 
 		if !con.ValidInput() {
-			log.Fatal("Invalid/non-existent 'Input' value.")
+			log.Fatalf("Invalid/non-existent 'Input' value, %s.", con.Input)
 		} else if !con.ValidOutput() {
-			log.Fatal("Invalid/non-existent 'Output' value.")
+			log.Fatalf("Invalid/non-existent 'Output' value, %s.", con.Output)
 		} else if !con.ValidSubsampleLength() {
-			log.Fatal("Invalid 'SubsampleLength' value.")
+			log.Fatalf("Invalid 'SubsampleLength' value, %d.",
+				con.SubsampleLength)
 		}
 
 		if !con.ValidImagePixels() && !con.ValidTotalPixels() {
@@ -132,6 +139,32 @@ func main() {
 		}
 		renderMain(con, bounds)
 
+	case "TetraHist":
+		wrap := io.DefaultTetraHistWrapper()
+		err := gcfg.ReadFileInto(wrap, tetraHistStr)
+		if err != nil { log.Fatal(err.Error()) }
+		con := &wrap.TetraHist
+		
+		if !con.ValidInput() {
+			log.Fatalf("Invalid/non-existent 'Input' value, %s.", con.Input)
+		} else if !con.ValidOutput() {
+			log.Fatalf("Invalid/non-existent 'Output' value, %s.", con.Output)
+		} else if !con.ValidSubsampleLength() {
+			log.Fatalf("Invalid 'SubsampleLength' value, %d.",
+				con.SubsampleLength)
+		} else if !con.ValidHistScale() {
+			log.Fatalf("Invalid 'HistScale' value, %s.", con.HistScale)
+		} else if !con.ValidHistMin() || !con.ValidHistMax() {
+			log.Fatalf("Invalid ('HistMin', 'HistMax'), (%g, %g).",
+				con.HistMin, con.HistMax)
+		}
+
+		bounds := flag.Args()
+		if len(bounds) < 1 {
+			log.Fatal("Must supply at least one bounds file.")
+		}
+
+		tetraHistMain(con, bounds)
 	case "ConvertSnapshot":
 		wrap := io.DefaultConvertSnapshotWrapper()
 		err := gcfg.ReadFileInto(wrap, convertSnapshot)
@@ -637,7 +670,7 @@ func tetraHistSetupIO(con *io.TetraHistConfig) (
 // round rounds x to the nearest integer
 func round(x float64) int {
 	floor, ceil := math.Floor(x), math.Ceil(x)
-	if ceil - x > x - floor {
+	if ceil - x < x - floor {
 		return int(ceil)
 	} else {
 		return int(floor)
@@ -727,7 +760,7 @@ func tetraHistMain(con *io.TetraHistConfig, bounds []string) {
 		if err != nil { log.Fatal(err.Error()) }
 		configBoxes = append(configBoxes, boxes...)
 	}
-	
+
 	// Figure out cell sizes, pixel sizes, and particle counts.
 	boxes := make([]render.HistBox, len(configBoxes))
 	for i := range boxes {
@@ -741,8 +774,9 @@ func tetraHistMain(con *io.TetraHistConfig, bounds []string) {
 
 	// Interpolate.
 	man, err := render.NewHistManager(
-		fileNames, boxes, con.Particles, con.Quantity, con.Input,
+		fileNames, boxes, con.Particles, con.Quantity, con.GridFile,
 	)
+
 	if err != nil { log.Fatal(err.Error()) }
 	man.Subsample(con.SubsampleLength)
 	info := &render.HistInfo{
