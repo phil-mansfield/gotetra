@@ -52,7 +52,7 @@ const (
 
 var (
 	// Yeah, this one was super fun to figure out.
-	dirs = [TetraDirCount][2][3]int64{
+	Dirs = [TetraDirCount][2][3]int64{
 		{{1, 0, 0}, {1, 1, 0}},
 		{{1, 0, 0}, {1, 0, 1}},
 		{{0, 1, 0}, {1, 1, 0}},
@@ -60,7 +60,7 @@ var (
 		{{0, 1, 0}, {0, 1, 1}},
 		{{0, 0, 1}, {0, 1, 1}},
 	}
-
+	
 	centers = [TetraCenteredCount][3][3]int64{
 		{{0, 0, +1}, {0, +1, 0}, {+1, 0, 0}},
 		{{0, 0, +1}, {0, +1, 0}, {-1, 0, 0}},
@@ -138,10 +138,10 @@ func (idxs *TetraIdxs) InitCartesian(
 ) *TetraIdxs {
 	countArea := countWidth * countWidth
 	idxs[0] = compressCoords(
-		x, y, z, dirs[dir][0][0], dirs[dir][0][1], dirs[dir][0][2], countWidth,
+		x, y, z, Dirs[dir][0][0], Dirs[dir][0][1], Dirs[dir][0][2], countWidth,
 	)
 	idxs[1] = compressCoords(
-		x, y, z, dirs[dir][1][0], dirs[dir][1][1], dirs[dir][1][2], countWidth,
+		x, y, z, Dirs[dir][1][0], Dirs[dir][1][1], Dirs[dir][1][2], countWidth,
 	)
 	idxs[2] = compressCoords(x, y, z, 1, 1, 1, countWidth)
 	idxs[3] = x + y*countWidth + z*countArea
@@ -163,12 +163,12 @@ func (idxs *TetraIdxs) Init(idx, countWidth, skip int64, dir int) *TetraIdxs {
 
 	idxs[0] = compressCoords(
 		x, y, z,
-		skip * dirs[dir][0][0], skip * dirs[dir][0][1], skip * dirs[dir][0][2],
+		skip * Dirs[dir][0][0], skip * Dirs[dir][0][1], skip * Dirs[dir][0][2],
 		countWidth,
 	)
 	idxs[1] = compressCoords(
 		x, y, z,
-		skip * dirs[dir][1][0], skip * dirs[dir][1][1], skip * dirs[dir][1][2],
+		skip * Dirs[dir][1][0], skip * Dirs[dir][1][1], skip * Dirs[dir][1][2],
 		countWidth,
 	)
 	idxs[2] = compressCoords(x, y, z, skip, skip, skip, countWidth)
