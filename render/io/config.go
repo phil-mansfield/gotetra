@@ -56,7 +56,14 @@ Cells = 8
 # (Inclusive) range for this iteration. If IterationEnd isn't set, folders will
 # be iterated through until an invalid one is found.
 # IterationStart = 0 
-# IterationEnd = 100`
+# IterationEnd = 100
+
+# Factors to multiply positions, velocities, and mass in the input data by to
+# convert them into Mpc/h, km/s, and Msun/h, repsectively. For default Gadget
+# units, this would be 1e-3, 1.0, and 1e10, respectively.
+# XUnits = 1e-3
+# VUnits = 1.0
+# MUnits = 1e10`
 	ExampleRenderFile = `[Render]
 
 # Render specified 
@@ -240,6 +247,7 @@ type ConvertSnapshotConfig struct {
 	// Optional
 	IteratedInput, IteratedOutput string
 	IterationStart, IterationEnd int
+	XUnits, VUnits, MUnits float64
 }
 
 func DefaultConvertSnapshotWrapper() *ConvertSnapshotWrapper {
@@ -247,6 +255,9 @@ func DefaultConvertSnapshotWrapper() *ConvertSnapshotWrapper {
 	con.IterationStart = 0
 	con.IterationEnd = -1
 	con.Gadget2IDSize = 64
+	con.XUnits = 1.0
+	con.VUnits = 1.0
+	con.MUnits = 1.0
 	return &ConvertSnapshotWrapper{con}
 }
 

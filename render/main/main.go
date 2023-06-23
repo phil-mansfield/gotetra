@@ -184,10 +184,10 @@ func main() {
 		}
 
 		switch con.InputFormat {
-		case "LGadget-2":
+		case "LGadget-2", "Arepo-type-2":
 			lGadget2Main(con)
 		default:
-			log.Fatalf("Only LGadget-2 snapshots can be read at this time.")
+			log.Fatalf("Only LGadget-2 and Arepo-type-2 snapshots can be read at this time.")
 		}
 
 	case "ExampleConfig":
@@ -265,7 +265,7 @@ func lGadget2Main(con *io.ConvertSnapshotConfig) {
 
 		// Part 1: read data into memory and put it into a single in-memory
 		// grid.
-		hd, xs, vs := createGrids(files, con.Gadget2IDSize)
+		hd, xs, vs := createGrids(files, con.Gadget2IDSize, con)
 
 		if err = os.MkdirAll(output, 0777); err != nil {
 			log.Fatalf(err.Error())
@@ -278,12 +278,14 @@ func lGadget2Main(con *io.ConvertSnapshotConfig) {
 
 // createGrids reads reads snapshot data into memory.
 func createGrids(
-	catalogs []string, idSize int,
+	catalogs []string, idSize int, con *io.ConvertSnapshotConfig,
 ) (hd *io.CatalogHeader, xs, vs []geom.Vec) {
 	hs := make([]io.CatalogHeader, len(catalogs))
 	for i := range hs {
-		hs[i] = *io.ReadGadgetHeader(catalogs[i], gadgetEndianness)
+		hs[i] = *io.ReadGadgetHeader(catalogs[i], gadgetEndianness, con.InputFormat)
+		hs[i].Mass *= con.MUnits
 	}
+	log.Printf("Input header: %v\n", hs[0])
 
 	// Monitor memory usage.
 	ms := &runtime.MemStats{}
@@ -299,17 +301,18 @@ func createGrids(
 	// Allocate position/velocity grids and sinle-file buffers.
 	xs = make([]geom.Vec, hs[0].TotalCount)
 	vs = make([]geom.Vec, hs[0].TotalCount)
-	
+
 	maxLen := int64(0)
 	for _, h := range hs {
 		if h.Count > maxLen {
 			maxLen = h.Count
 		}
 	}
+
 	idBuf := make([]int64, maxLen)
 	xBuf := make([]geom.Vec, maxLen)
 	vBuf := make([]geom.Vec, maxLen)
-	
+
 	buf := io.NewParticleBuffer(xs, vs, catalogBufLen)
 
 	for i, cat := range catalogs {
@@ -325,8 +328,15 @@ func createGrids(
 		vBuf = vBuf[0: N]
 
 		io.ReadGadgetParticlesAt(
-			cat, gadgetEndianness, xBuf, vBuf, idBuf, idSize,
+			cat, gadgetEndianness, xBuf, vBuf, idBuf, idSize, con.InputFormat,
 		)
+
+		for j := range xBuf {
+			for k := 0; k < 3; k++ {
+				xBuf[j][k] *= float32(con.XUnits)
+				vBuf[j][k] *= float32(con.VUnits)
+			}
+		}
 
 		runtime.GC()
 		buf.Append(xBuf, vBuf, idBuf)

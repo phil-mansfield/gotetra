@@ -129,8 +129,10 @@ func (h *gadgetHeader) WrapDistance(x float64) float64 {
 }
 
 // ReadGadgetHeader reads a Gadget catalog and returns a standardized
-// gotetra containing its information.
-func ReadGadgetHeader(path string, order binary.ByteOrder) *CatalogHeader {
+// gotetra containing its information. variant is a string that specifies
+// which of the Gadget-2 variants is being used. Currently supported:
+// "LGadget-2" and "Arepo-type-2".
+func ReadGadgetHeader(path string, order binary.ByteOrder, variant string) *CatalogHeader {
 	f, err := os.Open(path)
 	if err != nil {
 		panic(err)
@@ -141,8 +143,8 @@ func ReadGadgetHeader(path string, order binary.ByteOrder) *CatalogHeader {
 
 	_ = readInt32(f, order)
 	binary.Read(f, binary.LittleEndian, gh)
-	h := gh.Standardize()
 
+	h := gh.Standardize()
 	return h
 }
 
@@ -156,6 +158,7 @@ func ReadGadgetParticlesAt(
 	xs, vs []geom.Vec,
 	ids []int64,
 	idSize int,
+	variant string,
 ) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -187,13 +190,41 @@ func ReadGadgetParticlesAt(
 		))
 	}
 
+	xSize := readInt32(f, order)
+	f32Size := int32(4*3*gh.NPart[1])
+	var readF32 bool
+	if f32Size == xSize {
+		readF32 = true
+	} else if f32Size*2 == xSize {
+		readF32 = false
+	} else {
+		panic(fmt.Sprintf("Internal error: Expected positions block to have header %d or %d, but actually has header %d\n (this is probably a binary file format issues)", f32Size, 2*f32Size, xSize))
+	}
+
+	if readF32 {
+		readVecAsByte(f, order, xs)
+	} else {
+		readVec64AsByte(f, order, xs)
+	}
 	_ = readInt32(f, order)
-	readVecAsByte(f, order, xs)
+
+
+	vSize := readInt32(f, order)
+	if f32Size == vSize {
+		readF32 = true
+	} else if f32Size*2 == vSize {
+		readF32 = false
+	} else {
+		panic(fmt.Sprintf("Internal error: Expected positions block to have header %d or %d, but actually has header %d\n (this is probably a binary file format issues)", f32Size, 2*f32Size, xSize))
+	}
+	if readF32 {
+		readVecAsByte(f, order, vs)
+	} else {
+		readVec64AsByte(f, order, vs)
+	}
 	_ = readInt32(f, order)
 	_ = readInt32(f, order)
-	readVecAsByte(f, order, vs)
-	_ = readInt32(f, order)
-	_ = readInt32(f, order)
+
 	if idSize == 64 {
 		readInt64AsByte(f, order, ids)
 	} else if idSize == 32 {
@@ -219,15 +250,15 @@ func ReadGadgetParticlesAt(
 // and written with the given endianness. Its header and particle sequence
 // are returned in a standardized format.
 func ReadGadget(
-	path string, order binary.ByteOrder, idSize int,
+	path string, order binary.ByteOrder, idSize int, variant string,
 ) (hd *CatalogHeader, xs, vs []geom.Vec, ids []int64) {
 
-	hd = ReadGadgetHeader(path, order)
+	hd = ReadGadgetHeader(path, order, variant)
 	xs = make([]geom.Vec,  hd.Count)
 	vs = make([]geom.Vec,  hd.Count)
 	ids = make([]int64, hd.Count)
 
-	ReadGadgetParticlesAt(path, order, xs, vs, ids, idSize)
+	ReadGadgetParticlesAt(path, order, xs, vs, ids, idSize, variant)
 	return hd, xs, vs, ids
 }
 
@@ -398,6 +429,39 @@ func readVecAsByte(rd io.Reader, end binary.ByteOrder, buf []geom.Vec) error {
 
 	hd.Len /= 12
 	hd.Cap /= 12
+
+	return nil
+}
+
+func readVec64AsByte(rd io.Reader, end binary.ByteOrder, outBuf []geom.Vec) error {
+	buf := make([][3]float64, len(outBuf))
+	bufLen := len(buf)
+
+	hd := *(*reflect.SliceHeader)(unsafe.Pointer(&buf))
+	hd.Len *= 24
+	hd.Cap *= 24
+	
+	byteBuf := *(*[]byte)(unsafe.Pointer(&hd))
+	_, err := rd.Read(byteBuf)
+	if err != nil { return err }
+
+	if !isSysOrder(end) {
+		for i := 0; i < bufLen * 3; i++ {
+			for j := 0; j < 4; j++ {
+				idx1, idx2 := i*8 + j, i*8 + 3 - j
+				byteBuf[idx1], byteBuf[idx2] = byteBuf[idx2], byteBuf[idx1]
+			}
+		}
+	}
+
+	hd.Len /= 24
+	hd.Cap /= 24
+
+	for i := range buf {
+		outBuf[i][0] = float32(buf[i][0])
+		outBuf[i][1] = float32(buf[i][1])
+		outBuf[i][2] = float32(buf[i][2])
+	}
 
 	return nil
 }
